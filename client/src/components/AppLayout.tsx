@@ -13,6 +13,10 @@ import {
 import { cn } from '@/lib/utils'
 
 const links = [
+  { to: '/', label: 'Dashboard', end: true },
+  { to: '/invoices', label: 'Bills' },
+  { to: '/payments', label: 'Payments' },
+  { to: '/customers', label: 'Customers' },
   { to: '/stock', label: 'Stock' },
   { to: '/products', label: 'Products' },
   { to: '/packing', label: 'Packing' },
@@ -34,6 +38,7 @@ export function AppLayout() {
               <NavLink
                 key={link.to}
                 to={link.to}
+                end={link.end}
                 className={({ isActive }) =>
                   cn(
                     'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',

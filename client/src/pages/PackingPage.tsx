@@ -49,7 +49,6 @@ export function PackingPage() {
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ['stock'] })
       await queryClient.invalidateQueries({ queryKey: ['packing'] })
-      await queryClient.invalidateQueries({ queryKey: ['movements'] })
       toast.success(
         `Packed ${formatQuantity(result.packsProduced)} × ${selected?.name}, using ${formatQuantity(
           result.sourceQuantityUsed,

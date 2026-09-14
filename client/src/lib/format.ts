@@ -17,7 +17,17 @@ const dateFormat = new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium',
 })
 
+/** Plain dates from the API ("2026-09-14") carry no time zone, so they are formatted as they are. */
+const dayFormat = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' })
+
 export const formatQuantity = (value: number) => quantityFormat.format(value)
+
+/** Formats a plain date string such as an invoice date. */
+export const formatDay = (value: string) => dayFormat.format(new Date(`${value}T00:00:00`))
+
+/** Today in IST as "2026-09-14", for date inputs. */
+export const todayInIndia = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date())
 
 export const formatMoney = (value: number | null) => (value === null ? '—' : moneyFormat.format(value))
 

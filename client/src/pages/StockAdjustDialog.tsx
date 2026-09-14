@@ -48,7 +48,6 @@ export function StockAdjustDialog({
       }),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ['stock'] })
-      await queryClient.invalidateQueries({ queryKey: ['movements'] })
       toast.success(`${product?.name} corrected to ${formatQuantity(result.quantityOnHand)} ${product?.unitCode}`)
       if (result.warning) toast.warning(result.warning)
       onOpenChange(false)

@@ -15,7 +15,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  if (!isLoading && user) return <Navigate to="/stock" replace />
+  if (!isLoading && user) return <Navigate to="/" replace />
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()

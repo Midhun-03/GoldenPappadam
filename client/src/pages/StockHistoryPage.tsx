@@ -24,8 +24,8 @@ const movementLabels: Record<StockMovementType, string> = {
 export function StockHistoryPage() {
   const { productId = '' } = useParams()
 
-  const product = useQuery({ queryKey: ['product', productId], queryFn: () => productsApi.get(productId) })
-  const movements = useQuery({ queryKey: ['movements', productId], queryFn: () => stockApi.movements(productId) })
+  const product = useQuery({ queryKey: ['products', productId], queryFn: () => productsApi.get(productId) })
+  const movements = useQuery({ queryKey: ['stock', productId, 'movements'], queryFn: () => stockApi.movements(productId) })
 
   const rows = movements.data ?? []
 

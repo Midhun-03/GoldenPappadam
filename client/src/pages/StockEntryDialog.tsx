@@ -54,7 +54,6 @@ export function StockEntryDialog({
     mutationFn: (entry: StockEntry) => stockApi.addEntry(entry),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ['stock'] })
-      await queryClient.invalidateQueries({ queryKey: ['movements'] })
       toast.success(`${product?.name}: ${formatQuantity(result.quantityOnHand)} ${product?.unitCode} on hand`)
       if (result.warning) toast.warning(result.warning)
       onOpenChange(false)

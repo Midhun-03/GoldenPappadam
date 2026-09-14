@@ -98,6 +98,133 @@ export type PackingResponse = {
   warning: string | null
 }
 
+export type InvoiceStatus = 'Issued' | 'Cancelled'
+
+export type PaymentMethod = 'Cash' | 'UPI' | 'BankTransfer' | 'Cheque' | 'Other'
+
+export type Customer = {
+  id: string
+  name: string
+  contactPerson: string | null
+  phone: string | null
+  address: string | null
+  openingBalance: number
+  /** What the shop owes right now: opening balance + bills − payments. */
+  balance: number
+  notes: string | null
+  isActive: boolean
+}
+
+export type SaveCustomer = {
+  name: string
+  contactPerson: string | null
+  phone: string | null
+  address: string | null
+  openingBalance: number
+  notes: string | null
+}
+
+export type LedgerEntry = {
+  /** A plain date, "2026-09-14". */
+  date: string
+  entryType: 'Opening' | 'Invoice' | 'Payment'
+  reference: string
+  description: string | null
+  billed: number
+  paid: number
+  balance: number
+}
+
+export type OutstandingInvoice = {
+  invoiceId: string
+  invoiceNumber: string
+  invoiceDate: string
+  totalAmount: number
+  amountPaid: number
+  outstanding: number
+}
+
+export type InvoiceLine = {
+  id: string
+  productId: string
+  description: string
+  unitCode: string
+  quantity: number
+  unitPrice: number
+  lineTotal: number
+}
+
+export type InvoiceListItem = {
+  id: string
+  invoiceNumber: string
+  customerId: string
+  customerName: string
+  invoiceDate: string
+  status: InvoiceStatus
+  totalAmount: number
+  amountPaid: number
+  outstanding: number
+}
+
+export type InvoiceDetail = InvoiceListItem & {
+  subTotal: number
+  discountAmount: number
+  notes: string | null
+  cancelledAt: string | null
+  cancellationReason: string | null
+  lines: InvoiceLine[]
+}
+
+export type CreateInvoiceResponse = {
+  invoice: InvoiceDetail
+  warnings: string[]
+}
+
+export type PaymentAllocationView = {
+  invoiceId: string
+  invoiceNumber: string
+  amount: number
+}
+
+export type Payment = {
+  id: string
+  customerId: string
+  customerName: string
+  paymentDate: string
+  amount: number
+  method: PaymentMethod
+  reference: string | null
+  notes: string | null
+  allocatedAmount: number
+  unallocatedAmount: number
+  allocations: PaymentAllocationView[]
+}
+
+export type CreatePaymentResponse = {
+  payment: Payment
+  customerBalance: number
+}
+
+export type CustomerBalance = {
+  customerId: string
+  name: string
+  balance: number
+}
+
+export type DashboardSummary = {
+  today: string
+  todaySales: number
+  todayInvoiceCount: number
+  monthSales: number
+  monthInvoiceCount: number
+  activeCustomers: number
+  outstandingTotal: number
+  lowStockCount: number
+  recentInvoices: InvoiceListItem[]
+  topOutstanding: CustomerBalance[]
+  lowStockProducts: StockOnHand[]
+}
+
 export type PackingEntry = {
   id: string
   occurredAt: string
