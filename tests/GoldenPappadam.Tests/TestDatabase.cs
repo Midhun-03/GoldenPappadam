@@ -6,9 +6,9 @@ using Microsoft.EntityFrameworkCore;
 namespace GoldenPappadam.Tests;
 
 /// <summary>
-/// A throwaway LocalDB database per test class. Tests run against real SQL Server rather than
-/// an in-memory provider, so check constraints, transactions and decimal precision behave
-/// the way they will in production.
+/// A throwaway database per test class on the local SQL Express instance. Tests run against
+/// real SQL Server rather than an in-memory provider, so check constraints, transactions and
+/// decimal precision behave the way they will in production.
 /// </summary>
 public sealed class TestDatabase : IAsyncDisposable
 {
@@ -18,7 +18,7 @@ public sealed class TestDatabase : IAsyncDisposable
     {
         var name = $"GoldenPappadam_Tests_{Guid.NewGuid():N}";
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlServer($"Server=(localdb)\\MSSQLLocalDB;Database={name};Trusted_Connection=True;TrustServerCertificate=True")
+            .UseSqlServer($"Server=.\\SQLEXPRESS;Database={name};Trusted_Connection=True;TrustServerCertificate=True")
             .Options;
 
         Db = new AppDbContext(options, new TestCurrentUser());

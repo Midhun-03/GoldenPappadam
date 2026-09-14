@@ -240,7 +240,9 @@ Decisions made:
 - 2026-09-14 — Phase-1 requirement answers recorded in §4 "Confirmed requirements" and the build order in §3.
 - 2026-09-14 — Inventory design approved: `docs/01-inventory-design.md`. Current stock is computed from the movement ledger (no cache column in phase 1). Stock shortfalls **warn, never block**, so stock may go negative. A packed product's source may be a loose product or another packed product (`SourceProductId`), with no cycles allowed.
 
-- 2026-09-14 — Solution structure (3 projects + tests, feature folders, controllers), cookie-based login with ASP.NET Core Identity, and **LocalDB (`(localdb)\MSSQLLocalDB`, database `GoldenPappadam`) for development**.
+- 2026-09-14 — Solution structure (3 projects + tests, feature folders, controllers) and cookie-based login with ASP.NET Core Identity.
+- 2026-09-14 — Development database: **SQL Express (`.\SQLEXPRESS`), database `GoldenPappadam`**. Moved off LocalDB, which kept failing to auto-start on this machine; SQL Express runs as a service. Tests use the same instance.
+- 2026-09-14 — Open the solution in **Visual Studio 2026** (18.7). VS 2022 cannot target .NET 10, and the solution stays on .NET 10 because it is the current LTS release.
 
 Pending decisions:
 
@@ -272,11 +274,14 @@ dotnet user-secrets set "Bootstrap:AdminEmail" "you@example.com" --project src/G
 dotnet user-secrets set "Bootstrap:AdminPassword" "<a strong password>" --project src/GoldenPappadam.Api
 ```
 
-The LocalDB connection string is the default in `src/GoldenPappadam.Api/appsettings.json`; a server overrides it with the `ConnectionStrings__GoldenPappadam` environment variable. Inspect the data with SSMS or `sqlcmd -S "(localdb)\MSSQLLocalDB" -d GoldenPappadam`.
+Development uses the **SQL Express** instance `.\SQLEXPRESS` (SQL Server 2022), set in `src/GoldenPappadam.Api/appsettings.json`; the tests create throwaway databases on the same instance. A server overrides the connection with the `ConnectionStrings__GoldenPappadam` environment variable. Inspect the data with SSMS or `sqlcmd -S ".\SQLEXPRESS" -d GoldenPappadam`.
+
+LocalDB is deliberately **not** used: its engine is started on demand by the first process that connects and repeatedly failed to auto-start on this machine ("SQL Server process failed to start", 0x89c5010a). SQL Express runs as a Windows service, so it is always up. The owner's other projects still use LocalDB — leave that instance alone.
 
 Troubleshooting:
 
-- **"SQL Server process failed to start" / LocalDB connection errors.** Run `sqllocaldb start MSSQLLocalDB` (check with `sqllocaldb info MSSQLLocalDB`; force a restart with `sqllocaldb stop MSSQLLocalDB -k` first if needed). LocalDB's engine runs as a child of the process that first connects, so never stop the app with a forced process-tree kill (`taskkill /T /F`) — it takes the database engine down too. Stop it with Ctrl+C, or Shift+F5 in Visual Studio. The same LocalDB instance hosts the owner's other project databases, so leave them alone.
+- **Login failed / "Cannot open database GoldenPappadam"** on a fresh machine: the database does not exist yet. Run `dotnet ef database update` (see above); the first admin account is then created at start-up from user secrets.
+- Never stop the app with a forced process-tree kill (`taskkill /T /F`): it terminates child processes, which can include a database engine. Stop it with Ctrl+C, or Shift+F5 in Visual Studio.
 - **MSB3021/MSB3026/MSB3027 "file is locked by" on build.** The app is still running; stop it and build again. These are not compiler errors.
 
 ## 10. Open business decisions (TBD — do not assume)
