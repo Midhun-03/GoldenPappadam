@@ -274,6 +274,11 @@ dotnet user-secrets set "Bootstrap:AdminPassword" "<a strong password>" --projec
 
 The LocalDB connection string is the default in `src/GoldenPappadam.Api/appsettings.json`; a server overrides it with the `ConnectionStrings__GoldenPappadam` environment variable. Inspect the data with SSMS or `sqlcmd -S "(localdb)\MSSQLLocalDB" -d GoldenPappadam`.
 
+Troubleshooting:
+
+- **"SQL Server process failed to start" / LocalDB connection errors.** Run `sqllocaldb start MSSQLLocalDB` (check with `sqllocaldb info MSSQLLocalDB`; force a restart with `sqllocaldb stop MSSQLLocalDB -k` first if needed). LocalDB's engine runs as a child of the process that first connects, so never stop the app with a forced process-tree kill (`taskkill /T /F`) — it takes the database engine down too. Stop it with Ctrl+C, or Shift+F5 in Visual Studio. The same LocalDB instance hosts the owner's other project databases, so leave them alone.
+- **MSB3021/MSB3026/MSB3027 "file is locked by" on build.** The app is still running; stop it and build again. These are not compiler errors.
+
 ## 10. Open business decisions (TBD — do not assume)
 
 Never design around an assumption for these; ask, or keep the design open.
