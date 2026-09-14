@@ -17,6 +17,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<PackingEntry> PackingEntries => Set<PackingEntry>();
 
+    /// <summary>
+    /// SQL Server's datetime2 does not remember that a value is UTC, so EF hands it back as
+    /// "unspecified" and clients read it as local time. This stamps every DateTime as UTC on the
+    /// way out, and converts to UTC on the way in.
+    /// </summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder builder)
+    {
+        base.ConfigureConventions(builder);
+
+        builder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        builder.Properties<DateTime?>().HaveConversion<UtcDateTimeConverter>();
+    }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

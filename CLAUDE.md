@@ -196,8 +196,9 @@ Design before large code drops; deliver in reviewable increments.
 _Last updated: 2026-09-14_
 
 - Solution scaffolded on .NET 10: `GoldenPappadam.sln` with `src/GoldenPappadam.Domain`, `src/GoldenPappadam.Infrastructure`, `src/GoldenPappadam.Api` and `tests/GoldenPappadam.Tests`. No Application project: use-case code lives in the API project in feature folders until it earns its own project. Controllers, not minimal APIs. React client (`client/`) comes once the inventory endpoints exist.
-- Inventory entities, EF Core configurations, the `AppDbContext` (with audit handling and immutability enforcement) and Identity with `Guid` keys are in place. Migration `InitialCreate` applied to LocalDB; units KG/PCS/PKT/BOX are seeded.
-- Immediate priority: **Inventory management** — next slice is admin login plus the first inventory endpoints (categories, units, products).
+- Inventory entities, EF Core configurations, the `AppDbContext` (audit handling, ledger immutability, UTC DateTime conversion) and Identity with `Guid` keys are in place. Migration `InitialCreate` applied to LocalDB; units KG/PCS/PKT/BOX are seeded.
+- Inventory API done and covered by 20 tests against LocalDB: categories, units, products (with source/cycle validation), stock on hand with low-stock flag, movement history with running balance, manual entries (opening/production/damage), count-based adjustments, and packing. Business-rule failures return problem details via `DomainException`.
+- Immediate priority: admin login (ASP.NET Core Identity endpoints + first admin user), then the React client, then sales.
 
 Agreed order of work:
 
@@ -207,8 +208,17 @@ Agreed order of work:
 4. [x] Define products and product types — same document.
 5. [x] Define stock-movement logic — same document.
 6. [ ] Plan how inventory connects to future sales and production modules.
-7. [ ] Build the backend incrementally.
+7. [ ] Build the backend incrementally — inventory module done (categories, units, products, stock, packing); login and sales next.
 8. [ ] Build the React frontend incrementally.
+
+Conventions that emerged while building, worth following in new features:
+
+- Feature folders under `src/GoldenPappadam.Api/Features/<Module>/<Feature>` hold the controller, its DTOs and its service.
+- Controllers stay thin; rules the database cannot express live in a small service (`ProductService`, `StockService`, `PackingService`).
+- Validate everything **before** mutating a tracked entity, so a rejected request leaves nothing half-changed.
+- Business-rule failures throw `DomainException` (400) or `NotFoundException` (404); `DomainExceptionHandler` turns them into problem details.
+- Records used as request DTOs put validation attributes on the **constructor parameter**, not `[property: ...]`, which throws on .NET 10.
+- Tests run against a throwaway LocalDB database per test class (`TestDatabase`), not an in-memory provider, so constraints and transactions behave as in production.
 
 Decisions made:
 

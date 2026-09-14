@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\GoldenPappadam.Domain\GoldenPappadam.Domain.csproj" />
     <ProjectReference Include="..\..\src\GoldenPappadam.Infrastructure\GoldenPappadam.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\GoldenPappadam.Api\GoldenPappadam.Api.csproj" />
   </ItemGroup>
 
 </Project>

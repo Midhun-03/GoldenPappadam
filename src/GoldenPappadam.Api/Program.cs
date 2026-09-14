@@ -1,4 +1,8 @@
+using System.Text.Json.Serialization;
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Api.Features.Inventory.Packing;
+using GoldenPappadam.Api.Features.Inventory.Products;
+using GoldenPappadam.Api.Features.Inventory.Stock;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -22,10 +26,20 @@ builder.Services
     .AddRoles<IdentityRole<Guid>>()
     .AddEntityFrameworkStores<AppDbContext>();
 
-builder.Services.AddControllers();
+builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<StockService>();
+builder.Services.AddScoped<PackingService>();
+
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
