@@ -199,7 +199,8 @@ _Last updated: 2026-09-14_
 - Inventory entities, EF Core configurations, the `AppDbContext` (audit handling, ledger immutability, UTC DateTime conversion) and Identity with `Guid` keys are in place. Migration `InitialCreate` applied to LocalDB; units KG/PCS/PKT/BOX are seeded.
 - Inventory API done and covered by 20 tests against LocalDB: categories, units, products (with source/cycle validation), stock on hand with low-stock flag, movement history with running balance, manual entries (opening/production/damage), count-based adjustments, and packing. Business-rule failures return problem details via `DomainException`.
 - Admin login done: cookie authentication, `POST /api/auth/login`, `logout`, `GET /api/auth/me`, `change-password`, and `/api/admin/users` for adding or deactivating admins. Every endpoint requires a signed-in user through a fallback authorization policy; only login and the OpenAPI document are anonymous. Audit fields now record the signed-in user.
-- Immediate priority: the React client (inventory screens), then sales.
+- React client done for inventory: login, stock on hand (low-stock flags, add stock, correct after counting), products (with packed-from configuration), packing, stock history with running balance, and settings for categories and units. Stack: Vite, TypeScript, Tailwind v4, shadcn/ui (radix-nova preset), React Router and TanStack Query. `client/` runs on 5173 and proxies `/api` to 5207, so the session cookie stays same-origin.
+- Immediate priority: sales — customers, invoices, sale movements — then payments, dashboard and reports.
 
 Agreed order of work:
 
@@ -210,7 +211,7 @@ Agreed order of work:
 5. [x] Define stock-movement logic — same document.
 6. [ ] Plan how inventory connects to future sales and production modules.
 7. [ ] Build the backend incrementally — inventory module done (categories, units, products, stock, packing); login and sales next.
-8. [ ] Build the React frontend incrementally.
+8. [ ] Build the React frontend incrementally — inventory screens done; sales screens next.
 
 Conventions that emerged while building, worth following in new features:
 
@@ -221,6 +222,13 @@ Conventions that emerged while building, worth following in new features:
 - Records used as request DTOs put validation attributes on the **constructor parameter**, not `[property: ...]`, which throws on .NET 10.
 - Filter and order the entity query **before** projecting to a DTO: SQL Server cannot order by an already-projected record. Keep list projections in a `*Queries` class so a test can run them against real SQL.
 - Tests run against a throwaway LocalDB database per test class (`TestDatabase`), not an in-memory provider, so constraints and transactions behave as in production.
+
+Client conventions:
+
+- `client/src/api/` holds typed API functions and DTO types that mirror the server's; `lib/api.ts` is the only place that calls `fetch`, adds `credentials: 'include'` and turns problem details into an `ApiError` message.
+- Server state goes through TanStack Query (`useQuery` / `useMutation` with `invalidateQueries`); component state stays in `useState`. No global store.
+- Warnings returned by the API (negative stock) surface as a toast, never as a blocked form.
+- Quantities, money and dates are formatted only through `lib/format.ts`, which renders dates in IST.
 
 Decisions made:
 
@@ -242,10 +250,20 @@ Pending decisions:
 
 ```bash
 dotnet build
+dotnet test
 dotnet run --project src/GoldenPappadam.Api
 dotnet ef migrations add <Name> -p src/GoldenPappadam.Infrastructure -s src/GoldenPappadam.Api -o Persistence/Migrations
 dotnet ef database update -p src/GoldenPappadam.Infrastructure -s src/GoldenPappadam.Api
 ```
+
+The client needs the API running on 5207 (the `http` launch profile):
+
+```bash
+npm install --prefix client
+npm run dev --prefix client
+```
+
+Then open http://localhost:5173. `.claude/launch.json` defines both servers for tooling.
 
 The first admin account is created at start-up from user secrets, only when the user table is empty. Never put these in a committed file:
 
