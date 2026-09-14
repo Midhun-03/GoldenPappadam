@@ -3,6 +3,9 @@ using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Packing;
 using GoldenPappadam.Api.Features.Inventory.Products;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.Sales.Customers;
+using GoldenPappadam.Api.Features.Sales.Invoices;
+using GoldenPappadam.Api.Features.Sales.Payments;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -65,6 +68,9 @@ builder.Services.AddAuthorizationBuilder()
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<StockService>();
 builder.Services.AddScoped<PackingService>();
+builder.Services.AddScoped<CustomerService>();
+builder.Services.AddScoped<InvoiceService>();
+builder.Services.AddScoped<PaymentService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));

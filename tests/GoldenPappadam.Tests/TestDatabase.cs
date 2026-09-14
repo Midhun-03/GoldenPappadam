@@ -1,4 +1,5 @@
 using GoldenPappadam.Domain.Inventory;
+using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -61,6 +62,15 @@ public sealed class TestDatabase : IAsyncDisposable
         await Db.SaveChangesAsync();
 
         return (loose, packed);
+    }
+
+    public async Task<Customer> SeedCustomerAsync(string name = "Test Shop", decimal openingBalance = 0m)
+    {
+        var customer = new Customer { Name = name, OpeningBalance = openingBalance };
+        Db.Add(customer);
+        await Db.SaveChangesAsync();
+
+        return customer;
     }
 
     public async Task AddStockAsync(Guid productId, decimal quantity)

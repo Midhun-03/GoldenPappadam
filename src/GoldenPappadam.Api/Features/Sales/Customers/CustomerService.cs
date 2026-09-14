@@ -1,0 +1,169 @@
+using GoldenPappadam.Api.Common;
+using GoldenPappadam.Domain.Sales;
+using GoldenPappadam.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace GoldenPappadam.Api.Features.Sales.Customers;
+
+public class CustomerService(AppDbContext db)
+{
+    public async Task<Customer> CreateAsync(SaveCustomerRequest request, CancellationToken ct)
+    {
+        await EnsureNameIsFreeAsync(request.Name, null, ct);
+
+        var customer = new Customer
+        {
+            Name = request.Name.Trim(),
+            ContactPerson = Clean(request.ContactPerson),
+            Phone = Clean(request.Phone),
+            Address = Clean(request.Address),
+            OpeningBalance = request.OpeningBalance,
+            Notes = Clean(request.Notes)
+        };
+
+        db.Customers.Add(customer);
+        await db.SaveChangesAsync(ct);
+
+        return customer;
+    }
+
+    public async Task<Customer> UpdateAsync(Guid id, SaveCustomerRequest request, CancellationToken ct)
+    {
+        var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == id, ct)
+                       ?? throw new NotFoundException("Customer");
+
+        await EnsureNameIsFreeAsync(request.Name, id, ct);
+
+        if (customer.OpeningBalance != request.OpeningBalance &&
+            await db.Invoices.AnyAsync(i => i.CustomerId == id, ct))
+        {
+            throw new DomainException(
+                "The opening balance cannot be changed once this customer has bills. " +
+                "Record a payment or a new bill instead.");
+        }
+
+        customer.Name = request.Name.Trim();
+        customer.ContactPerson = Clean(request.ContactPerson);
+        customer.Phone = Clean(request.Phone);
+        customer.Address = Clean(request.Address);
+        customer.OpeningBalance = request.OpeningBalance;
+        customer.Notes = Clean(request.Notes);
+
+        await db.SaveChangesAsync(ct);
+
+        return customer;
+    }
+
+    public async Task<Customer> SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
+    {
+        var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == id, ct)
+                       ?? throw new NotFoundException("Customer");
+
+        customer.IsActive = isActive;
+        await db.SaveChangesAsync(ct);
+
+        return customer;
+    }
+
+    /// <summary>The account statement: opening balance, then every bill and payment in date order.</summary>
+    public async Task<IReadOnlyList<LedgerEntryDto>> GetLedgerAsync(Guid customerId, CancellationToken ct)
+    {
+        var customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == customerId, ct)
+                       ?? throw new NotFoundException("Customer");
+
+        var invoices = await db.Invoices
+            .Where(i => i.CustomerId == customerId && i.Status == InvoiceStatus.Issued)
+            .Select(i => new { i.InvoiceDate, i.InvoiceNumber, i.TotalAmount, i.CreatedAt })
+            .ToListAsync(ct);
+
+        var payments = await db.Payments
+            .Where(p => p.CustomerId == customerId)
+            .Select(p => new { p.PaymentDate, p.Amount, p.Method, p.Reference, p.CreatedAt })
+            .ToListAsync(ct);
+
+        var entries = invoices
+            .Select(i => (
+                Date: i.InvoiceDate,
+                i.CreatedAt,
+                Entry: new LedgerEntryDto(i.InvoiceDate, "Invoice", i.InvoiceNumber, null, i.TotalAmount, 0m, 0m)))
+            .Concat(payments.Select(p => (
+                Date: p.PaymentDate,
+                p.CreatedAt,
+                Entry: new LedgerEntryDto(
+                    p.PaymentDate,
+                    "Payment",
+                    p.Reference ?? p.Method.ToString(),
+                    p.Method.ToString(),
+                    0m,
+                    p.Amount,
+                    0m))))
+            .OrderBy(x => x.Date)
+            .ThenBy(x => x.CreatedAt)
+            .Select(x => x.Entry)
+            .ToList();
+
+        var ledger = new List<LedgerEntryDto>();
+        var balance = customer.OpeningBalance;
+
+        if (customer.OpeningBalance != 0m)
+        {
+            var openingDate = entries.Count > 0 ? entries[0].Date : DateOnly.FromDateTime(DateTime.UtcNow);
+            ledger.Add(new LedgerEntryDto(
+                openingDate, "Opening", "Opening balance", null, customer.OpeningBalance, 0m, balance));
+        }
+
+        foreach (var entry in entries)
+        {
+            balance += entry.Billed - entry.Paid;
+            ledger.Add(entry with { Balance = balance });
+        }
+
+        return ledger;
+    }
+
+    /// <summary>Bills with money still on them, oldest first — the order payments are applied in.</summary>
+    public async Task<IReadOnlyList<OutstandingInvoiceDto>> GetOutstandingInvoicesAsync(
+        Guid customerId,
+        CancellationToken ct)
+    {
+        if (!await db.Customers.AnyAsync(c => c.Id == customerId, ct))
+        {
+            throw new NotFoundException("Customer");
+        }
+
+        var rows = await db.Invoices
+            .Where(i => i.CustomerId == customerId && i.Status == InvoiceStatus.Issued)
+            .OrderBy(i => i.InvoiceDate)
+            .ThenBy(i => i.InvoiceNumber)
+            .Select(i => new
+            {
+                i.Id,
+                i.InvoiceNumber,
+                i.InvoiceDate,
+                i.TotalAmount,
+                Paid = db.PaymentAllocations
+                    .Where(a => a.InvoiceId == i.Id)
+                    .Sum(a => (decimal?)a.Amount) ?? 0m
+            })
+            .ToListAsync(ct);
+
+        return rows
+            .Select(r => new OutstandingInvoiceDto(
+                r.Id, r.InvoiceNumber, r.InvoiceDate, r.TotalAmount, r.Paid, r.TotalAmount - r.Paid))
+            .Where(r => r.Outstanding > 0m)
+            .ToList();
+    }
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private async Task EnsureNameIsFreeAsync(string name, Guid? exceptId, CancellationToken ct)
+    {
+        var trimmed = name.Trim();
+        var taken = await db.Customers.AnyAsync(c => c.Name == trimmed && (exceptId == null || c.Id != exceptId), ct);
+
+        if (taken)
+        {
+            throw new DomainException($"A customer named '{trimmed}' already exists.");
+        }
+    }
+}

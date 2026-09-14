@@ -4,5 +4,6 @@ namespace GoldenPappadam.Infrastructure.Persistence;
 public static class Schemas
 {
     public const string Inventory = "inventory";
+    public const string Sales = "sales";
     public const string Identity = "identity";
 }

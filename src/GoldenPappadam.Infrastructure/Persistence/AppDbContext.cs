@@ -1,6 +1,7 @@
 using System.Reflection;
 using GoldenPappadam.Domain.Common;
 using GoldenPappadam.Domain.Inventory;
+using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -16,6 +17,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<Product> Products => Set<Product>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<PackingEntry> PackingEntries => Set<PackingEntry>();
+
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
 
     /// <summary>
     /// SQL Server's datetime2 does not remember that a value is UTC, so EF hands it back as
