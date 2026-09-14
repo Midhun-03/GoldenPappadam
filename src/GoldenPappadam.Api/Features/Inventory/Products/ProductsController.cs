@@ -17,17 +17,17 @@ public class ProductsController(AppDbContext db, ProductService products) : Cont
         string? search = null,
         bool includeInactive = false,
         CancellationToken ct = default) =>
-        await Project(db.Products
+        await ProductQueries.Project(db.Products
                 .Where(p => includeInactive || p.IsActive)
                 .Where(p => categoryId == null || p.CategoryId == categoryId)
                 .Where(p => kind == null || p.Kind == kind)
-                .Where(p => search == null || p.Name.Contains(search) || p.ProductCode.Contains(search)))
-            .OrderBy(p => p.Name)
+                .Where(p => search == null || p.Name.Contains(search) || p.ProductCode.Contains(search))
+                .OrderBy(p => p.Name))
             .ToListAsync(ct);
 
     [HttpGet("{id:guid}")]
     public async Task<ProductDto> GetById(Guid id, CancellationToken ct) =>
-        await Project(db.Products.Where(p => p.Id == id)).FirstOrDefaultAsync(ct)
+        await ProductQueries.Project(db.Products.Where(p => p.Id == id)).FirstOrDefaultAsync(ct)
         ?? throw new NotFoundException("Product");
 
     [HttpPost]
@@ -55,21 +55,4 @@ public class ProductsController(AppDbContext db, ProductService products) : Cont
 
         return await GetById(id, ct);
     }
-
-    private static IQueryable<ProductDto> Project(IQueryable<Product> query) =>
-        query.Select(p => new ProductDto(
-            p.Id,
-            p.ProductCode,
-            p.Name,
-            p.CategoryId,
-            p.Category!.Name,
-            p.Kind,
-            p.UnitOfMeasureId,
-            p.UnitOfMeasure!.Code,
-            p.SourceProductId,
-            p.SourceProduct != null ? p.SourceProduct.Name : null,
-            p.SourceQuantityPerPack,
-            p.SellingPrice,
-            p.LowStockThreshold,
-            p.IsActive));
 }
