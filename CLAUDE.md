@@ -200,7 +200,9 @@ _Last updated: 2026-09-14_
 - Inventory API done and covered by 20 tests against LocalDB: categories, units, products (with source/cycle validation), stock on hand with low-stock flag, movement history with running balance, manual entries (opening/production/damage), count-based adjustments, and packing. Business-rule failures return problem details via `DomainException`.
 - Admin login done: cookie authentication, `POST /api/auth/login`, `logout`, `GET /api/auth/me`, `change-password`, and `/api/admin/users` for adding or deactivating admins. Every endpoint requires a signed-in user through a fallback authorization policy; only login and the OpenAPI document are anonymous. Audit fields now record the signed-in user.
 - React client done for inventory: login, stock on hand (low-stock flags, add stock, correct after counting), products (with packed-from configuration), packing, stock history with running balance, and settings for categories and units. Stack: Vite, TypeScript, Tailwind v4, shadcn/ui (radix-nova preset), React Router and TanStack Query. `client/` runs on 5173 and proxies `/api` to 5207, so the session cookie stays same-origin.
-- Immediate priority: sales — customers, invoices, sale movements — then payments, dashboard and reports.
+- Sales done, backend and screens, designed in `docs/02-sales-design.md`: customers with an opening balance and an account statement, bills numbered per Indian financial year that price lines from the product (overridable) and take stock off the ledger, a bill-level discount, cancellation that returns the stock, and payments that settle the oldest bills first or ones you pick, with partial settlement and money on account. 37 tests.
+- Dashboard done: today's and this month's sales, outstanding money, low stock, recent bills, who owes the most — all on the IST business day.
+- Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
 
@@ -209,9 +211,9 @@ Agreed order of work:
 3. [x] Design the inventory module — `docs/01-inventory-design.md` (approved 2026-09-14).
 4. [x] Define products and product types — same document.
 5. [x] Define stock-movement logic — same document.
-6. [ ] Plan how inventory connects to future sales and production modules.
-7. [ ] Build the backend incrementally — inventory module done (categories, units, products, stock, packing); login and sales next.
-8. [ ] Build the React frontend incrementally — inventory screens done; sales screens next.
+6. [x] Plan how inventory connects to future sales and production modules — sales writes `Sale` and `SaleReversal` movements through the same ledger; production will write `Production` movements the same way.
+7. [x] Build the backend incrementally — inventory, login, sales and dashboard.
+8. [x] Build the React frontend incrementally — inventory, sales and dashboard screens.
 
 Conventions that emerged while building, worth following in new features:
 
