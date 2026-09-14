@@ -82,7 +82,12 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi().AllowAnonymous();
 }
 
-app.UseHttpsRedirection();
+// Not in development: the React dev server proxies plain HTTP to this API, and a redirect to
+// HTTPS would break those calls (and the session cookie with them). Production still redirects.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
