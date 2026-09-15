@@ -25,6 +25,11 @@ public static class AdminUserSeeder
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(AdminUserSeeder));
 
+        if (!await RoleSeeder.CanReachDatabaseAsync(scope.ServiceProvider, logger))
+        {
+            return;
+        }
+
         if (userManager.Users.Any())
         {
             return;
@@ -35,6 +40,8 @@ public static class AdminUserSeeder
 
         if (result.Succeeded)
         {
+            // RoleSeeder has already run, so this account is past its backfill: say so explicitly.
+            await userManager.AddToRoleAsync(user, Roles.Admin);
             logger.LogInformation("Created the first admin account for {Email}.", email);
         }
         else

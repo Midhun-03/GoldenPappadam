@@ -86,6 +86,21 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 - **Pricing:** every product has a default selling price, overridable on a sale line. Customer-specific pricing must be addable later without redesign. Never hard-code one unchangeable price.
 - **Returns:** the design must stay return-ready (extensible movement types + the reference pattern). Do not build a returns workflow in phase 1.
 - **Discounts:** a simple bill-level discount field is enough for now; item-level discounts must remain addable later. No promotion/discount engine.
+### Confirmed requirements (2026-09-15, phase 3)
+
+- **Customer-specific pricing is real** (closes §10 question 1). The same product has a different price for
+  different shops. Prices live in `sales.CustomerPrices` and are **admin-only**; a shop with no price row
+  pays the product's `SellingPrice`. A salesperson can never set or change a price — the mobile sale request
+  carries no price field at all.
+- **A recorded price is never rewritten.** An offline sale is a transaction that already happened, so it is
+  saved at the price the phone used; if the price changed while the phone was offline, the bill is *flagged*
+  for the admin, not silently re-priced.
+- **Stock leaves the warehouse when the van is loaded**, not when a shop is billed. That makes stock
+  location-aware: `inventory.StockLocations` plus `StockMovement.LocationId`. The admin records the morning
+  load, unsold stock returns every evening, and a shortfall is **shown to the admin, never auto-adjusted** —
+  that reconciliation is what catches a sale nobody recorded.
+- **One user account per person**, with two roles: `Admin` and `Salesperson`.
+
 - **Tax/GST:** the invoice structure must allow tax fields (GSTIN, HSN/SAC, tax %, tax amount, CGST/SGST/IGST) to be added later without restructuring sales. Do **not** assume sales are GST-exempt and do not implement tax logic until the accountant confirms it.
 
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
@@ -195,6 +210,13 @@ Design before large code drops; deliver in reviewable increments.
 
 _Last updated: 2026-09-15_
 
+**Phase 1 is complete. Phase 3 is in progress** — a Flutter salesperson app that works offline and
+synchronizes with this API, designed in `docs/03-field-sales-design.md` (approved 2026-09-15).
+Milestones: M0 environment, **M1 roles and bearer auth (done)**, M2 customer pricing, M2b stock locations
+and van loads, M3 sync foundation, M4 Flutter foundation, M5 shops, M6 sale entry, M7 offline and sync,
+M8 payments, M9 admin field-sales screens, M10 field testing, M11 returns.
+There is no phase 2: the owner numbered the mobile work phase 3.
+
 - Solution scaffolded on .NET 10: `GoldenPappadam.sln` with `src/GoldenPappadam.Domain`, `src/GoldenPappadam.Infrastructure`, `src/GoldenPappadam.Api` and `tests/GoldenPappadam.Tests`. No Application project: use-case code lives in the API project in feature folders until it earns its own project. Controllers, not minimal APIs. React client (`client/`) comes once the inventory endpoints exist.
 - Inventory entities, EF Core configurations, the `AppDbContext` (audit handling, ledger immutability, UTC DateTime conversion) and Identity with `Guid` keys are in place. Migration `InitialCreate` applied to LocalDB; units KG/PCS/PKT/BOX are seeded.
 - Inventory API done and covered by 20 tests against LocalDB: categories, units, products (with source/cycle validation), stock on hand with low-stock flag, movement history with running balance, manual entries (opening/production/damage), count-based adjustments, and packing. Business-rule failures return problem details via `DomainException`.
@@ -203,6 +225,15 @@ _Last updated: 2026-09-15_
 - Sales done, backend and screens, designed in `docs/02-sales-design.md`: customers with an opening balance and an account statement, bills numbered per Indian financial year that price lines from the product (overridable) and take stock off the ledger, a bill-level discount, cancellation that returns the stock, and payments that settle the oldest bills first or ones you pick, with partial settlement and money on account. 40 tests.
 - Dashboard done: five KPI tiles (today, this month, outstanding, product count, stock needing attention), a daily sales trend, sales by product/category, how much of what was billed has come back, stock health, recent bills, what needs restocking and who owes the most — all on the IST business day, with a 7-day / 30-day / this-month range selector.
 - UI reworked across every screen for a modern, responsive admin layout: grouped sidebar at 1024px and up with a drawer below it, status colours that only ever carry meaning, skeletons and real empty/error states, priority columns so no list scrolls sideways on a phone, and touch targets that grow on coarse pointers. Charts are Recharts, loaded only with the dashboard route so the other screens do not carry them.
+- **M1 done (phase 3):** two roles, `Admin` and `Salesperson`. An endpoint with no authorization attribute is
+  **admin-only** through the fallback policy, which is what made every phase-1 controller safe against a
+  salesperson token without editing one of them; a bare `[Authorize]` means "anyone signed in" and only the
+  shared auth endpoints use it. Identity's bearer scheme runs alongside the cookie, so the React panel keeps
+  its session and the phone gets `POST /api/auth/mobile/login` and `mobile/refresh` (1-hour access token,
+  30-day refresh). `RoleSeeder` creates the roles and gives every pre-phase-3 account the admin role at
+  start-up — without that backfill the new policy would lock the owner out. 36 new tests drive real HTTP
+  through the real pipeline (`ApiFactory`, `WebApplicationFactory`), because authorization is wiring rather
+  than logic and the only honest check is the status code.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
@@ -247,6 +278,11 @@ Decisions made:
 - 2026-09-14 — Development database: **SQL Express (`.\SQLEXPRESS`), database `GoldenPappadam`**. Moved off LocalDB, which kept failing to auto-start on this machine; SQL Express runs as a service. Tests use the same instance.
 - 2026-09-15 — Charting library: **Recharts**, the only one, loaded through a lazy dashboard route. Recharts paints with SVG presentation attributes, which do not resolve `var()`, so chart colours are read off the document by `lib/chartColors.ts` and passed as resolved values.
 - 2026-09-15 — `GET /api/dashboard/product-sales?from&to` added: the invoice list carries no lines, so sales per product and per category cannot be built on the client without a request per bill.
+
+- 2026-09-15 — **Phase 3 approved**: `docs/03-field-sales-design.md`. Flutter/Android salesperson app, offline-first, syncing to this API. Seven business decisions recorded in its Part E.
+- 2026-09-15 — Authorization: **fallback policy = Admin**, so a new endpoint is closed until deliberately opened. Salesperson endpoints opt in with `Policies.FieldSales`.
+- 2026-09-15 — Mobile authentication: **Identity's bearer token scheme**, not hand-rolled JWT and not a second identity store. The cookie stays for the React panel.
+- 2026-09-15 — Integration tests: `Microsoft.AspNetCore.Mvc.Testing` against a throwaway SQL Express database, for things that only real HTTP can prove (authorization, later idempotency).
 
 - 2026-09-14 — Open the solution in **Visual Studio 2026** (18.7). VS 2022 cannot target .NET 10, and the solution stays on .NET 10 because it is the current LTS release.
 
@@ -296,7 +332,7 @@ Never design around an assumption for these; ask, or keep the design open.
 
 | # | Question | Status | Affects |
 |---|---|---|---|
-| 1 | Do different shops pay different prices? | TBD — owner to confirm with the business | sales pricing |
+| ~~1~~ | ~~Do different shops pay different prices?~~ | **Answered 2026-09-15: yes.** See §4 "Confirmed requirements" | sales pricing |
 | 2 | Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded? | TBD — owner to confirm the actual process | inventory + sales |
 | 3 | Are discounts given, and at bill level or item level? | TBD — owner to confirm | invoice totals |
 | 4 | Must bills carry GST (GSTIN, HSN/SAC, tax amounts)? | TBD — confirm with the accountant | invoice structure |

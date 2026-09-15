@@ -9,7 +9,6 @@ using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Payments;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,7 +38,21 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
+// Two ways in: the React panel uses the cookie, the Flutter app uses a bearer token. Identity's own
+// bearer scheme gives us access and refresh tokens without hand-rolling any JWT code, and the
+// cookie setup below is untouched, so the admin panel is unaffected.
+var authentication = builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme);
+
+authentication.AddIdentityCookies();
+
+authentication.AddBearerToken(IdentityConstants.BearerScheme, options =>
+{
+    options.BearerTokenExpiration = TimeSpan.FromHours(1);
+
+    // A salesperson can be out of signal for days; the phone keeps working offline either way,
+    // but this is how long it can go without having to type a password again.
+    options.RefreshTokenExpiration = TimeSpan.FromDays(30);
+});
 
 // This is an API, so an expired or missing session must answer 401, never redirect to a login page.
 builder.Services.ConfigureApplicationCookie(options =>
@@ -62,9 +75,15 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
-// Every endpoint needs a signed-in user unless it is marked [AllowAnonymous].
+// An endpoint with no authorization attribute is admin-only. That is what makes every controller
+// written in phase 1 safe against a salesperson token without editing any of them, and it means a
+// new endpoint is closed until someone deliberately opens it.
+// A bare [Authorize] means "anyone signed in", which only the shared auth endpoints use.
 builder.Services.AddAuthorizationBuilder()
-    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+    .SetFallbackPolicy(Policies.Admin())
+    .SetDefaultPolicy(Policies.SignedIn())
+    .AddPolicy(Policies.AdminOnly, Policies.Admin())
+    .AddPolicy(Policies.FieldSales, Policies.Field());
 
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<StockService>();
@@ -102,6 +121,10 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+await RoleSeeder.SeedAsync(app);
 await AdminUserSeeder.SeedAsync(app);
 
 app.Run();
+
+/// <summary>Exposed so the integration tests can spin up the real application.</summary>
+public partial class Program;

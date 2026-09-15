@@ -9,10 +9,14 @@ export type StockMovementType =
   | 'Damage'
   | 'Adjustment'
 
+export type Role = 'Admin' | 'Salesperson'
+
 export type CurrentUser = {
   id: string
   email: string
   fullName: string
+  /** What to show, never what is allowed — the API decides that. */
+  role: Role
 }
 
 export type Category = {

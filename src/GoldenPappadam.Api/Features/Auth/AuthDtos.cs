@@ -7,14 +7,18 @@ public record LoginRequest(
     [Required] string Password,
     bool RememberMe = false);
 
-public record CurrentUserDto(Guid Id, string Email, string FullName);
+/// <summary>The refresh token from a previous mobile login or refresh.</summary>
+public record RefreshRequest([Required] string RefreshToken);
 
-public record UserDto(Guid Id, string Email, string FullName, bool IsActive);
+public record CurrentUserDto(Guid Id, string Email, string FullName, string Role);
+
+public record UserDto(Guid Id, string Email, string FullName, string Role, bool IsActive);
 
 public record CreateUserRequest(
     [Required, EmailAddress] string Email,
     [Required, MaxLength(150)] string FullName,
-    [Required, MinLength(8)] string Password);
+    [Required, MinLength(8)] string Password,
+    [Required] string Role);
 
 public record ChangePasswordRequest(
     [Required] string CurrentPassword,
