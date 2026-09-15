@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { customersApi, paymentsApi } from '@/api/sales'
@@ -17,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ApiError } from '@/lib/api'
-import { formatDay, formatMoney, todayInIndia } from '@/lib/format'
+import { formatDay, formatMoney, formatPaymentMethod, todayInIndia } from '@/lib/format'
 
 const methods: PaymentMethod[] = ['Cash', 'UPI', 'BankTransfer', 'Cheque', 'Other']
 
@@ -113,6 +114,8 @@ export function RecordPaymentDialog({
 
   const bills = outstanding.data ?? []
   const totalOutstanding = bills.reduce((sum, bill) => sum + bill.outstanding, 0)
+  const entered = amount.trim() === '' ? 0 : Number(amount)
+  const overpaying = entered > totalOutstanding && totalOutstanding > 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,10 +129,12 @@ export function RecordPaymentDialog({
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
           {!customerId && (
-            <div className="grid gap-2">
-              <Label>Customer</Label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="payment-shop">
+                Customer <span className="text-destructive">*</span>
+              </Label>
               <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                <SelectTrigger>
+                <SelectTrigger id="payment-shop" className="w-full">
                   <SelectValue placeholder="Choose a shop" />
                 </SelectTrigger>
                 <SelectContent>
@@ -143,22 +148,29 @@ export function RecordPaymentDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="amount">Amount</Label>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="amount">
+                Amount <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="amount"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 min="0.01"
                 required
+                autoFocus
+                className="text-right"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="paymentDate">Date</Label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="paymentDate">
+                Date <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="paymentDate"
                 type="date"
@@ -168,16 +180,16 @@ export function RecordPaymentDialog({
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label>Method</Label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="payment-method">Method</Label>
               <Select value={method} onValueChange={(value) => setMethod(value as PaymentMethod)}>
-                <SelectTrigger>
+                <SelectTrigger id="payment-method" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {methods.map((option) => (
                     <SelectItem key={option} value={option}>
-                      {option === 'BankTransfer' ? 'Bank transfer' : option}
+                      {formatPaymentMethod(option)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -185,8 +197,8 @@ export function RecordPaymentDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="reference">Reference</Label>
               <Input
                 id="reference"
@@ -197,11 +209,12 @@ export function RecordPaymentDialog({
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="payment-notes">Notes</Label>
               <Input
                 id="payment-notes"
                 maxLength={300}
+                placeholder="Optional"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
               />
@@ -209,30 +222,50 @@ export function RecordPaymentDialog({
           </div>
 
           {selectedCustomerId !== '' && (
-            <div className="rounded-md border bg-muted/40 p-3">
-              <div className="flex items-center justify-between">
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-sm">
-                  {bills.length} unpaid bill{bills.length === 1 ? '' : 's'} · {formatMoney(totalOutstanding)}
+                  {outstanding.isPending ? (
+                    'Loading unpaid bills…'
+                  ) : (
+                    <>
+                      <span className="font-medium">{bills.length}</span> unpaid bill
+                      {bills.length === 1 ? '' : 's'} ·{' '}
+                      <span className="font-medium tabular-nums">{formatMoney(totalOutstanding)}</span>
+                    </>
+                  )}
                 </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setChooseBills(!chooseBills)}>
-                  {chooseBills ? 'Apply to oldest first' : 'Choose bills'}
-                </Button>
+                {bills.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-pressed={chooseBills}
+                    onClick={() => setChooseBills(!chooseBills)}
+                  >
+                    {chooseBills ? 'Apply to oldest first' : 'Choose bills'}
+                  </Button>
+                )}
               </div>
 
               {chooseBills && bills.length > 0 && (
                 <div className="mt-3 grid gap-2">
                   {bills.map((bill) => (
-                    <div key={bill.invoiceId} className="flex items-center gap-3 text-sm">
-                      <span className="font-mono text-xs">{bill.invoiceNumber}</span>
-                      <span className="text-muted-foreground">{formatDay(bill.invoiceDate)}</span>
-                      <span className="ml-auto text-muted-foreground">{formatMoney(bill.outstanding)} due</span>
+                    <div key={bill.invoiceId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      <span className="font-mono text-xs font-medium">{bill.invoiceNumber}</span>
+                      <span className="text-xs text-muted-foreground">{formatDay(bill.invoiceDate)}</span>
+                      <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                        {formatMoney(bill.outstanding)} due
+                      </span>
                       <Input
-                        className="w-28"
+                        className="w-24 text-right"
                         type="number"
+                        inputMode="decimal"
                         step="0.01"
                         min="0"
                         max={bill.outstanding}
                         placeholder="0"
+                        aria-label={`Amount to apply to bill ${bill.invoiceNumber}`}
                         value={allocations[bill.invoiceId] ?? ''}
                         onChange={(event) =>
                           setAllocations({ ...allocations, [bill.invoiceId]: event.target.value })
@@ -241,6 +274,13 @@ export function RecordPaymentDialog({
                     </div>
                   ))}
                 </div>
+              )}
+
+              {!chooseBills && overpaying && (
+                <p className="mt-2 text-xs text-warning">
+                  {formatMoney(entered - totalOutstanding)} more than is due. The extra stays on account for the
+                  next bill.
+                </p>
               )}
             </div>
           )}
@@ -256,6 +296,7 @@ export function RecordPaymentDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={save.isPending || selectedCustomerId === ''}>
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {save.isPending ? 'Saving…' : 'Record payment'}
             </Button>
           </DialogFooter>

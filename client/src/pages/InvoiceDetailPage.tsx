@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
+import { Ban, Loader2, Store, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { invoicesApi } from '@/api/sales'
+import { ErrorState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,9 +19,28 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApiError } from '@/lib/api'
 import { formatDay, formatMoney, formatQuantity } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
+function Amount({
+  label,
+  value,
+  className,
+}: {
+  label: string
+  value: string
+  className?: string
+}) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn('tabular-nums', className)}>{value}</span>
+    </div>
+  )
+}
 
 export function InvoiceDetailPage() {
   const { invoiceId = '' } = useParams()
@@ -47,103 +67,148 @@ export function InvoiceDetailPage() {
 
   const data = invoice.data
 
+  if (invoice.isError) {
+    return (
+      <>
+        <PageHeader back={{ to: '/invoices', label: 'Bills' }} title="Bill" />
+        <Card>
+          <CardContent className="px-0">
+            <ErrorState error={invoice.error} />
+          </CardContent>
+        </Card>
+      </>
+    )
+  }
+
   return (
     <>
       <PageHeader
+        back={{ to: '/invoices', label: 'Bills' }}
         title={data?.invoiceNumber ?? 'Bill'}
-        description={data ? `${data.customerName} · ${formatDay(data.invoiceDate)}` : undefined}
-        action={
-          <div className="flex gap-2">
-            <Button variant="outline" asChild>
-              <Link to="/invoices">
-                <ArrowLeft className="size-4" />
-                All bills
+        description={
+          !data ? (
+            <Skeleton className="h-4 w-48" />
+          ) : (
+            <>
+              <Link to={`/customers/${data.customerId}`} className="font-medium hover:underline">
+                {data.customerName}
               </Link>
+              {' · '}
+              {formatDay(data.invoiceDate)}
+            </>
+          )
+        }
+        action={
+          data?.status === 'Issued' && (
+            <Button variant="outline" onClick={() => setIsCancelOpen(true)}>
+              <Ban className="size-4" />
+              Cancel bill
             </Button>
-            {data?.status === 'Issued' && (
-              <Button variant="outline" onClick={() => setIsCancelOpen(true)}>
-                Cancel bill
-              </Button>
-            )}
-          </div>
+          )
         }
       />
 
       {data?.status === 'Cancelled' && (
-        <Card className="mb-6 border-destructive/40">
-          <CardContent className="py-1">
-            <Badge variant="destructive">Cancelled</Badge>
-            <span className="ml-3 text-sm text-muted-foreground">
-              {data.cancellationReason} · stock was returned
-            </span>
-          </CardContent>
-        </Card>
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-destructive/25 bg-destructive-surface px-3 py-2.5 lg:mb-5">
+          <Badge variant="destructive">Cancelled</Badge>
+          <span className="text-sm text-destructive">{data.cancellationReason}</span>
+          <span className="text-sm text-muted-foreground">Every item went back into stock.</span>
+        </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-5">
         <Card>
           <CardHeader>
             <CardTitle>Items</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(data?.lines ?? []).map((line) => (
-                  <TableRow key={line.id}>
-                    <TableCell className="font-medium">{line.description}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatQuantity(line.quantity)} {line.unitCode}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(line.unitPrice)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(line.lineTotal)}</TableCell>
-                  </TableRow>
+          <CardContent className="px-0">
+            {!data ? (
+              <div className="grid gap-3 px-4">
+                {Array.from({ length: 3 }, (_, index) => (
+                  <Skeleton key={index} className="h-5" />
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead className="hidden text-right sm:table-cell">Price</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.lines.map((line) => (
+                    <TableRow key={line.id}>
+                      <TableCell className="max-w-[16rem]">
+                        <div className="truncate font-medium">{line.description}</div>
+                        <div className="mt-0.5 text-xs text-muted-foreground sm:hidden">
+                          at {formatMoney(line.unitPrice)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatQuantity(line.quantity)}{' '}
+                        <span className="text-xs text-muted-foreground">{line.unitCode}</span>
+                      </TableCell>
+                      <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                        {formatMoney(line.unitPrice)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatMoney(line.lineTotal)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
 
-            {data?.notes && <p className="mt-4 text-sm text-muted-foreground">{data.notes}</p>}
+            {data?.notes && <p className="mt-4 px-4 text-sm text-muted-foreground">{data.notes}</p>}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:sticky lg:top-6">
           <CardContent className="grid gap-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="tabular-nums">{formatMoney(data?.subTotal ?? 0)}</span>
-            </div>
+            <Amount label="Subtotal" value={formatMoney(data?.subTotal ?? 0)} />
             {(data?.discountAmount ?? 0) > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Discount</span>
-                <span className="tabular-nums">− {formatMoney(data?.discountAmount ?? 0)}</span>
-              </div>
+              <Amount label="Discount" value={`− ${formatMoney(data?.discountAmount ?? 0)}`} />
             )}
-            <div className="flex justify-between border-t pt-3">
-              <span className="font-medium">Total</span>
-              <span className="font-heading text-xl font-semibold tabular-nums">
+
+            <div className="flex items-baseline justify-between border-t pt-3">
+              <span className="text-sm font-medium">Total</span>
+              <span className="font-heading text-2xl font-semibold tabular-nums">
                 {formatMoney(data?.totalAmount ?? 0)}
               </span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Paid</span>
-              <span className="tabular-nums text-emerald-600">{formatMoney(data?.amountPaid ?? 0)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Outstanding</span>
-              <span className="font-medium tabular-nums">{formatMoney(data?.outstanding ?? 0)}</span>
-            </div>
+
+            <Amount
+              label="Paid"
+              value={formatMoney(data?.amountPaid ?? 0)}
+              className={data?.amountPaid ? 'text-success' : undefined}
+            />
+            <Amount
+              label="Outstanding"
+              value={formatMoney(data?.outstanding ?? 0)}
+              className={cn('font-medium', (data?.outstanding ?? 0) > 0 && 'text-destructive')}
+            />
 
             {data && (
-              <Button variant="outline" asChild className="mt-2">
-                <Link to={`/customers/${data.customerId}`}>Open customer ledger</Link>
-              </Button>
+              <div className="mt-1 grid gap-2">
+                <Button variant="outline" asChild>
+                  <Link to={`/customers/${data.customerId}`}>
+                    <Store className="size-4" />
+                    Customer ledger
+                  </Link>
+                </Button>
+                {data.outstanding > 0 && (
+                  <Button asChild>
+                    <Link to="/payments">
+                      <Wallet className="size-4" />
+                      Record a payment
+                    </Link>
+                  </Button>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -152,15 +217,17 @@ export function InvoiceDetailPage() {
       <Dialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel {data?.invoiceNumber}</DialogTitle>
+            <DialogTitle>Cancel {data?.invoiceNumber}?</DialogTitle>
             <DialogDescription>
-              The bill is kept and marked cancelled, and every item goes back into stock. A bill with payments
-              on it cannot be cancelled.
+              The bill is kept and marked cancelled, and every item goes back into stock. A bill that already has
+              payments on it cannot be cancelled.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-2">
-            <Label htmlFor="reason">Reason</Label>
+          <div className="grid gap-1.5">
+            <Label htmlFor="reason">
+              Reason <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="reason"
               maxLength={300}
@@ -179,6 +246,7 @@ export function InvoiceDetailPage() {
               disabled={cancel.isPending || reason.trim() === ''}
               onClick={() => cancel.mutate()}
             >
+              {cancel.isPending && <Loader2 className="size-4 animate-spin" />}
               {cancel.isPending ? 'Cancelling…' : 'Cancel bill'}
             </Button>
           </DialogFooter>

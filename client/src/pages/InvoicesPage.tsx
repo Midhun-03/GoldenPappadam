@@ -1,20 +1,33 @@
 import { useQuery } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { FileText, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { customersApi, invoicesApi } from '@/api/sales'
+import type { InvoiceListItem } from '@/api/types'
+import { EmptyState, ErrorState } from '@/components/EmptyState'
+import { FilterBar, FilterField, FilterToggle } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
+import { TableSkeleton } from '@/components/TableSkeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDay, formatMoney } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const ALL = 'all'
+
+type BadgeVariant = 'outline' | 'secondary' | 'success' | 'warning' | 'destructive'
+
+/** Where a bill stands, in one word. */
+function settlement(invoice: InvoiceListItem): { label: string; variant: BadgeVariant } {
+  if (invoice.status === 'Cancelled') return { label: 'Cancelled', variant: 'outline' }
+  if (invoice.outstanding <= 0) return { label: 'Paid', variant: 'success' }
+  if (invoice.amountPaid > 0) return { label: 'Part paid', variant: 'warning' }
+  return { label: 'Unpaid', variant: 'destructive' }
+}
 
 export function InvoicesPage() {
   const [customerId, setCustomerId] = useState(ALL)
@@ -33,14 +46,24 @@ export function InvoicesPage() {
   const invoices = useQuery({ queryKey: ['invoices', filters], queryFn: () => invoicesApi.list(filters) })
 
   const rows = invoices.data ?? []
-  const billed = rows.filter((i) => i.status === 'Issued').reduce((sum, i) => sum + i.totalAmount, 0)
-  const outstanding = rows.reduce((sum, i) => sum + i.outstanding, 0)
+  const billed = rows.filter((invoice) => invoice.status === 'Issued').reduce((sum, i) => sum + i.totalAmount, 0)
+  const outstanding = rows.reduce((sum, invoice) => sum + invoice.outstanding, 0)
+  const isFiltered = customerId !== ALL || from !== '' || to !== '' || unpaidOnly
 
   return (
     <>
       <PageHeader
         title="Bills"
-        description={`${rows.length} shown · ${formatMoney(billed)} billed · ${formatMoney(outstanding)} outstanding`}
+        description={
+          invoices.isPending ? undefined : (
+            <span className="tabular-nums">
+              {rows.length} shown · {formatMoney(billed)} billed ·{' '}
+              <span className={cn(outstanding > 0 && 'font-medium text-destructive')}>
+                {formatMoney(outstanding)} outstanding
+              </span>
+            </span>
+          )
+        }
         action={
           <Button asChild>
             <Link to="/invoices/new">
@@ -51,100 +74,150 @@ export function InvoicesPage() {
         }
       />
 
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="grid gap-2">
-            <Label>Customer</Label>
-            <Select value={customerId} onValueChange={setCustomerId}>
-              <SelectTrigger className="w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All customers</SelectItem>
-                {(customers.data ?? []).map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <FilterBar>
+        <FilterField label="Customer" htmlFor="invoice-customer" className="col-span-2 sm:w-56">
+          <Select value={customerId} onValueChange={setCustomerId}>
+            <SelectTrigger id="invoice-customer" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All customers</SelectItem>
+              {(customers.data ?? []).map((customer) => (
+                <SelectItem key={customer.id} value={customer.id}>
+                  {customer.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
 
-          <div className="grid gap-2">
-            <Label htmlFor="from">From</Label>
-            <Input id="from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-          </div>
+        <FilterField label="From" htmlFor="invoice-from">
+          <Input
+            id="invoice-from"
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(event) => setFrom(event.target.value)}
+          />
+        </FilterField>
 
-          <div className="grid gap-2">
-            <Label htmlFor="to">To</Label>
-            <Input id="to" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-          </div>
+        <FilterField label="To" htmlFor="invoice-to">
+          <Input
+            id="invoice-to"
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(event) => setTo(event.target.value)}
+          />
+        </FilterField>
 
-          <Button variant={unpaidOnly ? 'default' : 'outline'} onClick={() => setUnpaidOnly(!unpaidOnly)}>
-            Unpaid only
-          </Button>
-        </CardContent>
-      </Card>
+        <FilterToggle
+          pressed={unpaidOnly}
+          onPressedChange={setUnpaidOnly}
+          className="col-span-2 sm:col-span-1"
+        >
+          Unpaid only
+        </FilterToggle>
+      </FilterBar>
 
       <Card>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Number</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Paid</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((invoice) => (
-                <TableRow key={invoice.id} className={invoice.status === 'Cancelled' ? 'opacity-60' : undefined}>
-                  <TableCell>
-                    <Link
-                      className="font-mono text-xs underline-offset-4 hover:underline"
-                      to={`/invoices/${invoice.id}`}
-                    >
-                      {invoice.invoiceNumber}
+        <CardContent className="px-0">
+          {invoices.isPending ? (
+            <TableSkeleton columns={5} />
+          ) : invoices.isError ? (
+            <ErrorState error={invoices.error} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title={isFiltered ? 'No bills match these filters' : 'No bills yet'}
+              description={
+                isFiltered
+                  ? 'Try a wider date range, or clear the customer filter.'
+                  : 'Create a bill when goods go out to a shop.'
+              }
+              action={
+                isFiltered ? undefined : (
+                  <Button asChild>
+                    <Link to="/invoices/new">
+                      <Plus className="size-4" />
+                      New bill
                     </Link>
-                    {invoice.status === 'Cancelled' && (
-                      <Badge variant="outline" className="ml-2">
-                        Cancelled
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDay(invoice.invoiceDate)}</TableCell>
-                  <TableCell>
-                    <Link className="hover:underline" to={`/customers/${invoice.customerId}`}>
-                      {invoice.customerName}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatMoney(invoice.totalAmount)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-emerald-600">
-                    {invoice.amountPaid ? formatMoney(invoice.amountPaid) : '—'}
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      'text-right tabular-nums',
-                      invoice.outstanding > 0 && 'font-medium text-destructive',
-                    )}
-                  >
-                    {formatMoney(invoice.outstanding)}
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {rows.length === 0 && (
+                  </Button>
+                )
+              }
+            />
+          ) : (
+            <Table>
+              <TableHeader sticky>
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                    No bills match these filters.
-                  </TableCell>
+                  <TableHead>Bill</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="hidden text-right md:table-cell">Paid</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Outstanding</TableHead>
+                  <TableHead className="hidden sm:table-cell">Status</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {rows.map((invoice) => {
+                  const state = settlement(invoice)
+
+                  return (
+                    <TableRow key={invoice.id} className={invoice.status === 'Cancelled' ? 'opacity-60' : undefined}>
+                      <TableCell>
+                        <Link
+                          className="font-mono text-xs font-medium underline-offset-4 hover:underline"
+                          to={`/invoices/${invoice.id}`}
+                        >
+                          {invoice.invoiceNumber}
+                        </Link>
+                        <div className="mt-0.5 text-xs text-muted-foreground">{formatDay(invoice.invoiceDate)}</div>
+                      </TableCell>
+
+                      <TableCell className="max-w-[8rem] sm:max-w-[12rem]">
+                        <Link className="block truncate hover:underline" to={`/customers/${invoice.customerId}`}>
+                          {invoice.customerName}
+                        </Link>
+                        <div className="mt-1 sm:hidden">
+                          <Badge variant={state.variant}>{state.label}</Badge>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatMoney(invoice.totalAmount)}
+                        {invoice.outstanding > 0 && (
+                          <div className="text-xs font-normal text-destructive sm:hidden">
+                            {formatMoney(invoice.outstanding)} due
+                          </div>
+                        )}
+                      </TableCell>
+
+                      <TableCell className="hidden text-right tabular-nums md:table-cell">
+                        {invoice.amountPaid ? (
+                          <span className="text-success">{formatMoney(invoice.amountPaid)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+
+                      <TableCell
+                        className={cn(
+                          'hidden text-right tabular-nums sm:table-cell',
+                          invoice.outstanding > 0 ? 'font-medium text-destructive' : 'text-muted-foreground',
+                        )}
+                      >
+                        {formatMoney(invoice.outstanding)}
+                      </TableCell>
+
+                      <TableCell className="hidden sm:table-cell">
+                        <Badge variant={state.variant}>{state.label}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </>

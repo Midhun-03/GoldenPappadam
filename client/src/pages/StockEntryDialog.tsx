@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { stockApi, type StockEntry } from '@/api/inventory'
@@ -87,10 +88,10 @@ export function StockEntryDialog({
         </DialogHeader>
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label>Reason</Label>
+          <div className="grid gap-1.5">
+            <Label htmlFor="entry-reason">Reason</Label>
             <Select value={movementType} onValueChange={(value) => setMovementType(value as EntryType)}>
-              <SelectTrigger>
+              <SelectTrigger id="entry-reason" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -104,8 +105,10 @@ export function StockEntryDialog({
             <p className="text-xs text-muted-foreground">{selected?.hint}</p>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="quantity">Quantity{product ? ` (${product.unitCode})` : ''}</Label>
+          <div className="grid gap-1.5">
+            <Label htmlFor="quantity">
+              Quantity{product ? ` (${product.unitCode})` : ''} <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="quantity"
               type="number"
@@ -117,11 +120,14 @@ export function StockEntryDialog({
             />
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="notes">Note{movementType === 'Damage' ? '' : ' (optional)'}</Label>
+          <div className="grid gap-1.5">
+            <Label htmlFor="notes">
+              Note{movementType === 'Damage' && <span className="text-destructive">*</span>}
+            </Label>
             <Input
               id="notes"
               maxLength={300}
+              placeholder={movementType === 'Damage' ? 'What was damaged, and how' : 'Optional'}
               required={movementType === 'Damage'}
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
@@ -139,6 +145,7 @@ export function StockEntryDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={save.isPending}>
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {save.isPending ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>

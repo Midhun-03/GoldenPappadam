@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { productsApi, stockApi } from '@/api/inventory'
 import { customersApi, invoicesApi } from '@/api/sales'
@@ -12,9 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApiError } from '@/lib/api'
 import { formatMoney, formatQuantity, todayInIndia } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 type Line = { key: number; productId: string; quantity: string; unitPrice: string }
 
@@ -37,10 +37,9 @@ export function NewInvoicePage() {
   const stock = useQuery({ queryKey: ['stock', {}], queryFn: () => stockApi.onHand() })
 
   const priced = lines.map((line) => {
-    const product = products.data?.find((p) => p.id === line.productId)
+    const product = products.data?.find((candidate) => candidate.id === line.productId)
     const quantity = line.quantity.trim() === '' ? 0 : Number(line.quantity)
-    const unitPrice =
-      line.unitPrice.trim() !== '' ? Number(line.unitPrice) : (product?.sellingPrice ?? 0)
+    const unitPrice = line.unitPrice.trim() !== '' ? Number(line.unitPrice) : (product?.sellingPrice ?? 0)
 
     return { line, product, quantity, unitPrice, total: Math.round(quantity * unitPrice * 100) / 100 }
   })
@@ -48,6 +47,7 @@ export function NewInvoicePage() {
   const subTotal = priced.reduce((sum, row) => sum + row.total, 0)
   const discountValue = discount.trim() === '' ? 0 : Number(discount)
   const total = subTotal - discountValue
+  const customer = customers.data?.find((candidate) => candidate.id === customerId)
 
   const create = useMutation({
     mutationFn: () =>
@@ -90,223 +90,241 @@ export function NewInvoicePage() {
     create.mutate()
   }
 
+  const updateLine = (key: number, change: Partial<Line>) =>
+    setLines(lines.map((line) => (line.key === key ? { ...line, ...change } : line)))
+
   const onHandFor = (productId: string) => stock.data?.find((row) => row.productId === productId)
 
   return (
     <>
       <PageHeader
+        back={{ to: '/invoices', label: 'Bills' }}
         title="New bill"
-        description="Prices come from the product and can be changed per line."
-        action={
-          <Button variant="outline" asChild>
-            <Link to="/invoices">
-              <ArrowLeft className="size-4" />
-              All bills
-            </Link>
-          </Button>
-        }
+        description="Prices come from the product and can be changed on any line."
       />
 
-      <form onSubmit={handleSubmit} className="grid gap-6">
-        <Card>
-          <CardContent className="flex flex-wrap items-end gap-4">
-            <div className="grid gap-2">
-              <Label>Customer</Label>
-              <Select value={customerId} onValueChange={setCustomerId}>
-                <SelectTrigger className="w-72">
-                  <SelectValue placeholder="Choose a shop" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(customers.data ?? []).map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      {customer.name}
-                      {customer.balance > 0 ? ` · owes ${formatMoney(customer.balance)}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="invoiceDate">Date</Label>
-              <Input
-                id="invoiceDate"
-                type="date"
-                required
-                value={invoiceDate}
-                onChange={(event) => setInvoiceDate(event.target.value)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Products</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[45%]">Product</TableHead>
-                  <TableHead className="w-32">Quantity</TableHead>
-                  <TableHead className="w-32">Price</TableHead>
-                  <TableHead className="text-right">Line total</TableHead>
-                  <TableHead className="w-12" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {priced.map((row) => {
-                  const available = onHandFor(row.line.productId)
-
-                  return (
-                    <TableRow key={row.line.key}>
-                      <TableCell>
-                        <Select
-                          value={row.line.productId}
-                          onValueChange={(value) =>
-                            setLines(
-                              lines.map((l) => (l.key === row.line.key ? { ...l, productId: value } : l)),
-                            )
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choose a product" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(products.data ?? []).map((product) => (
-                              <SelectItem key={product.id} value={product.id}>
-                                {product.name} ({product.unitCode})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {available && (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {formatQuantity(available.quantityOnHand)} {available.unitCode} in stock
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          value={row.line.quantity}
-                          onChange={(event) =>
-                            setLines(
-                              lines.map((l) =>
-                                l.key === row.line.key ? { ...l, quantity: event.target.value } : l,
-                              ),
-                            )
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder={row.product?.sellingPrice ? String(row.product.sellingPrice) : '0'}
-                          value={row.line.unitPrice}
-                          onChange={(event) =>
-                            setLines(
-                              lines.map((l) =>
-                                l.key === row.line.key ? { ...l, unitPrice: event.target.value } : l,
-                              ),
-                            )
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatMoney(row.total)}</TableCell>
-                      <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={lines.length === 1}
-                          onClick={() => setLines(lines.filter((l) => l.key !== row.line.key))}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              onClick={() => setLines([...lines, emptyLine(Math.max(...lines.map((l) => l.key)) + 1)])}
-            >
-              <Plus className="size-4" />
-              Add line
-            </Button>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-5">
+        <div className="grid gap-4 lg:gap-5">
           <Card>
-            <CardContent>
-              <div className="grid gap-2">
-                <Label htmlFor="invoice-notes">Notes</Label>
+            <CardContent className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem]">
+              <div className="grid gap-1.5">
+                <Label htmlFor="bill-customer">
+                  Customer <span className="text-destructive">*</span>
+                </Label>
+                <Select value={customerId} onValueChange={setCustomerId}>
+                  <SelectTrigger id="bill-customer" className="w-full">
+                    <SelectValue placeholder="Choose a shop" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(customers.data ?? []).map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.name}
+                        {option.balance > 0 ? ` · owes ${formatMoney(option.balance)}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {customer && customer.balance > 0 && (
+                  <p className="text-xs text-warning">
+                    This shop already owes {formatMoney(customer.balance)}.
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="invoiceDate">
+                  Date <span className="text-destructive">*</span>
+                </Label>
                 <Input
-                  id="invoice-notes"
-                  maxLength={300}
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
+                  id="invoiceDate"
+                  type="date"
+                  required
+                  value={invoiceDate}
+                  onChange={(event) => setInvoiceDate(event.target.value)}
                 />
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="grid gap-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="tabular-nums">{formatMoney(subTotal)}</span>
+            <CardHeader>
+              <CardTitle>Products</CardTitle>
+            </CardHeader>
+            <CardContent className="@container grid gap-3">
+              {/* Column headings for the wide layout; each row repeats them on a phone. */}
+              <div className="hidden gap-3 px-1 text-xs font-medium text-muted-foreground @xl:grid @xl:grid-cols-[minmax(0,1fr)_6rem_6rem_6rem_2.25rem]">
+                <span>Product</span>
+                <span>Quantity</span>
+                <span>Price</span>
+                <span className="text-right">Line total</span>
+                <span className="sr-only">Remove</span>
               </div>
 
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <Label htmlFor="discount" className="text-muted-foreground">
-                  Discount
-                </Label>
-                <Input
-                  id="discount"
-                  className="w-32"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0"
-                  value={discount}
-                  onChange={(event) => setDiscount(event.target.value)}
-                />
-              </div>
+              {priced.map((row, index) => {
+                const available = onHandFor(row.line.productId)
+                const isShort = available !== undefined && row.quantity > available.quantityOnHand
 
-              <div className="flex items-center justify-between border-t pt-3">
-                <span className="font-medium">Total</span>
-                <span className="font-heading text-xl font-semibold tabular-nums">{formatMoney(total)}</span>
-              </div>
+                return (
+                  <div
+                    key={row.line.key}
+                    className="grid gap-3 rounded-lg border p-3 @xl:grid-cols-[minmax(0,1fr)_6rem_6rem_6rem_2.25rem] @xl:items-start @xl:rounded-none @xl:border-0 @xl:border-b @xl:p-0 @xl:pb-3 @xl:last:border-0"
+                  >
+                    <div className="grid gap-1.5">
+                      <Label htmlFor={`line-product-${row.line.key}`} className="text-xs @xl:sr-only">
+                        Product
+                      </Label>
+                      <Select
+                        value={row.line.productId}
+                        onValueChange={(value) => updateLine(row.line.key, { productId: value })}
+                      >
+                        <SelectTrigger id={`line-product-${row.line.key}`} className="w-full">
+                          <SelectValue placeholder="Choose a product" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(products.data ?? []).map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              {product.name} ({product.unitCode})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {available && (
+                        <p className={cn('text-xs', isShort ? 'text-warning' : 'text-muted-foreground')}>
+                          {formatQuantity(available.quantityOnHand)} {available.unitCode} in stock
+                          {isShort && ' — this bill takes it below zero'}
+                        </p>
+                      )}
+                    </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+                    <div className="grid grid-cols-2 gap-3 @xl:contents">
+                      <div className="grid gap-1.5">
+                        <Label htmlFor={`line-quantity-${row.line.key}`} className="text-xs @xl:sr-only">
+                          Quantity
+                        </Label>
+                        <Input
+                          id={`line-quantity-${row.line.key}`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.001"
+                          min="0"
+                          className="text-right"
+                          value={row.line.quantity}
+                          onChange={(event) => updateLine(row.line.key, { quantity: event.target.value })}
+                        />
+                      </div>
 
-              <Button type="submit" disabled={create.isPending || customerId === ''}>
-                {create.isPending ? 'Saving…' : 'Create bill'}
+                      <div className="grid gap-1.5">
+                        <Label htmlFor={`line-price-${row.line.key}`} className="text-xs @xl:sr-only">
+                          Price
+                        </Label>
+                        <Input
+                          id={`line-price-${row.line.key}`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          className="text-right"
+                          placeholder={row.product?.sellingPrice ? String(row.product.sellingPrice) : '0'}
+                          value={row.line.unitPrice}
+                          onChange={(event) => updateLine(row.line.key, { unitPrice: event.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 @xl:h-9 @xl:justify-end">
+                      <span className="text-xs text-muted-foreground @xl:hidden">Line total</span>
+                      <span className="font-medium tabular-nums">{formatMoney(row.total)}</span>
+                    </div>
+
+                    <div className="flex justify-end @xl:h-9 @xl:items-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={lines.length === 1}
+                        aria-label={`Remove line ${index + 1}`}
+                        onClick={() => setLines(lines.filter((other) => other.key !== row.line.key))}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-self-start"
+                onClick={() => setLines([...lines, emptyLine(Math.max(...lines.map((line) => line.key)) + 1)])}
+              >
+                <Plus className="size-4" />
+                Add line
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Stock is taken off when the bill is saved. Short stock warns but never blocks.
-              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="grid gap-1.5">
+              <Label htmlFor="invoice-notes">Notes</Label>
+              <Input
+                id="invoice-notes"
+                maxLength={300}
+                placeholder="Anything worth remembering about this delivery"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
             </CardContent>
           </Card>
         </div>
+
+        <Card className="lg:sticky lg:top-6">
+          <CardContent className="grid gap-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="tabular-nums">{formatMoney(subTotal)}</span>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="discount" className="text-sm font-normal text-muted-foreground">
+                Discount
+              </Label>
+              <Input
+                id="discount"
+                className="w-28 text-right"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0"
+                value={discount}
+                onChange={(event) => setDiscount(event.target.value)}
+              />
+            </div>
+
+            <div className="mt-1 flex items-baseline justify-between border-t pt-3">
+              <span className="text-sm font-medium">Total</span>
+              <span className={cn('font-heading text-2xl font-semibold tabular-nums', total < 0 && 'text-destructive')}>
+                {formatMoney(total)}
+              </span>
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button type="submit" size="lg" className="mt-1" disabled={create.isPending || customerId === ''}>
+              {create.isPending && <Loader2 className="size-4 animate-spin" />}
+              {create.isPending ? 'Saving…' : 'Create bill'}
+            </Button>
+
+            <p className="text-xs text-muted-foreground">
+              Stock comes off when the bill is saved. Short stock warns but never blocks.
+            </p>
+          </CardContent>
+        </Card>
       </form>
     </>
   )

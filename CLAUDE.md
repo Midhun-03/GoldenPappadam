@@ -193,15 +193,16 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-09-14_
+_Last updated: 2026-09-15_
 
 - Solution scaffolded on .NET 10: `GoldenPappadam.sln` with `src/GoldenPappadam.Domain`, `src/GoldenPappadam.Infrastructure`, `src/GoldenPappadam.Api` and `tests/GoldenPappadam.Tests`. No Application project: use-case code lives in the API project in feature folders until it earns its own project. Controllers, not minimal APIs. React client (`client/`) comes once the inventory endpoints exist.
 - Inventory entities, EF Core configurations, the `AppDbContext` (audit handling, ledger immutability, UTC DateTime conversion) and Identity with `Guid` keys are in place. Migration `InitialCreate` applied to LocalDB; units KG/PCS/PKT/BOX are seeded.
 - Inventory API done and covered by 20 tests against LocalDB: categories, units, products (with source/cycle validation), stock on hand with low-stock flag, movement history with running balance, manual entries (opening/production/damage), count-based adjustments, and packing. Business-rule failures return problem details via `DomainException`.
 - Admin login done: cookie authentication, `POST /api/auth/login`, `logout`, `GET /api/auth/me`, `change-password`, and `/api/admin/users` for adding or deactivating admins. Every endpoint requires a signed-in user through a fallback authorization policy; only login and the OpenAPI document are anonymous. Audit fields now record the signed-in user.
 - React client done for inventory: login, stock on hand (low-stock flags, add stock, correct after counting), products (with packed-from configuration), packing, stock history with running balance, and settings for categories and units. Stack: Vite, TypeScript, Tailwind v4, shadcn/ui (radix-nova preset), React Router and TanStack Query. `client/` runs on 5173 and proxies `/api` to 5207, so the session cookie stays same-origin.
-- Sales done, backend and screens, designed in `docs/02-sales-design.md`: customers with an opening balance and an account statement, bills numbered per Indian financial year that price lines from the product (overridable) and take stock off the ledger, a bill-level discount, cancellation that returns the stock, and payments that settle the oldest bills first or ones you pick, with partial settlement and money on account. 37 tests.
-- Dashboard done: today's and this month's sales, outstanding money, low stock, recent bills, who owes the most — all on the IST business day.
+- Sales done, backend and screens, designed in `docs/02-sales-design.md`: customers with an opening balance and an account statement, bills numbered per Indian financial year that price lines from the product (overridable) and take stock off the ledger, a bill-level discount, cancellation that returns the stock, and payments that settle the oldest bills first or ones you pick, with partial settlement and money on account. 40 tests.
+- Dashboard done: five KPI tiles (today, this month, outstanding, product count, stock needing attention), a daily sales trend, sales by product/category, how much of what was billed has come back, stock health, recent bills, what needs restocking and who owes the most — all on the IST business day, with a 7-day / 30-day / this-month range selector.
+- UI reworked across every screen for a modern, responsive admin layout: grouped sidebar at 1024px and up with a drawer below it, status colours that only ever carry meaning, skeletons and real empty/error states, priority columns so no list scrolls sideways on a phone, and touch targets that grow on coarse pointers. Charts are Recharts, loaded only with the dashboard route so the other screens do not carry them.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
@@ -244,6 +245,9 @@ Decisions made:
 
 - 2026-09-14 — Solution structure (3 projects + tests, feature folders, controllers) and cookie-based login with ASP.NET Core Identity.
 - 2026-09-14 — Development database: **SQL Express (`.\SQLEXPRESS`), database `GoldenPappadam`**. Moved off LocalDB, which kept failing to auto-start on this machine; SQL Express runs as a service. Tests use the same instance.
+- 2026-09-15 — Charting library: **Recharts**, the only one, loaded through a lazy dashboard route. Recharts paints with SVG presentation attributes, which do not resolve `var()`, so chart colours are read off the document by `lib/chartColors.ts` and passed as resolved values.
+- 2026-09-15 — `GET /api/dashboard/product-sales?from&to` added: the invoice list carries no lines, so sales per product and per category cannot be built on the client without a request per bill.
+
 - 2026-09-14 — Open the solution in **Visual Studio 2026** (18.7). VS 2022 cannot target .NET 10, and the solution stays on .NET 10 because it is the current LTS release.
 
 Pending decisions:

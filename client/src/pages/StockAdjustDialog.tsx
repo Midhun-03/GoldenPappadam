@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { stockApi } from '@/api/inventory'
@@ -75,8 +76,10 @@ export function StockAdjustDialog({
         </DialogHeader>
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="counted">Counted quantity{product ? ` (${product.unitCode})` : ''}</Label>
+          <div className="grid gap-1.5">
+            <Label htmlFor="counted">
+              Counted quantity{product ? ` (${product.unitCode})` : ''} <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="counted"
               type="number"
@@ -94,8 +97,8 @@ export function StockAdjustDialog({
             </p>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="adjust-notes">Reason</Label>
+          <div className="grid gap-1.5">
+            <Label htmlFor="adjust-notes">Reason <span className="text-destructive">*</span></Label>
             <Input
               id="adjust-notes"
               required
@@ -117,6 +120,7 @@ export function StockAdjustDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={save.isPending}>
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {save.isPending ? 'Saving…' : 'Save adjustment'}
             </Button>
           </DialogFooter>

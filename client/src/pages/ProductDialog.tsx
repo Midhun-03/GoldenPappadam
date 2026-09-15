@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { productsApi } from '@/api/inventory'
@@ -117,9 +118,9 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
         </DialogHeader>
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="productCode">Code</Label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="productCode">Code <span className="text-destructive">*</span></Label>
               <Input
                 id="productCode"
                 required
@@ -129,8 +130,8 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="name">Name <span className="text-destructive">*</span></Label>
               <Input
                 id="name"
                 required
@@ -141,11 +142,11 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="grid gap-2">
-              <Label>Category</Label>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="product-category-field">Category <span className="text-destructive">*</span></Label>
               <Select value={form.categoryId} onValueChange={(value) => setForm({ ...form, categoryId: value })}>
-                <SelectTrigger>
+                <SelectTrigger id="product-category-field" className="w-full">
                   <SelectValue placeholder="Choose" />
                 </SelectTrigger>
                 <SelectContent>
@@ -158,14 +159,14 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
               </Select>
             </div>
 
-            <div className="grid gap-2">
-              <Label>Type</Label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="product-kind-field">Type</Label>
               <Select
                 value={form.kind}
                 disabled={product !== null}
                 onValueChange={(value) => setForm({ ...form, kind: value as ProductKind })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="product-kind-field" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -175,13 +176,13 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
               </Select>
             </div>
 
-            <div className="grid gap-2">
-              <Label>Unit</Label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="product-unit-field">Unit <span className="text-destructive">*</span></Label>
               <Select
                 value={form.unitOfMeasureId}
                 onValueChange={(value) => setForm({ ...form, unitOfMeasureId: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="product-unit-field" className="w-full">
                   <SelectValue placeholder="Choose" />
                 </SelectTrigger>
                 <SelectContent>
@@ -196,14 +197,14 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
           </div>
 
           {form.kind === 'Packed' && (
-            <div className="grid grid-cols-2 gap-4 rounded-md border bg-muted/40 p-3">
-              <div className="grid gap-2">
-                <Label>Packed from</Label>
+            <div className="grid gap-4 rounded-lg border bg-muted/40 p-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="product-source-field">Packed from <span className="text-destructive">*</span></Label>
                 <Select
                   value={form.sourceProductId}
                   onValueChange={(value) => setForm({ ...form, sourceProductId: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="product-source-field" className="w-full">
                     <SelectValue placeholder="Choose" />
                   </SelectTrigger>
                   <SelectContent>
@@ -216,7 +217,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
                 </Select>
               </div>
 
-              <div className="grid gap-2">
+              <div className="grid gap-1.5">
                 <Label htmlFor="sourceQuantityPerPack">
                   Used per pack{sourceUnit ? ` (${sourceUnit.code})` : ''}
                 </Label>
@@ -232,8 +233,8 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="sellingPrice">Selling price</Label>
               <Input
                 id="sellingPrice"
@@ -246,7 +247,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="lowStockThreshold">Low stock below</Label>
               <Input
                 id="lowStockThreshold"
@@ -271,6 +272,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
               Cancel
             </Button>
             <Button type="submit" disabled={save.isPending}>
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {save.isPending ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>

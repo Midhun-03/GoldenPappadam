@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { IndianRupee } from 'lucide-react'
+import { Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { customersApi, paymentsApi } from '@/api/sales'
+import { EmptyState, ErrorState } from '@/components/EmptyState'
+import { FilterBar, FilterField } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
+import { TableSkeleton } from '@/components/TableSkeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatDay, formatMoney } from '@/lib/format'
+import { formatDay, formatMoney, formatPaymentMethod } from '@/lib/format'
 import { RecordPaymentDialog } from './RecordPaymentDialog'
 
 const ALL = 'all'
@@ -33,113 +35,151 @@ export function PaymentsPage() {
 
   const rows = payments.data ?? []
   const received = rows.reduce((sum, payment) => sum + payment.amount, 0)
+  const isFiltered = customerId !== ALL || from !== '' || to !== ''
 
   return (
     <>
       <PageHeader
         title="Payments"
-        description={`${rows.length} shown · ${formatMoney(received)} received`}
+        description={
+          payments.isPending ? undefined : (
+            <span className="tabular-nums">
+              {rows.length} shown · <span className="font-medium text-success">{formatMoney(received)}</span>{' '}
+              received
+            </span>
+          )
+        }
         action={
           <Button onClick={() => setIsDialogOpen(true)}>
-            <IndianRupee className="size-4" />
+            <Wallet className="size-4" />
             Record payment
           </Button>
         }
       />
 
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="grid gap-2">
-            <Label>Customer</Label>
-            <Select value={customerId} onValueChange={setCustomerId}>
-              <SelectTrigger className="w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All customers</SelectItem>
-                {(customers.data ?? []).map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <FilterBar>
+        <FilterField label="Customer" htmlFor="payment-customer" className="col-span-2 sm:w-56">
+          <Select value={customerId} onValueChange={setCustomerId}>
+            <SelectTrigger id="payment-customer" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All customers</SelectItem>
+              {(customers.data ?? []).map((customer) => (
+                <SelectItem key={customer.id} value={customer.id}>
+                  {customer.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
 
-          <div className="grid gap-2">
-            <Label htmlFor="from">From</Label>
-            <Input id="from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-          </div>
+        <FilterField label="From" htmlFor="payment-from">
+          <Input
+            id="payment-from"
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(event) => setFrom(event.target.value)}
+          />
+        </FilterField>
 
-          <div className="grid gap-2">
-            <Label htmlFor="to">To</Label>
-            <Input id="to" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-          </div>
-        </CardContent>
-      </Card>
+        <FilterField label="To" htmlFor="payment-to">
+          <Input
+            id="payment-to"
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(event) => setTo(event.target.value)}
+          />
+        </FilterField>
+      </FilterBar>
 
       <Card>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Applied to</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((payment) => (
-                <TableRow key={payment.id}>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDay(payment.paymentDate)}
-                  </TableCell>
-                  <TableCell>
-                    <Link className="hover:underline" to={`/customers/${payment.customerId}`}>
-                      {payment.customerName}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {payment.method === 'BankTransfer' ? 'Bank transfer' : payment.method}
-                    </Badge>
-                    {payment.reference && (
-                      <span className="ml-2 font-mono text-xs text-muted-foreground">{payment.reference}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {payment.allocations.length === 0
-                      ? 'On account'
-                      : payment.allocations.map((allocation) => (
-                          <Link
-                            key={allocation.invoiceId}
-                            className="mr-2 font-mono text-xs underline-offset-4 hover:underline"
-                            to={`/invoices/${allocation.invoiceId}`}
-                          >
-                            {allocation.invoiceNumber}
-                          </Link>
-                        ))}
-                    {payment.unallocatedAmount > 0 && payment.allocations.length > 0 && (
-                      <span className="text-xs"> · {formatMoney(payment.unallocatedAmount)} on account</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    {formatMoney(payment.amount)}
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {rows.length === 0 && (
+        <CardContent className="px-0">
+          {payments.isPending ? (
+            <TableSkeleton columns={4} />
+          ) : payments.isError ? (
+            <ErrorState error={payments.error} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              icon={Wallet}
+              title={isFiltered ? 'No payments match these filters' : 'No payments recorded yet'}
+              description={
+                isFiltered
+                  ? 'Try a wider date range, or clear the customer filter.'
+                  : 'Record money as it comes in and it will settle the oldest bills first.'
+              }
+              action={
+                isFiltered ? undefined : (
+                  <Button onClick={() => setIsDialogOpen(true)}>
+                    <Wallet className="size-4" />
+                    Record payment
+                  </Button>
+                )
+              }
+            />
+          ) : (
+            <Table>
+              <TableHeader sticky>
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                    No payments recorded yet.
-                  </TableCell>
+                  <TableHead>Customer</TableHead>
+                  <TableHead className="hidden sm:table-cell">Method</TableHead>
+                  <TableHead className="hidden md:table-cell">Applied to</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {rows.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell className="max-w-[14rem]">
+                      <Link className="block truncate font-medium hover:underline" to={`/customers/${payment.customerId}`}>
+                        {payment.customerName}
+                      </Link>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {formatDay(payment.paymentDate)}
+                        <span className="sm:hidden"> · {formatPaymentMethod(payment.method)}</span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="hidden sm:table-cell">
+                      <Badge variant="outline">{formatPaymentMethod(payment.method)}</Badge>
+                      {payment.reference && (
+                        <div className="mt-0.5 font-mono text-xs text-muted-foreground">{payment.reference}</div>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="hidden max-w-[16rem] text-sm text-muted-foreground md:table-cell">
+                      {payment.allocations.length === 0 ? (
+                        <Badge variant="warning">On account</Badge>
+                      ) : (
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                          {payment.allocations.map((allocation) => (
+                            <Link
+                              key={allocation.invoiceId}
+                              className="font-mono text-xs underline-offset-4 hover:underline"
+                              to={`/invoices/${allocation.invoiceId}`}
+                            >
+                              {allocation.invoiceNumber}
+                            </Link>
+                          ))}
+                          {payment.unallocatedAmount > 0 && (
+                            <span className="text-xs">
+                              · {formatMoney(payment.unallocatedAmount)} on account
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="text-right font-medium tabular-nums text-success">
+                      {formatMoney(payment.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

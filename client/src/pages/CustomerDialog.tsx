@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { customersApi } from '@/api/sales'
@@ -94,8 +95,8 @@ export function CustomerDialog({
         </DialogHeader>
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="name">Shop name</Label>
+          <div className="grid gap-1.5">
+            <Label htmlFor="name">Shop name <span className="text-destructive">*</span></Label>
             <Input
               id="name"
               required
@@ -105,8 +106,8 @@ export function CustomerDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="contactPerson">Contact person</Label>
               <Input
                 id="contactPerson"
@@ -116,7 +117,7 @@ export function CustomerDialog({
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
@@ -127,7 +128,7 @@ export function CustomerDialog({
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="address">Address</Label>
             <Input
               id="address"
@@ -137,8 +138,8 @@ export function CustomerDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="openingBalance">Opening balance</Label>
               <Input
                 id="openingBalance"
@@ -150,7 +151,7 @@ export function CustomerDialog({
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="notes">Notes</Label>
               <Input
                 id="notes"
@@ -172,6 +173,7 @@ export function CustomerDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={save.isPending}>
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {save.isPending ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>

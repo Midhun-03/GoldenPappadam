@@ -1,15 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { MoreHorizontal, Package, Pencil, Plus, Search } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { categoriesApi, productsApi, unitsApi } from '@/api/inventory'
 import type { Product, ProductKind } from '@/api/types'
+import { EmptyState, ErrorState } from '@/components/EmptyState'
+import { FilterBar, FilterField, FilterToggle } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
+import { TableSkeleton } from '@/components/TableSkeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApiError } from '@/lib/api'
@@ -56,147 +64,181 @@ export function ProductsPage() {
       toast.error(caught instanceof ApiError ? caught.message : 'Could not change the product.'),
   })
 
+  const rows = products.data ?? []
+  const isFiltered = search !== '' || categoryId !== ALL || kind !== ALL
+
+  function openDialog(product: Product | null) {
+    setEditing(product)
+    setIsDialogOpen(true)
+  }
+
   return (
     <>
       <PageHeader
         title="Products"
         description="Loose varieties and the packs made from them."
         action={
-          <Button
-            onClick={() => {
-              setEditing(null)
-              setIsDialogOpen(true)
-            }}
-          >
+          <Button onClick={() => openDialog(null)}>
             <Plus className="size-4" />
             New product
           </Button>
         }
       />
 
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="grid gap-2">
-            <Label htmlFor="search">Search</Label>
+      <FilterBar>
+        <FilterField label="Search" htmlFor="product-search" className="col-span-2 sm:w-56">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              id="search"
-              className="w-56"
+              id="product-search"
+              className="pl-8"
               placeholder="Name or code"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
+        </FilterField>
 
-          <div className="grid gap-2">
-            <Label>Category</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All categories</SelectItem>
-                {(categories.data ?? []).map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <FilterField label="Category" htmlFor="product-category" className="sm:w-48">
+          <Select value={categoryId} onValueChange={setCategoryId}>
+            <SelectTrigger id="product-category" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All categories</SelectItem>
+              {(categories.data ?? []).map((category) => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
 
-          <div className="grid gap-2">
-            <Label>Type</Label>
-            <Select value={kind} onValueChange={(value) => setKind(value as ProductKind | typeof ALL)}>
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All types</SelectItem>
-                <SelectItem value="Loose">Loose</SelectItem>
-                <SelectItem value="Packed">Packed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <FilterField label="Type" htmlFor="product-kind" className="sm:w-36">
+          <Select value={kind} onValueChange={(value) => setKind(value as ProductKind | typeof ALL)}>
+            <SelectTrigger id="product-kind" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All types</SelectItem>
+              <SelectItem value="Loose">Loose</SelectItem>
+              <SelectItem value="Packed">Packed</SelectItem>
+            </SelectContent>
+          </Select>
+        </FilterField>
 
-          <Button variant="ghost" size="sm" onClick={() => setIncludeInactive(!includeInactive)}>
-            {includeInactive ? 'Hide inactive' : 'Show inactive'}
-          </Button>
-        </CardContent>
-      </Card>
+        <FilterToggle
+          pressed={includeInactive}
+          onPressedChange={setIncludeInactive}
+          className="col-span-2 sm:col-span-1"
+        >
+          Show inactive
+        </FilterToggle>
+      </FilterBar>
 
       <Card>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead>Packed from</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Low below</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(products.data ?? []).map((product) => (
-                <TableRow key={product.id} className={product.isActive ? undefined : 'opacity-60'}>
-                  <TableCell className="font-mono text-xs">{product.productCode}</TableCell>
-                  <TableCell className="font-medium">
-                    {product.name}
-                    {!product.isActive && (
-                      <Badge variant="outline" className="ml-2">
-                        Inactive
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>{product.categoryName}</TableCell>
-                  <TableCell>
-                    <Badge variant={product.kind === 'Packed' ? 'secondary' : 'outline'}>{product.kind}</Badge>
-                  </TableCell>
-                  <TableCell>{product.unitCode}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {product.sourceProductName
-                      ? `${product.sourceProductName} · ${formatQuantity(product.sourceQuantityPerPack ?? 0)} per pack`
-                      : '—'}
-                  </TableCell>
-                  <TableCell className="text-right">{formatMoney(product.sellingPrice)}</TableCell>
-                  <TableCell className="text-right">
-                    {product.lowStockThreshold === null ? '—' : formatQuantity(product.lowStockThreshold)}
-                  </TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setEditing(product)
-                        setIsDialogOpen(true)
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setActive.mutate({ id: product.id, isActive: !product.isActive })}
-                    >
-                      {product.isActive ? 'Deactivate' : 'Activate'}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {products.data?.length === 0 && (
+        <CardContent className="px-0">
+          {products.isPending ? (
+            <TableSkeleton columns={5} />
+          ) : products.isError ? (
+            <ErrorState error={products.error} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              icon={Package}
+              title={isFiltered ? 'Nothing matches these filters' : 'No products yet'}
+              description={
+                isFiltered
+                  ? 'Try a different search, category or type.'
+                  : 'Add a loose variety first, then the packs made from it.'
+              }
+              action={
+                isFiltered ? undefined : (
+                  <Button onClick={() => openDialog(null)}>
+                    <Plus className="size-4" />
+                    New product
+                  </Button>
+                )
+              }
+            />
+          ) : (
+            <Table>
+              <TableHeader sticky>
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                    No products yet. Add a loose variety first, then the packs made from it.
-                  </TableCell>
+                  <TableHead>Product</TableHead>
+                  <TableHead className="hidden md:table-cell">Category</TableHead>
+                  <TableHead className="hidden sm:table-cell">Type</TableHead>
+                  <TableHead className="hidden xl:table-cell">Packed from</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="hidden text-right xl:table-cell">Low below</TableHead>
+                  <TableHead className="w-12" />
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {rows.map((product) => (
+                  <TableRow key={product.id} className={product.isActive ? undefined : 'opacity-60'}>
+                    <TableCell className="max-w-[14rem]">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">{product.name}</span>
+                        {!product.isActive && <Badge variant="outline">Inactive</Badge>}
+                      </div>
+                      <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+                        {product.productCode} · {product.unitCode}
+                        <span className="md:hidden"> · {product.categoryName}</span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="hidden text-muted-foreground md:table-cell">
+                      {product.categoryName}
+                    </TableCell>
+
+                    <TableCell className="hidden sm:table-cell">
+                      <Badge variant={product.kind === 'Packed' ? 'secondary' : 'outline'}>{product.kind}</Badge>
+                    </TableCell>
+
+                    <TableCell className="hidden max-w-[14rem] truncate text-muted-foreground xl:table-cell">
+                      {product.sourceProductName
+                        ? `${product.sourceProductName} · ${formatQuantity(product.sourceQuantityPerPack ?? 0)} per pack`
+                        : '—'}
+                    </TableCell>
+
+                    <TableCell className="text-right tabular-nums">
+                      {product.sellingPrice === null ? (
+                        <span className="text-xs text-muted-foreground">Not priced</span>
+                      ) : (
+                        formatMoney(product.sellingPrice)
+                      )}
+                    </TableCell>
+
+                    <TableCell className="hidden text-right tabular-nums text-muted-foreground xl:table-cell">
+                      {product.lowStockThreshold === null ? '—' : formatQuantity(product.lowStockThreshold)}
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${product.name}`}>
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openDialog(product)}>
+                            <Pencil className="size-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setActive.mutate({ id: product.id, isActive: !product.isActive })}
+                          >
+                            {product.isActive ? 'Deactivate' : 'Activate'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

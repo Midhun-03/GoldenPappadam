@@ -7,20 +7,8 @@
 
 @theme inline {
     --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
+    --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+
     --color-ring: var(--ring);
     --color-input: var(--input);
     --color-border: var(--border);
@@ -39,6 +27,30 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+
+    /* Status colours. Meaning, never decoration: see the table in the block below. */
+    --color-success: var(--success);
+    --color-success-surface: var(--success-surface);
+    --color-warning: var(--warning);
+    --color-warning-surface: var(--warning-surface);
+    --color-info: var(--info);
+    --color-info-surface: var(--info-surface);
+    --color-destructive-surface: var(--destructive-surface);
+
+    /* The Golden Pappadam mark. Deliberately used nowhere else. */
+    --color-brand: var(--brand);
+    --color-brand-deep: var(--brand-deep);
+
+    /*
+     * A neutral ramp for charts that need to tell several slices apart, such as sales by
+     * category. Charts whose slices carry meaning use the status colours above instead.
+     */
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -48,83 +60,121 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * One palette, warm neutral, with colour reserved for meaning:
+ *
+ *   success      money received, healthy stock
+ *   warning      low stock, money left on account
+ *   destructive  errors, out of stock, money owed
+ *   info         neutral notices
+ *   brand        the logo mark only
+ *
+ * Nothing else may introduce a colour. Reach for a token or stay neutral.
+ */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --background: oklch(0.985 0.003 85);
+    --foreground: oklch(0.205 0.008 65);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.205 0.008 65);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
-}
+    --popover-foreground: oklch(0.205 0.008 65);
+    --primary: oklch(0.235 0.01 65);
+    --primary-foreground: oklch(0.985 0.003 85);
+    --secondary: oklch(0.966 0.004 85);
+    --secondary-foreground: oklch(0.235 0.01 65);
+    --muted: oklch(0.966 0.004 85);
+    --muted-foreground: oklch(0.525 0.012 68);
+    --accent: oklch(0.955 0.005 85);
+    --accent-foreground: oklch(0.235 0.01 65);
+    --border: oklch(0.916 0.005 85);
+    --input: oklch(0.9 0.006 85);
+    --ring: oklch(0.55 0.02 70);
 
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --destructive: oklch(0.545 0.19 27);
+    --destructive-surface: oklch(0.962 0.022 24);
+    --success: oklch(0.52 0.115 155);
+    --success-surface: oklch(0.958 0.03 158);
+    --warning: oklch(0.53 0.105 72);
+    --warning-surface: oklch(0.962 0.04 80);
+    --info: oklch(0.52 0.12 252);
+    --info-surface: oklch(0.96 0.025 252);
+
+    --brand: oklch(0.72 0.145 68);
+    --brand-deep: oklch(0.48 0.105 62);
+
+    --chart-1: oklch(0.30 0.014 65);
+    --chart-2: oklch(0.43 0.014 66);
+    --chart-3: oklch(0.56 0.014 68);
+    --chart-4: oklch(0.68 0.012 71);
+    --chart-5: oklch(0.80 0.010 75);
+
+    --radius: 0.5rem;
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+    * {
+        @apply border-border outline-ring/50;
     }
-  body {
-    @apply bg-background text-foreground;
+
+    html {
+        @apply font-sans;
+        -webkit-text-size-adjust: 100%;
     }
-  html {
-    @apply font-sans;
+
+    body {
+        @apply bg-background text-foreground;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Money and quantities line up column to column wherever they appear. */
+    .tabular-nums {
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*
+     * Touch devices get comfortable hit targets without inflating the desktop UI,
+     * which is deliberately dense for all-day use.
+     */
+    @media (pointer: coarse) {
+        button:not([data-size='icon-xs']),
+        [role='button'],
+        a[data-slot='button'],
+        [data-slot='select-trigger'],
+        [data-slot='input'] {
+            min-height: 2.75rem;
+        }
+
+        [data-slot='button'][data-size='icon'],
+        [data-slot='button'][data-size='icon-sm'] {
+            min-width: 2.75rem;
+        }
+    }
+}
+
+/* Entrance for a page's content. Short enough not to sit between a click and the result. */
+@keyframes gp-enter {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@utility animate-enter {
+    animation: gp-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }

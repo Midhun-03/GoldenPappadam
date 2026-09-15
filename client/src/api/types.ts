@@ -236,3 +236,16 @@ export type PackingEntry = {
   sourceQuantityUsed: number
   notes: string | null
 }
+
+/**
+ * Sales for one product over a date range. `salesValue` is the sum of the line totals, so it
+ * is gross of any bill-level discount and will not tie exactly to the sales headline figures.
+ */
+export type ProductSales = {
+  productId: string
+  productName: string
+  unitCode: string
+  categoryName: string
+  quantitySold: number
+  salesValue: number
+}

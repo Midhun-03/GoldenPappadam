@@ -1,23 +1,36 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, Plus, Tag, Ruler, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { categoriesApi, unitsApi } from '@/api/inventory'
+import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
+import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError } from '@/lib/api'
 
 const showError = (caught: unknown, fallback: string) =>
   toast.error(caught instanceof ApiError ? caught.message : fallback)
 
+function ListSkeleton() {
+  return (
+    <div className="grid gap-2">
+      {Array.from({ length: 4 }, (_, index) => (
+        <Skeleton key={index} className="h-9" />
+      ))}
+    </div>
+  )
+}
+
 export function SettingsPage() {
   return (
     <>
-      <PageHeader title="Settings" description="Categories and units used by products." />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <PageHeader title="Settings" description="The categories and units that products are built from." />
+      <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
         <CategoriesCard />
         <UnitsCard />
       </div>
@@ -56,9 +69,7 @@ function CategoriesCard() {
 
   const setActive = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => categoriesApi.setActive(id, isActive),
-    onSuccess: async () => {
-      await refresh()
-    },
+    onSuccess: refresh,
     onError: (caught) => showError(caught, 'Could not change the category.'),
   })
 
@@ -75,7 +86,11 @@ function CategoriesCard() {
       </CardHeader>
       <CardContent className="grid gap-4">
         <form className="flex gap-2" onSubmit={handleAdd}>
+          <Label htmlFor="new-category" className="sr-only">
+            New category
+          </Label>
           <Input
+            id="new-category"
             placeholder="New category"
             maxLength={100}
             required
@@ -83,17 +98,32 @@ function CategoriesCard() {
             onChange={(event) => setNewName(event.target.value)}
           />
           <Button type="submit" disabled={create.isPending}>
+            <Plus className="size-4" />
             Add
           </Button>
         </form>
 
-        <Table>
-          <TableBody>
-            {(categories.data ?? []).map((category) => (
-              <TableRow key={category.id}>
-                <TableCell>
-                  {editingId === category.id ? (
+        {categories.isPending ? (
+          <ListSkeleton />
+        ) : categories.isError ? (
+          <ErrorState error={categories.error} />
+        ) : categories.data.length === 0 ? (
+          <EmptyState
+            icon={Tag}
+            title="No categories yet"
+            description="Add one above, then products can be grouped by it."
+          />
+        ) : (
+          <ul className="divide-y rounded-lg border">
+            {categories.data.map((category) => (
+              <li key={category.id} className="flex items-center gap-2 px-3 py-2">
+                {editingId === category.id ? (
+                  <>
+                    <Label htmlFor={`rename-${category.id}`} className="sr-only">
+                      Rename {category.name}
+                    </Label>
                     <Input
+                      id={`rename-${category.id}`}
                       autoFocus
                       value={editingName}
                       onChange={(event) => setEditingName(event.target.value)}
@@ -102,57 +132,52 @@ function CategoriesCard() {
                         if (event.key === 'Escape') setEditingId(null)
                       }}
                     />
-                  ) : (
-                    <span className={category.isActive ? 'font-medium' : 'text-muted-foreground'}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Save name"
+                      disabled={rename.isPending}
+                      onClick={() => rename.mutate({ id: category.id, name: editingName.trim() })}
+                    >
+                      <Check className="size-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" aria-label="Cancel" onClick={() => setEditingId(null)}>
+                      <X className="size-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className={
+                        category.isActive ? 'min-w-0 flex-1 truncate font-medium' : 'min-w-0 flex-1 truncate text-muted-foreground'
+                      }
+                    >
                       {category.name}
-                      {!category.isActive && (
-                        <Badge variant="outline" className="ml-2">
-                          Inactive
-                        </Badge>
-                      )}
                     </span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap">
-                  {editingId === category.id ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => rename.mutate({ id: category.id, name: editingName.trim() })}
-                      >
-                        Save
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditingId(category.id)
-                          setEditingName(category.name)
-                        }}
-                      >
-                        Rename
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setActive.mutate({ id: category.id, isActive: !category.isActive })}
-                      >
-                        {category.isActive ? 'Deactivate' : 'Activate'}
-                      </Button>
-                    </>
-                  )}
-                </TableCell>
-              </TableRow>
+                    {!category.isActive && <Badge variant="outline">Inactive</Badge>}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditingId(category.id)
+                        setEditingName(category.name)
+                      }}
+                    >
+                      Rename
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setActive.mutate({ id: category.id, isActive: !category.isActive })}
+                    >
+                      {category.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
+                  </>
+                )}
+              </li>
             ))}
-          </TableBody>
-        </Table>
+          </ul>
+        )}
       </CardContent>
     </Card>
   )
@@ -179,9 +204,7 @@ function UnitsCard() {
 
   const setActive = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => unitsApi.setActive(id, isActive),
-    onSuccess: async () => {
-      await refresh()
-    },
+    onSuccess: refresh,
     onError: (caught) => showError(caught, 'Could not change the unit.'),
   })
 
@@ -198,15 +221,23 @@ function UnitsCard() {
       </CardHeader>
       <CardContent className="grid gap-4">
         <form className="flex gap-2" onSubmit={handleAdd}>
+          <Label htmlFor="new-unit-code" className="sr-only">
+            Unit code
+          </Label>
           <Input
-            className="w-24"
+            id="new-unit-code"
+            className="w-24 shrink-0"
             placeholder="Code"
             maxLength={10}
             required
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
+          <Label htmlFor="new-unit-name" className="sr-only">
+            Unit name
+          </Label>
           <Input
+            id="new-unit-name"
             placeholder="Name"
             maxLength={50}
             required
@@ -214,36 +245,37 @@ function UnitsCard() {
             onChange={(event) => setName(event.target.value)}
           />
           <Button type="submit" disabled={create.isPending}>
+            <Plus className="size-4" />
             Add
           </Button>
         </form>
 
-        <Table>
-          <TableBody>
-            {(units.data ?? []).map((unit) => (
-              <TableRow key={unit.id}>
-                <TableCell className="w-24 font-mono text-xs">{unit.code}</TableCell>
-                <TableCell className={unit.isActive ? undefined : 'text-muted-foreground'}>
+        {units.isPending ? (
+          <ListSkeleton />
+        ) : units.isError ? (
+          <ErrorState error={units.error} />
+        ) : units.data.length === 0 ? (
+          <EmptyState icon={Ruler} title="No units yet" description="Add one above before creating products." />
+        ) : (
+          <ul className="divide-y rounded-lg border">
+            {units.data.map((unit) => (
+              <li key={unit.id} className="flex items-center gap-3 px-3 py-2">
+                <span className="w-14 shrink-0 font-mono text-xs font-medium">{unit.code}</span>
+                <span className={unit.isActive ? 'min-w-0 flex-1 truncate' : 'min-w-0 flex-1 truncate text-muted-foreground'}>
                   {unit.name}
-                  {!unit.isActive && (
-                    <Badge variant="outline" className="ml-2">
-                      Inactive
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setActive.mutate({ id: unit.id, isActive: !unit.isActive })}
-                  >
-                    {unit.isActive ? 'Deactivate' : 'Activate'}
-                  </Button>
-                </TableCell>
-              </TableRow>
+                </span>
+                {!unit.isActive && <Badge variant="outline">Inactive</Badge>}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActive.mutate({ id: unit.id, isActive: !unit.isActive })}
+                >
+                  {unit.isActive ? 'Deactivate' : 'Activate'}
+                </Button>
+              </li>
             ))}
-          </TableBody>
-        </Table>
+          </ul>
+        )}
       </CardContent>
     </Card>
   )
