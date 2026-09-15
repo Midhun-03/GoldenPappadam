@@ -5,7 +5,7 @@ import '../../app.dart';
 import '../../core/money.dart';
 import '../../data/local/database.dart';
 import '../../data/sales_repository.dart';
-import '../home/home_screen.dart';
+import '../sync/sync_views.dart';
 import 'shop_screen.dart';
 
 /// The list the salesperson opens on. Search first, because on a route of fifteen shops the
