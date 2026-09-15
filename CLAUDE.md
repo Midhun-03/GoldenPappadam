@@ -86,6 +86,8 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 - **Pricing:** every product has a default selling price, overridable on a sale line. Customer-specific pricing must be addable later without redesign. Never hard-code one unchangeable price.
 - **Returns:** the design must stay return-ready (extensible movement types + the reference pattern). Do not build a returns workflow in phase 1.
 - **Discounts:** a simple bill-level discount field is enough for now; item-level discounts must remain addable later. No promotion/discount engine.
+- **Tax/GST:** the invoice structure must allow tax fields (GSTIN, HSN/SAC, tax %, tax amount, CGST/SGST/IGST) to be added later without restructuring sales. Do **not** assume sales are GST-exempt and do not implement tax logic until the accountant confirms it.
+
 ### Confirmed requirements (2026-09-15, phase 3)
 
 - **Customer-specific pricing is real** (closes §10 question 1). The same product has a different price for
@@ -100,8 +102,6 @@ Keep payments simple and practical — not a full enterprise accounting system. 
   load, unsold stock returns every evening, and a shortfall is **shown to the admin, never auto-adjusted** —
   that reconciliation is what catches a sale nobody recorded.
 - **One user account per person**, with two roles: `Admin` and `Salesperson`.
-
-- **Tax/GST:** the invoice structure must allow tax fields (GSTIN, HSN/SAC, tax %, tax amount, CGST/SGST/IGST) to be added later without restructuring sales. Do **not** assume sales are GST-exempt and do not implement tax logic until the accountant confirms it.
 
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
 

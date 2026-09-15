@@ -1,7 +1,7 @@
 # Phase 3 — salesperson app and field sales: audit and design proposal
 
-Status: **proposal, awaiting approval.** Nothing in here is built yet. Seven business decisions were taken
-on 2026-09-15 and are recorded in Part E; none of the open ones block starting.
+Status: **approved 2026-09-15, in progress.** M1, M2 and M2b are built; the milestone table in Part C says
+where things stand. Seven business decisions were taken on 2026-09-15 and are recorded in Part E.
 
 ---
 
