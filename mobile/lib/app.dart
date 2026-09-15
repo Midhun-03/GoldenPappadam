@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/local/database.dart';
+import 'data/sales_repository.dart';
 import 'data/remote/api_client.dart';
 import 'features/auth/login_screen.dart';
-import 'features/home/home_screen.dart';
+import 'features/shops/shops_screen.dart';
 import 'sync/sync_engine.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -27,6 +28,13 @@ final syncProvider = Provider<SyncEngine>((ref) {
 
   return engine;
 });
+
+final salesRepositoryProvider =
+    Provider<SalesRepository>((ref) => SalesRepository(ref.watch(databaseProvider)));
+
+/// Hands the work to the office without making anyone wait for it. The sale is already saved on
+/// the phone by the time this is called, so failure here changes nothing the salesperson can see.
+void unawaitedSync(WidgetRef ref) => unawaited(ref.read(syncProvider).syncNow());
 
 /// Whether somebody is signed in. Null while the app is still looking.
 class SessionNotifier extends Notifier<bool?> {
@@ -111,7 +119,7 @@ class _GoldenPappadamAppState extends ConsumerState<GoldenPappadamApp> {
       ),
       home: switch (session) {
         null => const Scaffold(body: Center(child: CircularProgressIndicator())),
-        true => const HomeScreen(),
+        true => const ShopsScreen(),
         false => const LoginScreen(),
       },
     );
