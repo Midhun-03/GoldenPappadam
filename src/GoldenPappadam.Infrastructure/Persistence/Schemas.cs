@@ -5,5 +5,8 @@ public static class Schemas
 {
     public const string Inventory = "inventory";
     public const string Sales = "sales";
+
+    /// <summary>The van and the road: loads, and later devices, visits and routes.</summary>
+    public const string FieldSales = "fieldsales";
     public const string Identity = "identity";
 }

@@ -212,8 +212,8 @@ _Last updated: 2026-09-15_
 
 **Phase 1 is complete. Phase 3 is in progress** — a Flutter salesperson app that works offline and
 synchronizes with this API, designed in `docs/03-field-sales-design.md` (approved 2026-09-15).
-Milestones: M0 environment, **M1 roles and bearer auth (done)**, **M2 customer pricing (done)**, M2b stock locations
-and van loads, M3 sync foundation, M4 Flutter foundation, M5 shops, M6 sale entry, M7 offline and sync,
+Milestones: M0 environment, **M1 roles and bearer auth (done)**, **M2 customer pricing (done)**,
+**M2b stock locations and van loads (done)**, M3 sync foundation, M4 Flutter foundation, M5 shops, M6 sale entry, M7 offline and sync,
 M8 payments, M9 admin field-sales screens, M10 field testing, M11 returns.
 There is no phase 2: the owner numbered the mobile work phase 3.
 
@@ -240,6 +240,17 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   asks a person instead of guessing. A shop with no arrangement keeps paying the product price, so phase-1
   behaviour is unchanged. Changing a price never touches a bill already made, because `InvoiceLine.UnitPrice`
   was always the frozen record of what was charged. The admin sets prices from a card on the customer page.
+- **M2b done (phase 3):** stock has a place. `inventory.StockLocations` (seeded `MAIN` and `VAN-1`, fixed ids
+  like the units) and `StockMovement.LocationId`, migrated nullable -> backfill to `MAIN` -> required so no row
+  ever claimed to be somewhere that did not exist. Verified against the development database: every stock
+  figure identical before and after. Stock figures are now **per location**, and callers say which they mean
+  rather than inherit a default. Packing and low stock mean the warehouse; a bill with no location still comes
+  off the warehouse. `fieldsales.VanLoads` records the morning load and the evening return as `Transfer`
+  movement pairs, admin-only. The day's reconciliation is deliberately the ledger's own arithmetic - opening +
+  loaded - sold - returned + corrections **is** the van's closing balance - so an unaccounted packet is not a
+  report that could disagree with stock, it is stock still sitting on a van that should be empty. It is shown,
+  never auto-adjusted: an unrecorded sale and a miscount look identical to arithmetic, and that reconciliation
+  is what catches the sale nobody wrote down.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:

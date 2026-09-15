@@ -7,6 +7,7 @@ import type {
   ProductKind,
   SaveProduct,
   StockEntryResponse,
+  StockLocation,
   StockMovement,
   StockMovementType,
   StockOnHand,
@@ -62,15 +63,30 @@ export type StockEntry = {
   quantity: number
   occurredAt?: string
   notes?: string
+  /** Left out means the main warehouse, which is where all of this used to happen. */
+  locationId?: string
 }
 
 export const stockApi = {
-  onHand: (filters: { categoryId?: string; lowStockOnly?: boolean; includeInactive?: boolean } = {}) =>
-    api.get<StockOnHand[]>(`${base}/stock${query(filters)}`),
+  /** Defaults to the main warehouse; pass a location for the van, or allLocations for the total. */
+  onHand: (
+    filters: {
+      categoryId?: string
+      lowStockOnly?: boolean
+      includeInactive?: boolean
+      locationId?: string
+      allLocations?: boolean
+    } = {},
+  ) => api.get<StockOnHand[]>(`${base}/stock${query(filters)}`),
   movements: (productId: string) => api.get<StockMovement[]>(`${base}/stock/${productId}/movements`),
+  locations: () => api.get<StockLocation[]>(`${base}/stock/locations`),
   addEntry: (entry: StockEntry) => api.post<StockEntryResponse>(`${base}/stock/entries`, entry),
-  adjust: (adjustment: { productId: string; countedQuantity: number; notes: string }) =>
-    api.post<StockEntryResponse>(`${base}/stock/adjustments`, adjustment),
+  adjust: (adjustment: {
+    productId: string
+    countedQuantity: number
+    notes: string
+    locationId?: string
+  }) => api.post<StockEntryResponse>(`${base}/stock/adjustments`, adjustment),
 }
 
 export const packingApi = {

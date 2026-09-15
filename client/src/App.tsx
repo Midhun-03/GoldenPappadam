@@ -15,6 +15,7 @@ import { ProductsPage } from './pages/ProductsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { StockHistoryPage } from './pages/StockHistoryPage'
 import { StockPage } from './pages/StockPage'
+import { VanPage } from './pages/VanPage'
 
 // The dashboard is the only screen that draws charts, so its charting library loads with it
 // rather than with every other page.
@@ -50,6 +51,7 @@ export function App() {
           <Route path="/stock/:productId" element={<StockHistoryPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/packing" element={<PackingPage />} />
+          <Route path="/van" element={<VanPage />} />
 
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/:customerId" element={<CustomerLedgerPage />} />

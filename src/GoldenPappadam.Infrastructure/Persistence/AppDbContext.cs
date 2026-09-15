@@ -1,5 +1,6 @@
 using System.Reflection;
 using GoldenPappadam.Domain.Common;
+using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
@@ -25,6 +26,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
+
+    public DbSet<VanLoad> VanLoads => Set<VanLoad>();
+    public DbSet<VanLoadLine> VanLoadLines => Set<VanLoadLine>();
 
     /// <summary>
     /// SQL Server's datetime2 does not remember that a value is UTC, so EF hands it back as

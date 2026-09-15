@@ -287,3 +287,61 @@ export type ProductSales = {
   quantitySold: number
   salesValue: number
 }
+
+export type VanLoadDirection = 'Loading' | 'Return'
+
+export type VanLoadLine = {
+  productId: string
+  productName: string
+  unitCode: string
+  quantity: number
+}
+
+export type VanLoad = {
+  id: string
+  vanLocationId: string
+  vanCode: string
+  direction: VanLoadDirection
+  occurredAt: string
+  businessDate: string
+  notes: string | null
+  lines: VanLoadLine[]
+}
+
+export type SaveVanLoad = {
+  vanLocationId: string
+  direction: VanLoadDirection
+  occurredAt?: string
+  notes?: string
+  lines: { productId: string; quantity: number }[]
+}
+
+export type CreateVanLoadResponse = {
+  vanLoad: VanLoad
+  warnings: string[]
+}
+
+/**
+ * One product's day on the van. `unaccounted` is what the van is still holding after the evening
+ * return: it should be zero, and when it is not, a person decides why rather than the system
+ * quietly adjusting it away.
+ */
+export type VanReconciliationLine = {
+  productId: string
+  productName: string
+  unitCode: string
+  opening: number
+  loaded: number
+  sold: number
+  returned: number
+  other: number
+  unaccounted: number
+}
+
+export type VanReconciliation = {
+  vanLocationId: string
+  vanCode: string
+  businessDate: string
+  isSettled: boolean
+  lines: VanReconciliationLine[]
+}

@@ -42,16 +42,28 @@ const statusStyle: Record<StockStatus, { dot: string; label: string; badge: 'des
   healthy: { dot: 'bg-success', label: 'In stock', badge: null },
 }
 
+/** The main warehouse, which is the default view, and the total across every location. */
+const WAREHOUSE = 'warehouse'
+const EVERYWHERE = 'everywhere'
+
 export function StockPage() {
   const [categoryId, setCategoryId] = useState(ALL)
   const [search, setSearch] = useState('')
   const [lowStockOnly, setLowStockOnly] = useState(false)
   const [entryProduct, setEntryProduct] = useState<StockOnHand | null>(null)
   const [adjustProduct, setAdjustProduct] = useState<StockOnHand | null>(null)
+  // The warehouse by default: that is what packing draws from and what low stock has always meant.
+  const [where, setWhere] = useState(WAREHOUSE)
 
   const categories = useQuery({ queryKey: ['categories'], queryFn: () => categoriesApi.list() })
+  const locations = useQuery({ queryKey: ['stock', 'locations'], queryFn: stockApi.locations })
 
-  const filters = { categoryId: categoryId === ALL ? undefined : categoryId, lowStockOnly }
+  const filters = {
+    categoryId: categoryId === ALL ? undefined : categoryId,
+    lowStockOnly,
+    locationId: where === WAREHOUSE || where === EVERYWHERE ? undefined : where,
+    allLocations: where === EVERYWHERE,
+  }
   const stock = useQuery({ queryKey: ['stock', filters], queryFn: () => stockApi.onHand(filters) })
 
   const term = search.trim().toLowerCase()
@@ -104,6 +116,25 @@ export function StockPage() {
                   {category.name}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+
+        <FilterField label="Where" htmlFor="stock-location" className="col-span-2 sm:w-44">
+          <Select value={where} onValueChange={setWhere}>
+            <SelectTrigger id="stock-location" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(locations.data ?? []).map((location) => (
+                <SelectItem
+                  key={location.id}
+                  value={location.kind === 'Warehouse' && location.code === 'MAIN' ? WAREHOUSE : location.id}
+                >
+                  {location.name}
+                </SelectItem>
+              ))}
+              <SelectItem value={EVERYWHERE}>Everywhere</SelectItem>
             </SelectContent>
           </Select>
         </FilterField>

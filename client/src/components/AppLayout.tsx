@@ -8,6 +8,7 @@ import {
   PackagePlus,
   Settings,
   Store,
+  Truck,
   Wallet,
   type LucideIcon,
 } from 'lucide-react'
@@ -50,6 +51,10 @@ const navigation: NavGroup[] = [
       { to: '/products', label: 'Products', icon: Package },
       { to: '/packing', label: 'Packing', icon: PackagePlus },
     ],
+  },
+  {
+    label: 'Field sales',
+    items: [{ to: '/van', label: 'Van', icon: Truck }],
   },
   {
     label: null,
