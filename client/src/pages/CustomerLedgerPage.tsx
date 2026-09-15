@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDay, formatMoney } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { CustomerPricesCard } from './CustomerPricesCard'
 import { RecordPaymentDialog } from './RecordPaymentDialog'
 
 export function CustomerLedgerPage() {
@@ -243,6 +244,10 @@ export function CustomerLedgerPage() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-4 lg:mt-5">
+        <CustomerPricesCard customerId={customerId} />
       </div>
 
       <RecordPaymentDialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen} customerId={customerId} />

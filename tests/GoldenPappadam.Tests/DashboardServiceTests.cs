@@ -1,5 +1,6 @@
 using GoldenPappadam.Api.Features.Dashboard;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Domain.Sales;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +21,7 @@ public class DashboardServiceTests : IAsyncLifetime
     {
         _database = new TestDatabase();
         var stock = new StockService(_database.Db);
-        _invoices = new InvoiceService(_database.Db, stock);
+        _invoices = new InvoiceService(_database.Db, stock, new CustomerPriceService(_database.Db));
         _dashboard = new DashboardService(_database.Db, stock);
         return Task.CompletedTask;
     }

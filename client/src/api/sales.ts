@@ -3,6 +3,7 @@ import type {
   CreateInvoiceResponse,
   CreatePaymentResponse,
   Customer,
+  CustomerPrice,
   InvoiceDetail,
   InvoiceListItem,
   InvoiceStatus,
@@ -35,6 +36,16 @@ export const customersApi = {
   ledger: (id: string) => api.get<LedgerEntry[]>(`${base}/customers/${id}/ledger`),
   outstandingInvoices: (id: string) =>
     api.get<OutstandingInvoice[]>(`${base}/customers/${id}/outstanding-invoices`),
+}
+
+/** Prices are admin-only on the server; the salesperson's app can only read its own snapshot. */
+export const customerPricesApi = {
+  list: (customerId: string, filters: { agreedOnly?: boolean } = {}) =>
+    api.get<CustomerPrice[]>(`${base}/customers/${customerId}/prices${query(filters)}`),
+  set: (customerId: string, productId: string, unitPrice: number) =>
+    api.put<CustomerPrice>(`${base}/customers/${customerId}/prices/${productId}`, { unitPrice }),
+  remove: (customerId: string, productId: string) =>
+    api.del<void>(`${base}/customers/${customerId}/prices/${productId}`),
 }
 
 export type InvoiceFilters = {

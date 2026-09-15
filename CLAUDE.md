@@ -212,7 +212,7 @@ _Last updated: 2026-09-15_
 
 **Phase 1 is complete. Phase 3 is in progress** — a Flutter salesperson app that works offline and
 synchronizes with this API, designed in `docs/03-field-sales-design.md` (approved 2026-09-15).
-Milestones: M0 environment, **M1 roles and bearer auth (done)**, M2 customer pricing, M2b stock locations
+Milestones: M0 environment, **M1 roles and bearer auth (done)**, **M2 customer pricing (done)**, M2b stock locations
 and van loads, M3 sync foundation, M4 Flutter foundation, M5 shops, M6 sale entry, M7 offline and sync,
 M8 payments, M9 admin field-sales screens, M10 field testing, M11 returns.
 There is no phase 2: the owner numbered the mobile work phase 3.
@@ -234,6 +234,12 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   start-up — without that backfill the new policy would lock the owner out. 36 new tests drive real HTTP
   through the real pipeline (`ApiFactory`, `WebApplicationFactory`), because authorization is wiring rather
   than logic and the only honest check is the status code.
+- **M2 done (phase 3):** `sales.CustomerPrices` — one price per shop per product, unique index, admin-only,
+  deactivated rather than deleted. The precedence lives in one place, `CustomerPriceService.Resolve`: the
+  price typed on the bill line, else the shop's agreed price, else `Product.SellingPrice`, else an error that
+  asks a person instead of guessing. A shop with no arrangement keeps paying the product price, so phase-1
+  behaviour is unchanged. Changing a price never touches a bill already made, because `InvoiceLine.UnitPrice`
+  was always the frozen record of what was charged. The admin sets prices from a card on the customer page.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:

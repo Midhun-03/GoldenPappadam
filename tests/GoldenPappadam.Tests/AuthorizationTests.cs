@@ -107,6 +107,25 @@ public class AuthorizationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_salesperson_can_neither_see_nor_set_a_price()
+    {
+        var client = await _api.SignInAsync("van@test.local");
+        var customerId = Guid.NewGuid();
+
+        // Authorization runs before the controller, so made-up ids still prove the point: the
+        // request never gets far enough for the ids to matter.
+        var read = await client.GetAsync($"/api/sales/customers/{customerId}/prices");
+        Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
+
+        var write = await client.PutAsJsonAsync(
+            $"/api/sales/customers/{customerId}/prices/{Guid.NewGuid()}", new { unitPrice = 1m });
+        Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
+
+        var remove = await client.DeleteAsync($"/api/sales/customers/{customerId}/prices/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.Forbidden, remove.StatusCode);
+    }
+
+    [Fact]
     public async Task A_role_that_does_not_exist_is_refused()
     {
         var client = await _api.SignInAsync("office@test.local");

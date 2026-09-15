@@ -1,5 +1,6 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
@@ -17,7 +18,7 @@ public class InvoiceServiceTests : IAsyncLifetime
     {
         _database = new TestDatabase();
         _stock = new StockService(_database.Db);
-        _invoices = new InvoiceService(_database.Db, _stock);
+        _invoices = new InvoiceService(_database.Db, _stock, new CustomerPriceService(_database.Db));
         return Task.CompletedTask;
     }
 

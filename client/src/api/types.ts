@@ -19,6 +19,17 @@ export type CurrentUser = {
   role: Role
 }
 
+/** What one shop pays for one product. `effectivePrice` is what a bill would actually charge. */
+export type CustomerPrice = {
+  productId: string
+  productCode: string
+  productName: string
+  unitCode: string
+  defaultPrice: number | null
+  agreedPrice: number | null
+  effectivePrice: number | null
+}
+
 export type Category = {
   id: string
   name: string

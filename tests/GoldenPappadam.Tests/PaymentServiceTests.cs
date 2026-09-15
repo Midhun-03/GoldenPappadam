@@ -1,6 +1,7 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
 using GoldenPappadam.Api.Features.Sales.Customers;
+using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Payments;
 using GoldenPappadam.Domain.Sales;
@@ -23,7 +24,7 @@ public class PaymentServiceTests : IAsyncLifetime
     public Task InitializeAsync()
     {
         _database = new TestDatabase();
-        _invoices = new InvoiceService(_database.Db, new StockService(_database.Db));
+        _invoices = new InvoiceService(_database.Db, new StockService(_database.Db), new CustomerPriceService(_database.Db));
         _payments = new PaymentService(_database.Db);
         _customers = new CustomerService(_database.Db);
         return Task.CompletedTask;

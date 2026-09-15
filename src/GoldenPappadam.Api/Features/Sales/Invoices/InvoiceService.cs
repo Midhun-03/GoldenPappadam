@@ -1,5 +1,6 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Persistence;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GoldenPappadam.Api.Features.Sales.Invoices;
 
-public class InvoiceService(AppDbContext db, StockService stock)
+public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceService prices)
 {
     private const int NumberRetryAttempts = 3;
     private static readonly int[] UniqueViolationErrors = [2601, 2627];
@@ -29,7 +30,7 @@ public class InvoiceService(AppDbContext db, StockService stock)
         }
 
         var invoiceDate = request.InvoiceDate ?? IndiaTime.Today();
-        var lines = await BuildLinesAsync(request.Lines, ct);
+        var lines = await BuildLinesAsync(customer.Id, request.Lines, ct);
 
         var subTotal = decimal.Round(lines.Sum(l => l.LineTotal), 2, MidpointRounding.AwayFromZero);
 
@@ -100,10 +101,12 @@ public class InvoiceService(AppDbContext db, StockService stock)
         ?? throw new NotFoundException("Invoice");
 
     private async Task<List<InvoiceLine>> BuildLinesAsync(
+        Guid customerId,
         IReadOnlyList<InvoiceLineRequest> requested,
         CancellationToken ct)
     {
         var productIds = requested.Select(l => l.ProductId).Distinct().ToList();
+        var agreedPrices = await prices.GetAgreedPricesAsync(customerId, productIds, ct);
         var products = await db.Products
             .Where(p => productIds.Contains(p.Id))
             .Select(p => new
@@ -135,9 +138,13 @@ public class InvoiceService(AppDbContext db, StockService stock)
                 throw new DomainException($"The quantity for '{product.Name}' must be greater than zero.");
             }
 
-            var unitPrice = line.UnitPrice ?? product.SellingPrice
+            // What the office typed, else what this shop has agreed, else the product's own price.
+            var agreed = agreedPrices.TryGetValue(product.Id, out var shopPrice) ? shopPrice : (decimal?)null;
+
+            var unitPrice = CustomerPriceService.Resolve(line.UnitPrice, agreed, product.SellingPrice)
                 ?? throw new DomainException(
-                    $"'{product.Name}' has no selling price. Enter a price on the line, or set one on the product.");
+                    $"'{product.Name}' has no selling price. Enter a price on the line, agree one with " +
+                    "this customer, or set one on the product.");
 
             if (unitPrice < 0m)
             {
