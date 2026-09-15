@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The office API is plain HTTP on the local network, and Android has blocked cleartext by default
+  since Android 9. Rather than opening the app up to cleartext everywhere, this permits it only for
+  the addresses development actually uses.
+
+  To test on a real phone, add the office machine's LAN address below: the one `ipconfig` shows for
+  your Wi-Fi adapter, say 192.168.1.5. Pass the same address to the app with the API_BASE_URL
+  define, which CLAUDE.md section 11 spells out in full.
+
+  When the API is eventually served over HTTPS, every one of these can go.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- The Android emulator's alias for the machine it is running on. -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <!-- Add the office machine's LAN address here to test on a real phone. -->
+    </domain-config>
+</network-security-config>

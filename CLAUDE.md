@@ -371,6 +371,50 @@ dotnet user-secrets set "Bootstrap:AdminEmail" "you@example.com" --project src/G
 dotnet user-secrets set "Bootstrap:AdminPassword" "<a strong password>" --project src/GoldenPappadam.Api
 ```
 
+### The salesperson app (`mobile/`)
+
+Flutter 3.47 / Dart 3.13, Android only for now. Open `mobile/` in **Android Studio** (not the solution root),
+or use the command line from `mobile/`:
+
+```bash
+flutter pub get
+flutter test
+flutter analyze
+dart run build_runner build      # only after changing the drift tables in lib/data/local/database.dart
+```
+
+`flutter doctor` reports missing cmdline-tools and unaccepted licences. That does **not** stop a build - the
+first `flutter build apk` installs and accepts what it needs. Only install the SDK command-line tools if a
+build actually complains. The first Gradle build takes about ten minutes; later ones are far quicker.
+
+**On the emulator.** Start the API with the `http` profile, then run the app with no arguments: the default
+`API_BASE_URL` is `http://10.0.2.2:5207`, which is the emulator's alias for the machine hosting it.
+
+```bash
+flutter run
+```
+
+**On a real phone.** Two things have to change, and both are easy to forget:
+
+1. The API must listen on the network rather than only on loopback. Use the `lan` profile:
+   `dotnet run --project src/GoldenPappadam.Api --launch-profile lan` (it binds `0.0.0.0:5207`).
+   Windows Firewall will ask to allow it the first time - it has to be allowed on **private** networks.
+2. The app must be told where the office is, using the machine's Wi-Fi address from `ipconfig`:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://192.168.1.5:5207
+```
+
+Android blocks plain HTTP by default, so `android/app/src/main/res/xml/network_security_config.xml` permits
+it for `10.0.2.2` and `localhost` only. **Add the LAN address there too**, or the phone fails to connect with
+no useful error. When the API is served over HTTPS, that file can go.
+
+The phone needs a **Salesperson** account, created by an admin from the users screen. It cannot use an admin
+account's password to reach anything except its own endpoints, which is the point.
+
+First sign-in needs a connection: it registers the handset and pulls the first snapshot. After that the app
+works with no signal at all.
+
 Development uses the **SQL Express** instance `.\SQLEXPRESS` (SQL Server 2022), set in `src/GoldenPappadam.Api/appsettings.json`; the tests create throwaway databases on the same instance. A server overrides the connection with the `ConnectionStrings__GoldenPappadam` environment variable. Inspect the data with SSMS or `sqlcmd -S ".\SQLEXPRESS" -d GoldenPappadam`.
 
 LocalDB is deliberately **not** used: its engine is started on demand by the first process that connects and repeatedly failed to auto-start on this machine ("SQL Server process failed to start", 0x89c5010a). SQL Express runs as a Windows service, so it is always up. The owner's other projects still use LocalDB — leave that instance alone.

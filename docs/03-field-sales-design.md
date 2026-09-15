@@ -338,7 +338,7 @@ Each milestone ends with a build, the full test suite green, and the admin panel
 
 | # | Milestone | Deliverable |
 |---|---|---|
-| M0 | Environment (Flutter done; Android licences outstanding) | Flutter SDK and Android toolchain installed (**not present on this machine**), API reachable from the phone over the LAN |
+| M0 | Environment (done: Flutter installed, debug APK builds) | Flutter SDK and Android toolchain installed (**not present on this machine**), API reachable from the phone over the LAN |
 | M1 | Roles and bearer auth (done) | `Admin`/`Salesperson` roles, seeder, default policy = admin, bearer scheme, mobile login and refresh. Tests: a salesperson token gets 403 on every admin endpoint |
 | M2 | Customer pricing (done) | `sales.CustomerPrices`, price precedence in `InvoiceService`, admin price screen. Tests: two shops, two prices, one product |
 | M2b | **Stock locations** (done) | `inventory.StockLocations`, the `LocationId` migration and backfill, `Transfer` movements, `fieldsales.VanLoads`, admin load and evening-return screens, the day's reconciliation with its discrepancy line, location selector on the stock screens. Tests: loading moves stock between locations; existing stock figures are unchanged after the backfill |
