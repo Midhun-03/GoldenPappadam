@@ -1,0 +1,269 @@
+import 'dart:convert';
+
+import 'package:drift/drift.dart';
+import 'package:drift_flutter/drift_flutter.dart';
+
+part 'database.g.dart';
+
+/// Money and quantities are doubles here on purpose. The phone never decides what anything costs
+/// or what a bill comes to - the server recomputes every total from the same rules the admin panel
+/// uses - so these are display values and the exact figures live in SQL Server's decimals.
+///
+/// The cache tables are replaced wholesale on every snapshot. [Outbox] is the only table that is
+/// local truth: nothing else on this phone is information the server does not already have.
+
+@DataClassName('CachedCustomer')
+class Customers extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get contactPerson => text().nullable()();
+  TextColumn get phone => text().nullable()();
+  TextColumn get address => text().nullable()();
+
+  /// What the shop owed as at the last sync. Shown with that caveat, never edited here.
+  RealColumn get balance => real()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('CachedProduct')
+class Products extends Table {
+  TextColumn get id => text()();
+  TextColumn get productCode => text()();
+  TextColumn get name => text()();
+  TextColumn get unitCode => text()();
+  RealColumn get defaultPrice => real().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// What one shop pays for one product. Read-only on the phone: only the office can change a price,
+/// and there is no screen here that offers to.
+@DataClassName('CachedPrice')
+class CustomerPrices extends Table {
+  TextColumn get customerId => text()();
+  TextColumn get productId => text()();
+  RealColumn get unitPrice => real()();
+
+  @override
+  Set<Column> get primaryKey => {customerId, productId};
+}
+
+/// Anything the app needs to remember between runs: the last sync, the device id, who is signed in.
+class Meta extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
+/// Everything the salesperson has done that the server has not confirmed.
+///
+/// A row is written before the screen says "saved", and nothing deletes it on failure. The
+/// [clientRequestId] is generated once, here, and never regenerated - that single fact is what
+/// makes a retry safe, because the server recognises it and returns the original bill instead of
+/// making a second one.
+class OutboxEntries extends Table {
+  TextColumn get clientRequestId => text()();
+
+  /// Invoice, Payment or Visit, matching the server's SubmissionType.
+  TextColumn get type => text()();
+
+  /// The request body, exactly as it will be sent. Frozen at the moment of saving, so a later
+  /// price change or edit cannot alter what the shop was actually told.
+  TextColumn get payload => text()();
+
+  /// UTC, when the salesperson saved it - which may be hours before the server hears about it.
+  DateTimeColumn get recordedAt => dateTime()();
+
+  /// Pending, Syncing, Synced or Failed.
+  TextColumn get status => text().withDefault(const Constant('Pending'))();
+
+  IntColumn get attemptCount => integer().withDefault(const Constant(0))();
+
+  DateTimeColumn get nextAttemptAt => dateTime().nullable()();
+
+  /// Why the server refused it, in words the salesperson can act on.
+  TextColumn get lastError => text().nullable()();
+
+  TextColumn get serverRecordId => text().nullable()();
+
+  /// A line to show in the list: "Kumar Stores - 450".
+  TextColumn get summary => text()();
+
+  @override
+  Set<Column> get primaryKey => {clientRequestId};
+}
+
+enum OutboxStatus { pending, syncing, synced, failed }
+
+extension OutboxStatusName on OutboxStatus {
+  String get stored => switch (this) {
+        OutboxStatus.pending => 'Pending',
+        OutboxStatus.syncing => 'Syncing',
+        OutboxStatus.synced => 'Synced',
+        OutboxStatus.failed => 'Failed',
+      };
+}
+
+@DriftDatabase(tables: [Customers, Products, CustomerPrices, Meta, OutboxEntries])
+class AppDatabase extends _$AppDatabase {
+  AppDatabase([QueryExecutor? executor])
+      : super(executor ?? driftDatabase(name: 'golden_pappadam'));
+
+  @override
+  int get schemaVersion => 1;
+
+  // ---------- the cache ----------
+
+  /// Replaces the whole cache in one transaction, so the app never reads half a snapshot.
+  Future<void> replaceSnapshot({
+    required List<CustomersCompanion> customers,
+    required List<ProductsCompanion> products,
+    required List<CustomerPricesCompanion> prices,
+  }) =>
+      transaction(() async {
+        await delete(this.customers).go();
+        await delete(this.products).go();
+        await delete(customerPrices).go();
+
+        await batch((batch) {
+          batch.insertAll(this.customers, customers);
+          batch.insertAll(this.products, products);
+          batch.insertAll(customerPrices, prices);
+        });
+      });
+
+  Future<List<CachedCustomer>> allCustomers() =>
+      (select(customers)..orderBy([(c) => OrderingTerm(expression: c.name)])).get();
+
+  Future<CachedCustomer?> findCustomer(String id) =>
+      (select(customers)..where((c) => c.id.equals(id))).getSingleOrNull();
+
+  Future<List<CachedProduct>> allProducts() =>
+      (select(products)..orderBy([(p) => OrderingTerm(expression: p.name)])).get();
+
+  /// The prices that apply to one shop: the agreed price where there is one, the product's own
+  /// price otherwise. Exactly the rule the server uses when it builds the bill.
+  Future<Map<String, double?>> pricesFor(String customerId) async {
+    final agreed = await (select(customerPrices)
+          ..where((p) => p.customerId.equals(customerId)))
+        .get();
+
+    final byProduct = {for (final price in agreed) price.productId: price.unitPrice};
+    final catalogue = await allProducts();
+
+    return {
+      for (final product in catalogue)
+        product.id: byProduct[product.id] ?? product.defaultPrice,
+    };
+  }
+
+  // ---------- meta ----------
+
+  Future<String?> readMeta(String key) async {
+    final row = await (select(meta)..where((m) => m.key.equals(key))).getSingleOrNull();
+
+    return row?.value;
+  }
+
+  Future<void> writeMeta(String key, String value) =>
+      into(meta).insertOnConflictUpdate(MetaCompanion.insert(key: key, value: value));
+
+  Future<void> clearMeta(String key) => (delete(meta)..where((m) => m.key.equals(key))).go();
+
+  // ---------- the outbox ----------
+
+  Future<void> enqueue({
+    required String clientRequestId,
+    required String type,
+    required Map<String, dynamic> payload,
+    required DateTime recordedAt,
+    required String summary,
+  }) =>
+      into(outboxEntries).insert(OutboxEntriesCompanion.insert(
+        clientRequestId: clientRequestId,
+        type: type,
+        payload: jsonEncode(payload),
+        recordedAt: recordedAt,
+        summary: summary,
+      ));
+
+  /// What is worth sending now: never tried, or failed transiently and due for another go.
+  /// Oldest first, because a payment must not reach the server before the bill it settles.
+  Future<List<OutboxEntry>> dueEntries(DateTime now) => (select(outboxEntries)
+        ..where((e) => e.status.isIn([OutboxStatus.pending.stored, OutboxStatus.syncing.stored]))
+        ..where((e) => e.nextAttemptAt.isSmallerOrEqualValue(now) | e.nextAttemptAt.isNull())
+        ..orderBy([(e) => OrderingTerm(expression: e.recordedAt)]))
+      .get();
+
+  Future<List<OutboxEntry>> entriesWithStatus(OutboxStatus status) =>
+      (select(outboxEntries)
+            ..where((e) => e.status.equals(status.stored))
+            ..orderBy([(e) => OrderingTerm(expression: e.recordedAt)]))
+          .get();
+
+  /// Everything still waiting or stuck, newest first, for the status screen.
+  Stream<List<OutboxEntry>> watchUnfinished() => (select(outboxEntries)
+        ..where((e) => e.status.equals(OutboxStatus.synced.stored).not())
+        ..orderBy([(e) => OrderingTerm(expression: e.recordedAt, mode: OrderingMode.desc)]))
+      .watch();
+
+  Stream<int> watchPendingCount() => watchUnfinished().map((rows) => rows.length);
+
+  Future<void> markSynced(String clientRequestId, String? serverRecordId) =>
+      (update(outboxEntries)..where((e) => e.clientRequestId.equals(clientRequestId))).write(
+        OutboxEntriesCompanion(
+          status: Value(OutboxStatus.synced.stored),
+          serverRecordId: Value(serverRecordId),
+          lastError: const Value(null),
+          nextAttemptAt: const Value(null),
+        ),
+      );
+
+  /// A business rule refused it. Keep it, stop retrying, and let the salesperson see why.
+  Future<void> markFailed(String clientRequestId, String error) =>
+      (update(outboxEntries)..where((e) => e.clientRequestId.equals(clientRequestId))).write(
+        OutboxEntriesCompanion(
+          status: Value(OutboxStatus.failed.stored),
+          lastError: Value(error),
+          nextAttemptAt: const Value(null),
+        ),
+      );
+
+  /// The signal went, or the server was unwell. Try again later; the row is untouched otherwise.
+  Future<void> markForRetry(String clientRequestId, int attemptCount, DateTime nextAttemptAt,
+          String error) =>
+      (update(outboxEntries)..where((e) => e.clientRequestId.equals(clientRequestId))).write(
+        OutboxEntriesCompanion(
+          status: Value(OutboxStatus.pending.stored),
+          attemptCount: Value(attemptCount),
+          nextAttemptAt: Value(nextAttemptAt),
+          lastError: Value(error),
+        ),
+      );
+
+  /// Puts a failed entry back in the queue, for the "try again" button.
+  Future<void> retryNow(String clientRequestId) =>
+      (update(outboxEntries)..where((e) => e.clientRequestId.equals(clientRequestId))).write(
+        OutboxEntriesCompanion(
+          status: Value(OutboxStatus.pending.stored),
+          attemptCount: const Value(0),
+          nextAttemptAt: const Value(null),
+          lastError: const Value(null),
+        ),
+      );
+
+  /// Signing out must never throw away work the server has not seen.
+  Future<void> clearForSignOut() => transaction(() async {
+        await delete(customers).go();
+        await delete(products).go();
+        await delete(customerPrices).go();
+        await (delete(outboxEntries)
+              ..where((e) => e.status.equals(OutboxStatus.synced.stored)))
+            .go();
+      });
+}
