@@ -20,6 +20,7 @@ const movements: Record<StockMovementType, { label: string; variant: BadgeVarian
   Opening: { label: 'Opening stock', variant: 'outline' },
   Production: { label: 'Production', variant: 'success' },
   Packing: { label: 'Packing', variant: 'info' },
+  Transfer: { label: 'Moved', variant: 'info' },
   Sale: { label: 'Sale', variant: 'secondary' },
   SaleReversal: { label: 'Bill cancelled', variant: 'info' },
   Damage: { label: 'Damage', variant: 'destructive' },

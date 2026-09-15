@@ -21,8 +21,16 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
             .HasForeignKey(x => x.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Current stock per product, and the movement history of one product.
-        builder.HasIndex(x => new { x.ProductId, x.OccurredAt });
+        builder.HasOne(x => x.Location)
+            .WithMany()
+            .HasForeignKey(x => x.LocationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Current stock per product at one location, and the movement history of one product.
+        builder.HasIndex(x => new { x.ProductId, x.LocationId, x.OccurredAt });
+
+        // "What is on the van right now?"
+        builder.HasIndex(x => new { x.LocationId, x.OccurredAt });
 
         // "Which movements did this invoice or packing entry cause?"
         builder.HasIndex(x => new { x.ReferenceType, x.ReferenceId });

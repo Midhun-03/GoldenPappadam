@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<UnitOfMeasure> UnitOfMeasures => Set<UnitOfMeasure>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<StockLocation> StockLocations => Set<StockLocation>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<PackingEntry> PackingEntries => Set<PackingEntry>();
 

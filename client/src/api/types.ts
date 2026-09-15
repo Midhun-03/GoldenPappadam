@@ -4,6 +4,7 @@ export type StockMovementType =
   | 'Opening'
   | 'Production'
   | 'Packing'
+  | 'Transfer'
   | 'Sale'
   | 'SaleReversal'
   | 'Damage'
@@ -84,12 +85,33 @@ export type StockOnHand = {
   isActive: boolean
 }
 
+export type StockLocationKind = 'Warehouse' | 'Van'
+
+export type StockLocation = {
+  id: string
+  code: string
+  name: string
+  kind: StockLocationKind
+  isActive: boolean
+}
+
+/** One product's stock in one place. */
+export type LocationStock = {
+  locationId: string
+  code: string
+  name: string
+  kind: StockLocationKind
+  quantityOnHand: number
+}
+
 export type StockMovement = {
   id: string
   occurredAt: string
   movementType: StockMovementType
   quantity: number
   runningBalance: number
+  locationId: string
+  locationCode: string
   referenceType: string | null
   referenceId: string | null
   notes: string | null
@@ -98,6 +120,7 @@ export type StockMovement = {
 export type StockEntryResponse = {
   movementId: string
   productId: string
+  locationId: string
   quantityOnHand: number
   warning: string | null
 }

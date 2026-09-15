@@ -8,5 +8,6 @@ namespace GoldenPappadam.Domain.Inventory;
 public enum StockReferenceType
 {
     PackingEntry,
-    Invoice
+    Invoice,
+    VanLoad
 }

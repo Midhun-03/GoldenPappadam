@@ -30,6 +30,11 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
         }
 
         var invoiceDate = request.InvoiceDate ?? IndiaTime.Today();
+
+        // Where the goods physically came from: the warehouse for a counter sale, the van for a
+        // delivery on the route. Defaults to the warehouse, which is what every bill meant before
+        // the van kept its own stock.
+        var locationId = await stock.ResolveLocationAsync(request.LocationId, ct);
         var lines = await BuildLinesAsync(customer.Id, request.Lines, ct);
 
         var subTotal = decimal.Round(lines.Sum(l => l.LineTotal), 2, MidpointRounding.AwayFromZero);
@@ -44,9 +49,9 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             throw new DomainException("The discount cannot be more than the bill.");
         }
 
-        var invoice = await SaveInvoiceAsync(request, customer, invoiceDate, lines, subTotal, ct);
+        var invoice = await SaveInvoiceAsync(request, customer, invoiceDate, lines, subTotal, locationId, ct);
         var detail = await GetDetailAsync(invoice.Id, ct);
-        var warnings = await WarningsForAsync(lines.Select(l => l.ProductId).Distinct(), ct);
+        var warnings = await WarningsForAsync(lines.Select(l => l.ProductId).Distinct(), locationId, ct);
 
         return new CreateInvoiceResponse(detail, warnings);
     }
@@ -78,12 +83,20 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
         invoice.CancelledAt = DateTime.UtcNow;
         invoice.CancellationReason = reason.Trim();
 
-        // Put the stock back; the bill and its lines stay exactly as they were.
-        db.StockMovements.AddRange(invoice.Lines.Select(line => new StockMovement
+        // Put the stock back where it actually came from. Mirroring the original movements rather
+        // than rebuilding from the lines is what keeps a van sale going back onto the van.
+        var sold = await db.StockMovements
+            .Where(m => m.ReferenceType == StockReferenceType.Invoice &&
+                        m.ReferenceId == invoice.Id &&
+                        m.MovementType == StockMovementType.Sale)
+            .ToListAsync(ct);
+
+        db.StockMovements.AddRange(sold.Select(movement => new StockMovement
         {
-            ProductId = line.ProductId,
+            ProductId = movement.ProductId,
+            LocationId = movement.LocationId,
             MovementType = StockMovementType.SaleReversal,
-            Quantity = line.Quantity,
+            Quantity = -movement.Quantity,
             OccurredAt = DateTime.UtcNow,
             ReferenceType = StockReferenceType.Invoice,
             ReferenceId = invoice.Id,
@@ -171,6 +184,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
         DateOnly invoiceDate,
         List<InvoiceLine> lines,
         decimal subTotal,
+        Guid locationId,
         CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
@@ -207,6 +221,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             db.StockMovements.AddRange(lines.Select(line => new StockMovement
             {
                 ProductId = line.ProductId,
+                LocationId = locationId,
                 MovementType = StockMovementType.Sale,
                 Quantity = -line.Quantity,
                 OccurredAt = DateTime.UtcNow,
@@ -244,13 +259,16 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
     private static bool IsDuplicateInvoiceNumber(DbUpdateException exception) =>
         exception.InnerException is SqlException sql && UniqueViolationErrors.Contains(sql.Number);
 
-    private async Task<IReadOnlyList<string>> WarningsForAsync(IEnumerable<Guid> productIds, CancellationToken ct)
+    private async Task<IReadOnlyList<string>> WarningsForAsync(
+        IEnumerable<Guid> productIds,
+        Guid locationId,
+        CancellationToken ct)
     {
         var warnings = new List<string>();
 
         foreach (var productId in productIds)
         {
-            var onHand = await stock.GetQuantityOnHandAsync(productId, ct);
+            var onHand = await stock.GetQuantityOnHandAsync(productId, locationId, ct);
 
             if (onHand < 0m)
             {

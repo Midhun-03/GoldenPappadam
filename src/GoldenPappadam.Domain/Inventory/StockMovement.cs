@@ -11,6 +11,13 @@ public class StockMovement : Entity
     public Guid ProductId { get; set; }
     public Product? Product { get; set; }
 
+    /// <summary>
+    /// Where this happened. Stock is the sum of the ledger <em>for one location</em>: the warehouse
+    /// and the van hold their own counts, and the sum across locations is what the business owns.
+    /// </summary>
+    public Guid LocationId { get; set; }
+    public StockLocation? Location { get; set; }
+
     public StockMovementType MovementType { get; set; }
 
     /// <summary>Signed: positive adds stock, negative removes it. Never zero.</summary>

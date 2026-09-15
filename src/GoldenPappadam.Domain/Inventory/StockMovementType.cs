@@ -14,6 +14,12 @@ public enum StockMovementType
     /// <summary>Packing: negative on the source product, positive on the packed product.</summary>
     Packing,
 
+    /// <summary>
+    /// Stock moved between locations: negative where it left, positive where it arrived.
+    /// Loading the van in the morning and emptying it at night are both transfers.
+    /// </summary>
+    Transfer,
+
     /// <summary>Stock delivered on an invoice.</summary>
     Sale,
 

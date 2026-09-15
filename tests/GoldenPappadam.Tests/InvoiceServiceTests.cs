@@ -43,7 +43,7 @@ public class InvoiceServiceTests : IAsyncLifetime
         Assert.Equal(1280m, result.Invoice.Outstanding);
         Assert.Empty(result.Warnings);
 
-        Assert.Equal(460m, await _stock.GetQuantityOnHandAsync(packet.Id, default));
+        Assert.Equal(460m, await _stock.GetQuantityOnHandAsync(packet.Id, KnownStockLocations.MainWarehouseId, default));
 
         var movement = await _database.Db.StockMovements
             .SingleAsync(m => m.ReferenceType == StockReferenceType.Invoice);
@@ -145,7 +145,7 @@ public class InvoiceServiceTests : IAsyncLifetime
 
         Assert.Single(result.Warnings);
         Assert.Contains("-30", result.Warnings[0]);
-        Assert.Equal(-30m, await _stock.GetQuantityOnHandAsync(packet.Id, default));
+        Assert.Equal(-30m, await _stock.GetQuantityOnHandAsync(packet.Id, KnownStockLocations.MainWarehouseId, default));
         Assert.Equal(InvoiceStatus.Issued, result.Invoice.Status);
     }
 
@@ -158,14 +158,14 @@ public class InvoiceServiceTests : IAsyncLifetime
         var customer = await _database.SeedCustomerAsync();
 
         var created = await CreateAsync(customer.Id, packet.Id, null, quantity: 40m);
-        Assert.Equal(60m, await _stock.GetQuantityOnHandAsync(packet.Id, default));
+        Assert.Equal(60m, await _stock.GetQuantityOnHandAsync(packet.Id, KnownStockLocations.MainWarehouseId, default));
 
         var cancelled = await _invoices.CancelAsync(created.Invoice.Id, "Shop refused delivery", default);
 
         Assert.Equal(InvoiceStatus.Cancelled, cancelled.Status);
         Assert.Equal(0m, cancelled.Outstanding);
         Assert.Equal("Shop refused delivery", cancelled.CancellationReason);
-        Assert.Equal(100m, await _stock.GetQuantityOnHandAsync(packet.Id, default));
+        Assert.Equal(100m, await _stock.GetQuantityOnHandAsync(packet.Id, KnownStockLocations.MainWarehouseId, default));
         Assert.Single(cancelled.Lines);
 
         var reversal = await _database.Db.StockMovements

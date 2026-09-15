@@ -9,12 +9,17 @@ public record InvoiceLineRequest(
     [Range(typeof(decimal), "0.001", "79228162514264337593543950335")] decimal Quantity,
     decimal? UnitPrice);
 
+/// <summary>
+/// LocationId is where the goods came from, and is optional: leaving it out means the main
+/// warehouse, which is what every bill meant before the van carried its own stock.
+/// </summary>
 public record CreateInvoiceRequest(
     [Required] Guid CustomerId,
     DateOnly? InvoiceDate,
     decimal DiscountAmount,
     [MaxLength(300)] string? Notes,
-    [Required, MinLength(1)] List<InvoiceLineRequest> Lines);
+    [Required, MinLength(1)] List<InvoiceLineRequest> Lines,
+    Guid? LocationId = null);
 
 public record CancelInvoiceRequest([Required, MaxLength(300)] string Reason);
 

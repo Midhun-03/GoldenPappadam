@@ -68,6 +68,8 @@ public class PackingService(AppDbContext db, StockService stock)
             new StockMovement
             {
                 ProductId = sourceProductId,
+                // Packing is warehouse work: nobody packs on the van.
+                LocationId = KnownStockLocations.MainWarehouseId,
                 MovementType = StockMovementType.Packing,
                 Quantity = -sourceQuantityUsed,
                 OccurredAt = occurredAt,
@@ -77,6 +79,7 @@ public class PackingService(AppDbContext db, StockService stock)
             new StockMovement
             {
                 ProductId = packedProduct.Id,
+                LocationId = KnownStockLocations.MainWarehouseId,
                 MovementType = StockMovementType.Packing,
                 Quantity = request.PacksProduced,
                 OccurredAt = occurredAt,
@@ -87,8 +90,8 @@ public class PackingService(AppDbContext db, StockService stock)
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
-        var sourceOnHand = await stock.GetQuantityOnHandAsync(sourceProductId, ct);
-        var packedOnHand = await stock.GetQuantityOnHandAsync(packedProduct.Id, ct);
+        var sourceOnHand = await stock.GetQuantityOnHandAsync(sourceProductId, KnownStockLocations.MainWarehouseId, ct);
+        var packedOnHand = await stock.GetQuantityOnHandAsync(packedProduct.Id, KnownStockLocations.MainWarehouseId, ct);
 
         return new PackingResponse(
             entry.Id,

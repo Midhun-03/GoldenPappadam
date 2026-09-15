@@ -2,6 +2,7 @@ using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
 using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
+using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -41,7 +42,9 @@ public class DashboardService(AppDbContext db, StockService stock)
                 db)
             .ToListAsync(ct);
 
-        var lowStock = await stock.GetOnHandAsync(null, lowStockOnly: true, includeInactive: false, ct);
+        // The warehouse: that is what needs restocking, and van stock is already spoken for.
+        var lowStock = await stock.GetOnHandAsync(
+            null, lowStockOnly: true, includeInactive: false, KnownStockLocations.MainWarehouseId, ct);
 
         return new DashboardSummaryDto(
             today,

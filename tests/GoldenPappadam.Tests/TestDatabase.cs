@@ -73,11 +73,12 @@ public sealed class TestDatabase : IAsyncDisposable
         return customer;
     }
 
-    public async Task AddStockAsync(Guid productId, decimal quantity)
+    public async Task AddStockAsync(Guid productId, decimal quantity, Guid? locationId = null)
     {
         Db.Add(new StockMovement
         {
             ProductId = productId,
+            LocationId = locationId ?? KnownStockLocations.MainWarehouseId,
             MovementType = StockMovementType.Opening,
             Quantity = quantity,
             OccurredAt = DateTime.UtcNow

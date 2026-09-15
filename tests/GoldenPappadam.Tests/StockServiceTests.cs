@@ -71,7 +71,7 @@ public class StockServiceTests : IAsyncLifetime
 
         Assert.Equal(18.5m, result.QuantityOnHand);
 
-        var movements = await _stock.GetMovementsAsync(loose.Id, null, null, default);
+        var movements = await _stock.GetMovementsAsync(loose.Id, null, null, KnownStockLocations.MainWarehouseId, default);
         Assert.Equal(-1.5m, movements.Last().Quantity);
         Assert.Equal(StockMovementType.Adjustment, movements.Last().MovementType);
     }
@@ -86,7 +86,7 @@ public class StockServiceTests : IAsyncLifetime
         await _stock.AddEntryAsync(
             new CreateStockEntryRequest(loose.Id, StockMovementType.Damage, 5m, null, "Broken"), default);
 
-        var movements = await _stock.GetMovementsAsync(loose.Id, null, null, default);
+        var movements = await _stock.GetMovementsAsync(loose.Id, null, null, KnownStockLocations.MainWarehouseId, default);
 
         Assert.Equal([20m, 50m, 45m], movements.Select(m => m.RunningBalance));
     }
@@ -99,11 +99,11 @@ public class StockServiceTests : IAsyncLifetime
         await _database.Db.SaveChangesAsync();
         await _database.AddStockAsync(loose.Id, 8m);
 
-        var lowStock = await _stock.GetOnHandAsync(null, lowStockOnly: true, includeInactive: false, default);
+        var lowStock = await _stock.GetOnHandAsync(null, lowStockOnly: true, includeInactive: false, KnownStockLocations.MainWarehouseId, default);
 
         Assert.Equal(loose.Id, Assert.Single(lowStock).ProductId);
 
-        var all = await _stock.GetOnHandAsync(null, lowStockOnly: false, includeInactive: false, default);
+        var all = await _stock.GetOnHandAsync(null, lowStockOnly: false, includeInactive: false, KnownStockLocations.MainWarehouseId, default);
         Assert.Equal(0m, all.Single(r => r.ProductId == packet.Id).QuantityOnHand);
     }
 }
