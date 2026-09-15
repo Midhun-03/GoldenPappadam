@@ -59,4 +59,40 @@ public class DashboardService(AppDbContext db, StockService stock)
                 .ToList(),
             lowStock.Take(ListSize).ToList());
     }
+
+    /// <summary>
+    /// Groups invoice lines by product for a range of business days. Cancelled bills are left
+    /// out, the same way the sales totals leave them out. The product's current name, unit and
+    /// category are used so a rename does not split one product across two bars.
+    /// </summary>
+    public async Task<IReadOnlyList<ProductSalesDto>> GetProductSalesAsync(
+        DateOnly from,
+        DateOnly to,
+        CancellationToken ct)
+    {
+        // Group on the product's own columns rather than joining a grouped subquery back to
+        // Products, which EF cannot translate. Ordering happens in memory because the rows are
+        // already projected into a record, and there is one row per product at most.
+        var sold = await db.InvoiceLines
+            .Where(l => l.Invoice!.Status == InvoiceStatus.Issued
+                        && l.Invoice.InvoiceDate >= from
+                        && l.Invoice.InvoiceDate <= to)
+            .GroupBy(l => new
+            {
+                l.ProductId,
+                ProductName = l.Product!.Name,
+                UnitCode = l.Product.UnitOfMeasure!.Code,
+                CategoryName = l.Product.Category!.Name
+            })
+            .Select(g => new ProductSalesDto(
+                g.Key.ProductId,
+                g.Key.ProductName,
+                g.Key.UnitCode,
+                g.Key.CategoryName,
+                g.Sum(l => l.Quantity),
+                g.Sum(l => l.LineTotal)))
+            .ToListAsync(ct);
+
+        return sold.OrderByDescending(p => p.SalesValue).ToList();
+    }
 }
