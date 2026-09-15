@@ -342,13 +342,13 @@ Each milestone ends with a build, the full test suite green, and the admin panel
 | M1 | Roles and bearer auth (done) | `Admin`/`Salesperson` roles, seeder, default policy = admin, bearer scheme, mobile login and refresh. Tests: a salesperson token gets 403 on every admin endpoint |
 | M2 | Customer pricing (done) | `sales.CustomerPrices`, price precedence in `InvoiceService`, admin price screen. Tests: two shops, two prices, one product |
 | M2b | **Stock locations** (done) | `inventory.StockLocations`, the `LocationId` migration and backfill, `Transfer` movements, `fieldsales.VanLoads`, admin load and evening-return screens, the day's reconciliation with its discrepancy line, location selector on the stock screens. Tests: loading moves stock between locations; existing stock figures are unchanged after the backfill |
-| M3 | Sync foundation | `fieldsales` schema, devices, submissions, snapshot endpoint, batch submission endpoint with idempotency. Tests: the same `ClientRequestId` twice creates one bill |
+| M3 | Sync foundation (done) | `fieldsales` schema, devices, submissions, snapshot endpoint, batch submission endpoint with idempotency. Tests: the same `ClientRequestId` twice creates one bill |
 | M4 | Flutter foundation | project, Drift schema, Dio client with token refresh, login, connectivity, an empty sync engine |
 | M5 | Shops | shop list, search, shop detail with balance and applicable prices, all from the local database |
 | M6 | Sale entry | shop → products → quantity → total → credit/paid → save, written to the outbox |
 | M7 | Offline and sync | the full sync engine, status UI, retry, manual sync; the offline scenarios in your §23 |
 | M8 | Payments | collecting against old outstanding, separate from today's sale |
-| M9 | Admin field-sales section | Today screen, visits, sync visibility |
+| M9 | Admin field-sales section (done) | Today screen, visits, sync visibility |
 | M10 | Field testing | a real route, on a real phone, with real shops |
 | M11 | Returns and replacement | **only after Part E Q5 is answered** |
 

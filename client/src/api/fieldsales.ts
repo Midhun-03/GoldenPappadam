@@ -1,6 +1,7 @@
 import { api } from '@/lib/api'
 import type {
   CreateVanLoadResponse,
+  FieldSalesDay,
   SaveVanLoad,
   VanLoad,
   VanLoadLine,
@@ -29,4 +30,8 @@ export const vanLoadsApi = {
     api.get<VanReconciliation>(
       `${base}/van-loads/reconciliation${query({ vanLocationId, businessDate })}`,
     ),
+}
+
+export const fieldSalesApi = {
+  day: (businessDate: string) => api.get<FieldSalesDay>(`${base}/day${query({ businessDate })}`),
 }

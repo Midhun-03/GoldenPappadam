@@ -345,3 +345,45 @@ export type VanReconciliation = {
   isSettled: boolean
   lines: VanReconciliationLine[]
 }
+
+export type VisitOutcome = 'Sold' | 'NoOrder' | 'Closed' | 'Skipped'
+
+/** `recordedAt` is when the phone saved it; `receivedAt` is when the server heard about it. */
+export type FieldSaleRow = {
+  invoiceId: string
+  invoiceNumber: string
+  customerId: string
+  customerName: string
+  products: string
+  totalAmount: number
+  amountPaid: number
+  salesperson: string
+  deviceName: string
+  recordedAt: string
+  receivedAt: string
+  priceMismatch: boolean
+  status: InvoiceStatus
+}
+
+export type FieldVisitRow = {
+  customerId: string
+  customerName: string
+  outcome: VisitOutcome
+  visitedAt: string
+  salesperson: string
+  notes: string | null
+}
+
+export type FieldSalesDay = {
+  businessDate: string
+  totalSales: number
+  saleCount: number
+  shopsVisited: number
+  cashCollected: number
+  creditSales: number
+  outstandingCreatedToday: number
+  priceMismatchCount: number
+  slowestSyncMinutes: number
+  sales: FieldSaleRow[]
+  visits: FieldVisitRow[]
+}

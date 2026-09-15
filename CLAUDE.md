@@ -251,6 +251,20 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   report that could disagree with stock, it is stock still sitting on a van that should be empty. It is shown,
   never auto-adjusted: an unrecorded sale and a miscount look identical to arithmetic, and that reconciliation
   is what catches the sale nobody wrote down.
+- **M3 done (phase 3):** the sync foundation. `fieldsales.Devices`, `ShopVisits` and `SyncSubmissions`, plus
+  `/api/mobile/*` - the salesperson's entire surface, which contains no endpoint that prices, moves stock,
+  edits a shop or cancels a bill. `MobileSyncService` owns no business rules: a sale runs through the same
+  `InvoiceService` and a payment through the same `PaymentService` the admin panel uses. Idempotency is a
+  unique index on `SyncSubmissions.ClientRequestId`, generated once on the device and never regenerated, so a
+  retry returns the original bill instead of making a second one. The batch answers per item, so one rejected
+  sale does not stop the nine behind it, and a rejection writes nothing, leaving the client id free to succeed
+  later. A price changed while the phone was offline is **flagged, not rewritten**. Known gap, commented at
+  `RecordSubmissionAsync`: the submission row is committed just after the record rather than inside the same
+  transaction, because `InvoiceService` rolls back and retries its own transaction when two bills race for an
+  invoice number. A dropped connection is fully covered; a process crash between the two commits is not.
+- **M9 done (phase 3):** "Today on the road" - sales, shops visited, cash collected, sold on credit and
+  outstanding created today, then the bills with **recorded-on-the-phone against received-by-the-server**,
+  which is what makes offline legible rather than mysterious, plus the visits that sold nothing.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:

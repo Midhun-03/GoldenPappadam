@@ -15,6 +15,12 @@ public sealed class TestDatabase : IAsyncDisposable
 {
     public AppDbContext Db { get; }
 
+    /// <summary>
+    /// Who the tests are signed in as. Null by default, which is how everything behaved before
+    /// there were users; a test that needs a real signed-in user sets it.
+    /// </summary>
+    public TestCurrentUser CurrentUser { get; } = new();
+
     public TestDatabase()
     {
         var name = $"GoldenPappadam_Tests_{Guid.NewGuid():N}";
@@ -22,7 +28,7 @@ public sealed class TestDatabase : IAsyncDisposable
             .UseSqlServer($"Server=.\\SQLEXPRESS;Database={name};Trusted_Connection=True;TrustServerCertificate=True")
             .Options;
 
-        Db = new AppDbContext(options, new TestCurrentUser());
+        Db = new AppDbContext(options, CurrentUser);
         Db.Database.EnsureCreated();
     }
 
@@ -92,8 +98,8 @@ public sealed class TestDatabase : IAsyncDisposable
         await Db.DisposeAsync();
     }
 
-    private sealed class TestCurrentUser : ICurrentUser
+    public sealed class TestCurrentUser : ICurrentUser
     {
-        public Guid? UserId => null;
+        public Guid? UserId { get; set; }
     }
 }

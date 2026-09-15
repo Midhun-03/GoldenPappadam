@@ -6,6 +6,7 @@ import {
   Menu,
   Package,
   PackagePlus,
+  Route,
   Settings,
   Store,
   Truck,
@@ -54,7 +55,10 @@ const navigation: NavGroup[] = [
   },
   {
     label: 'Field sales',
-    items: [{ to: '/van', label: 'Van', icon: Truck }],
+    items: [
+      { to: '/field-sales', label: 'Today on the road', icon: Route },
+      { to: '/van', label: 'Van', icon: Truck },
+    ],
   },
   {
     label: null,

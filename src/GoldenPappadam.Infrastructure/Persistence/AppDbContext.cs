@@ -27,6 +27,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
 
+    public DbSet<Device> Devices => Set<Device>();
+    public DbSet<ShopVisit> ShopVisits => Set<ShopVisit>();
+    public DbSet<SyncSubmission> SyncSubmissions => Set<SyncSubmission>();
     public DbSet<VanLoad> VanLoads => Set<VanLoad>();
     public DbSet<VanLoadLine> VanLoadLines => Set<VanLoadLine>();
 

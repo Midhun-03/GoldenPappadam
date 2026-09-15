@@ -24,7 +24,9 @@ public class AuthorizationTests : IAsyncLifetime
         "/api/inventory/stock",
         "/api/sales/customers",
         "/api/sales/invoices",
-        "/api/sales/payments"
+        "/api/sales/payments",
+        "/api/fieldsales/day",
+        "/api/fieldsales/van-loads"
     ];
 
     private ApiFactory _api = null!;
@@ -123,6 +125,52 @@ public class AuthorizationTests : IAsyncLifetime
 
         var remove = await client.DeleteAsync($"/api/sales/customers/{customerId}/prices/{Guid.NewGuid()}");
         Assert.Equal(HttpStatusCode.Forbidden, remove.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_salesperson_can_reach_their_own_endpoints()
+    {
+        var client = await _api.SignInAsync("van@test.local");
+
+        var registered = await client.PostAsJsonAsync(
+            "/api/mobile/devices/register", new { name = "Nokia", platform = "Android" });
+        registered.EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/mobile/sync/snapshot")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/mobile/day")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_salesperson_cannot_move_stock_or_load_the_van()
+    {
+        var client = await _api.SignInAsync("van@test.local");
+
+        var entry = await client.PostAsJsonAsync("/api/inventory/stock/entries", new
+        {
+            productId = Guid.NewGuid(), movementType = "Production", quantity = 10
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, entry.StatusCode);
+
+        var load = await client.PostAsJsonAsync("/api/fieldsales/van-loads", new
+        {
+            vanLocationId = Guid.NewGuid(), direction = "Loading", lines = new[] { new { productId = Guid.NewGuid(), quantity = 1 } }
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, load.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_admin_cannot_be_reached_from_the_mobile_surface_by_a_salesperson()
+    {
+        var client = await _api.SignInAsync("van@test.local");
+
+        // The one that would matter most: creating a bill by hand, at any price they like.
+        var bill = await client.PostAsJsonAsync("/api/sales/invoices", new
+        {
+            customerId = Guid.NewGuid(),
+            lines = new[] { new { productId = Guid.NewGuid(), quantity = 1, unitPrice = 1 } }
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, bill.StatusCode);
     }
 
     [Fact]
