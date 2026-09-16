@@ -296,6 +296,14 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   by hand, posted to the real API. The Dart tests prove the phone builds the right body and the C# tests prove
   the server does the right thing, but neither would notice the two disagreeing about a field name. A rename
   on either side now fails there rather than on a road in Kollam.
+- **Salesperson extensions done (2026-09-16):** van stock, a day summary, payment history, and stock
+  requests. `fieldsales.StockRequests` (+ lines) is the only new table; `VanLoads.DeviceId` the only new
+  column. Everything the phone sends still rides the one outbox and the one client request id, so a stock
+  request asked for twice is asked for once. The salesperson's app is four tabs - Today, Shops, Van, Stock -
+  because on a doorstep anything more than a tap is too far. The admin gets a **Stock requests** screen with
+  two readings of the same data: what to pack, added up per product per day, and the individual requests
+  behind it. `/api/mobile/day` is cached on the phone at each sync, so the home screen shows the office's
+  figures with the pending count beside them rather than a confident total that quietly omits unsent work.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:

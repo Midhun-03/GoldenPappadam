@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, PackageCheck, Truck } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, PackageCheck, Smartphone, Truck } from 'lucide-react'
 import { useState } from 'react'
 import { vanLoadsApi } from '@/api/fieldsales'
 import { stockApi } from '@/api/inventory'
@@ -39,6 +39,12 @@ export function VanPage() {
     enabled: selectedVan !== undefined,
   })
 
+  const loads = useQuery({
+    queryKey: ['van-loads', 'list', selectedVan?.id, businessDate],
+    queryFn: () => vanLoadsApi.list({ vanLocationId: selectedVan!.id, from: businessDate, to: businessDate }),
+    enabled: selectedVan !== undefined,
+  })
+
   const onVan = useQuery({
     queryKey: ['van-loads', 'on-van', selectedVan?.id],
     queryFn: () => vanLoadsApi.onVan(selectedVan!.id),
@@ -53,6 +59,10 @@ export function VanPage() {
 
   const lines = day.data?.lines ?? []
   const unsettled = lines.filter((line) => line.unaccounted !== 0)
+
+  // Loads the salesman entered himself. Both are legitimate — the packing book says what was
+  // packed, his book says what he took — but the office should know which it is looking at.
+  const fromTheVan = (loads.data ?? []).filter((load) => load.deviceName !== null)
 
   return (
     <>
@@ -121,6 +131,17 @@ export function VanPage() {
             {day.data.isSettled
               ? `Everything on ${formatDay(businessDate)} is accounted for.`
               : `${unsettled.length} ${unsettled.length === 1 ? 'product is' : 'products are'} still on the van for ${formatDay(businessDate)}. Record what happened — a sale, damage, or a recount — rather than leaving it.`}
+          </p>
+        </div>
+      )}
+
+      {fromTheVan.length > 0 && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-info/30 bg-info/5 px-3 py-2.5 text-sm lg:mb-5">
+          <Smartphone className="mt-0.5 size-4 shrink-0 text-info" />
+          <p>
+            {fromTheVan.length === 1 ? 'A load was' : `${fromTheVan.length} loads were`} entered on the
+            phone by {[...new Set(fromTheVan.map((load) => load.deviceName))].join(', ')} — what the
+            salesman actually took, rather than what was packed.
           </p>
         </div>
       )}

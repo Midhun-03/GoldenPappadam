@@ -2,6 +2,9 @@ import { api } from '@/lib/api'
 import type {
   CreateVanLoadResponse,
   FieldSalesDay,
+  PackingNeed,
+  StockRequest,
+  StockRequestStatus,
   SaveVanLoad,
   VanLoad,
   VanLoadLine,
@@ -34,4 +37,14 @@ export const vanLoadsApi = {
 
 export const fieldSalesApi = {
   day: (businessDate: string) => api.get<FieldSalesDay>(`${base}/day${query({ businessDate })}`),
+}
+
+/** Admin-only on the server: the salesperson raises requests, the office answers them. */
+export const stockRequestsApi = {
+  list: (filters: { from?: string; to?: string; status?: StockRequestStatus } = {}) =>
+    api.get<StockRequest[]>(`${base}/stock-requests${query(filters)}`),
+  packingNeeds: (filters: { from?: string; to?: string } = {}) =>
+    api.get<PackingNeed[]>(`${base}/stock-requests/packing-needs${query(filters)}`),
+  setStatus: (id: string, status: StockRequestStatus) =>
+    api.post<StockRequest>(`${base}/stock-requests/${id}/status${query({ status })}`),
 }

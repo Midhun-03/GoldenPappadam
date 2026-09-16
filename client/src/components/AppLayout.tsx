@@ -1,5 +1,6 @@
 import {
   Boxes,
+  ClipboardList,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -58,6 +59,7 @@ const navigation: NavGroup[] = [
     items: [
       { to: '/field-sales', label: 'Today on the road', icon: Route },
       { to: '/van', label: 'Van', icon: Truck },
+      { to: '/stock-requests', label: 'Stock requests', icon: ClipboardList },
     ],
   },
   {

@@ -310,6 +310,8 @@ export type VanLoad = {
   vanLocationId: string
   vanCode: string
   direction: VanLoadDirection
+  /** The phone that recorded it. Null means the office did. */
+  deviceName: string | null
   occurredAt: string
   businessDate: string
   notes: string | null
@@ -394,4 +396,35 @@ export type FieldSalesDay = {
   slowestSyncMinutes: number
   sales: FieldSaleRow[]
   visits: FieldVisitRow[]
+}
+
+export type StockRequestStatus = 'Requested' | 'Fulfilled' | 'Cancelled'
+
+export type StockRequestLine = {
+  productId: string
+  productName: string
+  unitCode: string
+  quantity: number
+}
+
+/** What a salesperson has asked the packing unit to pack, and when they need it. */
+export type StockRequest = {
+  id: string
+  requiredDate: string
+  status: StockRequestStatus
+  requestedBy: string
+  deviceName: string | null
+  createdAt: string
+  notes: string | null
+  lines: StockRequestLine[]
+}
+
+/** The same requests added up: one figure per product per day, for the packing table. */
+export type PackingNeed = {
+  requiredDate: string
+  productId: string
+  productName: string
+  unitCode: string
+  quantity: number
+  requestCount: number
 }

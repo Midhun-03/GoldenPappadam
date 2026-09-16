@@ -15,6 +15,7 @@ import { ProductsPage } from './pages/ProductsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { StockHistoryPage } from './pages/StockHistoryPage'
 import { StockPage } from './pages/StockPage'
+import { StockRequestsPage } from './pages/StockRequestsPage'
 import { FieldSalesDayPage } from './pages/FieldSalesDayPage'
 import { VanPage } from './pages/VanPage'
 
@@ -54,6 +55,7 @@ export function App() {
           <Route path="/packing" element={<PackingPage />} />
           <Route path="/van" element={<VanPage />} />
           <Route path="/field-sales" element={<FieldSalesDayPage />} />
+          <Route path="/stock-requests" element={<StockRequestsPage />} />
 
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/:customerId" element={<CustomerLedgerPage />} />
