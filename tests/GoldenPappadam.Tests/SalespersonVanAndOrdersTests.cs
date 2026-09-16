@@ -130,6 +130,44 @@ public class SalespersonVanAndOrdersTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_phone_with_no_van_cannot_bill_a_shop()
+    {
+        _device.LocationId = null;
+        await _database.Db.SaveChangesAsync();
+
+        var result = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m));
+
+        // A bill follows the goods and the goods come off the van, so with no van there is nothing
+        // to have delivered. Refusing beats quietly taking it off the warehouse, which would
+        // balance the books and leave the van's wrong.
+        Assert.Equal(SubmissionOutcome.Rejected, result.Outcome);
+        Assert.Contains("not assigned to a van", result.Error!);
+        Assert.Empty(await _database.Db.Invoices.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Money_can_still_be_collected_without_a_van()
+    {
+        _device.LocationId = null;
+        await _database.Db.SaveChangesAsync();
+
+        // Settling last week's bills moves no product, so it has nothing to do with the van.
+        var payment = await SubmitAsync(new SubmissionItemRequest(
+            Guid.NewGuid(), SubmissionType.Payment, DateTime.UtcNow, null,
+            new MobilePaymentRequest(_shop.Id, 500m, PaymentMethod.Cash, null, null), null));
+
+        var visit = await SubmitAsync(new SubmissionItemRequest(
+            Guid.NewGuid(), SubmissionType.Visit, DateTime.UtcNow, null, null,
+            new MobileVisitRequest(_shop.Id, VisitOutcome.NoOrder, null, null, null)));
+
+        var request = await SubmitAsync(StockRequestItem(Guid.NewGuid(), IndiaTime.Today().AddDays(1), 250m));
+
+        Assert.Equal(SubmissionOutcome.Accepted, payment.Outcome);
+        Assert.Equal(SubmissionOutcome.Accepted, visit.Outcome);
+        Assert.Equal(SubmissionOutcome.Accepted, request.Outcome);
+    }
+
+    [Fact]
     public async Task Assigning_the_van_is_what_unblocks_the_load()
     {
         // Straight off a real phone: the app said "not assigned to a van yet" and the load failed.

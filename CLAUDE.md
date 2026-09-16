@@ -109,6 +109,11 @@ Keep payments simple and practical — not a full enterprise accounting system. 
   adjustments, no damage, no other location. A load entered from a phone carries its `DeviceId`, and the
   admin's van screen names the phone, which is how the office is told the salesman entered it.
 - **One user account per person**, with two roles: `Admin` and `Salesperson`.
+- **No van, no bill** (2026-09-16). A phone the office has not assigned to a van cannot record a
+  delivery: the bill follows the goods and the goods come off the van, so with no van there is nothing
+  to have delivered. It is refused rather than quietly drawn from the warehouse, which would balance the
+  books and leave the van's wrong. Payments, visits and stock requests still work without a van, because
+  none of them moves product.
 
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
 

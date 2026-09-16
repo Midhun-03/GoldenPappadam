@@ -222,6 +222,11 @@ public class MobileSyncService(
     {
         var sale = item.Sale ?? throw new DomainException("This submission says it is a sale but carries none.");
 
+        // A bill follows the goods, and the goods come off the van. With no van there is nothing to
+        // have delivered, so the bill is refused rather than quietly drawn from the warehouse -
+        // which would balance the books and leave the van's wrong.
+        var vanId = RequireVan(device);
+
         // The price the phone charged is kept as charged. What the server decides is whether the
         // office has changed it since, in which case a person is asked to look.
         var mismatch = await HasPriceMovedAsync(sale, ct);
@@ -233,7 +238,7 @@ public class MobileSyncService(
                 0m,
                 sale.Notes,
                 sale.Lines.Select(l => new InvoiceLineRequest(l.ProductId, l.Quantity, l.UnitPrice)).ToList(),
-                device.LocationId),
+                vanId),
             ct);
 
         await RecordSubmissionAsync(device, item, created.Invoice.Id, mismatch, ct);
@@ -317,11 +322,7 @@ public class MobileSyncService(
         var load = item.VanLoad
                    ?? throw new DomainException("This submission says it is a van load but carries none.");
 
-        if (device.LocationId is not { } vanId)
-        {
-            throw new DomainException(
-                "This phone is not assigned to a van yet. Ask the office to set that up.");
-        }
+        var vanId = RequireVan(device);
 
         var created = await vanLoads.CreateAsync(
             new CreateVanLoadRequest(
@@ -366,18 +367,22 @@ public class MobileSyncService(
             item.ClientRequestId, SubmissionOutcome.Accepted, created.Id, null, false, []);
     }
 
+    /// <summary>
+    /// The van this phone sells from, or a refusal. Which van a phone belongs to is the office's
+    /// decision, deliberately: the server reads it from the device rather than trusting anything the
+    /// phone sends, so a phone the office has not placed cannot touch stock at all.
+    /// </summary>
+    private static Guid RequireVan(Device device) =>
+        device.LocationId
+        ?? throw new DomainException("This phone is not assigned to a van yet. Ask the office to set that up.");
+
     /// <summary>What is on this phone's van: loaded today, sold, and what is left.</summary>
     public async Task<VanReconciliationDto> GetVanStockAsync(DateOnly businessDate, CancellationToken ct)
     {
         var device = await CurrentDeviceAsync(ct)
                      ?? throw new NotFoundException("Device");
 
-        if (device.LocationId is not { } vanId)
-        {
-            throw new DomainException("This phone is not assigned to a van yet. Ask the office to set that up.");
-        }
-
-        return await vanLoads.GetReconciliationAsync(vanId, businessDate, ct);
+        return await vanLoads.GetReconciliationAsync(RequireVan(device), businessDate, ct);
     }
 
     /// <summary>
