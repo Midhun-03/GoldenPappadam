@@ -6,13 +6,18 @@ import '../../app.dart';
 import '../../core/money.dart';
 import '../../data/local/database.dart';
 import '../../data/sales_repository.dart';
+import 'bill_draft.dart';
 
 /// Shop, products, quantities, then credit or paid. Nothing else.
 ///
 /// The price sits beside each product as plain text. There is no field to edit it, because the
 /// office decides what each shop pays and the salesperson carries that decision rather than making
-/// one. A product the office has never priced simply cannot be added, which is a better failure
+/// one. A product the office has never priced cannot be added at all, which is a better failure
 /// than an invented number.
+///
+/// Products are picked from a search rather than listed permanently: a route sells four or five
+/// things out of a catalogue that will only grow, and scrolling past the rest every time is a tax
+/// on every bill.
 class SaleScreen extends ConsumerStatefulWidget {
   const SaleScreen({required this.shop, super.key});
 
@@ -23,9 +28,7 @@ class SaleScreen extends ConsumerStatefulWidget {
 }
 
 class _SaleScreenState extends ConsumerState<SaleScreen> {
-  final Map<String, double> _quantities = {};
-  final _search = TextEditingController();
-  String _term = '';
+  final BillDraft _draft = BillDraft();
   bool _saving = false;
 
   List<CachedProduct> _products = const [];
@@ -37,12 +40,6 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
   void initState() {
     super.initState();
     _load();
-  }
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -61,93 +58,99 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     });
   }
 
-  List<SaleLine> get _lines => [
-        for (final entry in _quantities.entries)
-          if (entry.value > 0 && _prices[entry.key] != null)
-            SaleLine(
-              productId: entry.key,
-              productName: _products.firstWhere((p) => p.id == entry.key).name,
-              quantity: entry.value,
-              unitPrice: _prices[entry.key]!,
-            )
-      ];
-
-  double get _total => _lines.fold(0, (sum, line) => sum + line.lineTotal);
+  /// Only what this shop has a price for. Everything else would be a guess.
+  List<CachedProduct> get _sellable =>
+      _products.where((product) => _prices[product.id] != null).toList();
 
   @override
   Widget build(BuildContext context) {
-    // Only what this shop has a price for. Everything else would be a guess.
-    final sellable = _products.where((product) => _prices[product.id] != null).toList();
-    final visible = _term.trim().isEmpty
-        ? sellable
-        : sellable
-            .where((p) => p.name.toLowerCase().contains(_term.trim().toLowerCase()))
-            .toList();
-
     return Scaffold(
-      appBar: AppBar(title: Text(widget.shop.name)),
+      appBar: AppBar(
+        title: Text(widget.shop.name),
+        bottom: widget.shop.balance > 0
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(28),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Owes ${money(widget.shop.balance)}',
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ),
+              )
+            : null,
+      ),
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
-          : sellable.isEmpty
+          : _sellable.isEmpty
               ? const _NoPrices()
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                      child: TextField(
-                        controller: _search,
-                        onChanged: (value) => setState(() => _term = value),
-                        decoration: const InputDecoration(
-                          hintText: 'Find a product',
-                          prefixIcon: Icon(Icons.search),
-                          isDense: true,
+              : _draft.isEmpty
+                  ? _EmptyBill(onAdd: _pickProduct)
+                  : ListView(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      children: [
+                        for (final line in _draft.lines)
+                          _LineRow(
+                            line: line,
+                            unit: _unitOf(line.productId),
+                            onChanged: (quantity) =>
+                                setState(() => _draft.setQuantity(line.productId, quantity)),
+                            onStep: (by) =>
+                                setState(() => _draft.changeQuantity(line.productId, by)),
+                            onRemove: () => setState(() => _draft.remove(line.productId)),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                          child: OutlinedButton.icon(
+                            onPressed: _pickProduct,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add product'),
+                            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    Expanded(
-                      child: ListView.separated(
-                        itemCount: visible.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final product = visible[index];
-
-                          return _ProductRow(
-                            product: product,
-                            price: _prices[product.id]!,
-                            quantity: _quantities[product.id] ?? 0,
-                            onChanged: (value) => setState(() {
-                              if (value <= 0) {
-                                _quantities.remove(product.id);
-                              } else {
-                                _quantities[product.id] = value;
-                              }
-                            }),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
       bottomNavigationBar:
-          _lines.isEmpty ? null : _Total(total: _total, saving: _saving, onSave: _save),
+          _draft.isEmpty ? null : _Total(total: _draft.total, saving: _saving, onSave: _save),
     );
+  }
+
+  String _unitOf(String productId) =>
+      _products.firstWhere((product) => product.id == productId).unitCode;
+
+  /// Picking a product already on the bill adds to that line rather than making a second one.
+  Future<void> _pickProduct() async {
+    final product = await showModalBottomSheet<CachedProduct>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _ProductPicker(products: _sellable, prices: _prices, draft: _draft),
+    );
+
+    if (product == null || !mounted) return;
+
+    setState(() => _draft.add(
+          productId: product.id,
+          productName: product.name,
+          unitPrice: _prices[product.id]!,
+        ));
   }
 
   Future<void> _save() async {
     final choice = await showModalBottomSheet<_HowPaid>(
       context: context,
-      builder: (context) => _PaymentChoice(total: _total),
+      builder: (context) => _PaymentChoice(total: _draft.total),
     );
 
     if (choice == null || !mounted) return;
 
     setState(() => _saving = true);
+    final total = _draft.total;
 
     try {
       await ref.read(salesRepositoryProvider).recordSale(
             customerId: widget.shop.id,
             customerName: widget.shop.name,
-            lines: _lines,
+            lines: _draft.lines,
             amountPaid: choice.amount,
             paymentMethod: choice.method,
             pricesAsOf: _pricesAsOf,
@@ -160,7 +163,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
 
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${money(_total)} recorded for ${widget.shop.name}.')),
+        SnackBar(content: Text('${money(total)} recorded for ${widget.shop.name}.')),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -168,68 +171,187 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
   }
 }
 
-class _ProductRow extends StatelessWidget {
-  const _ProductRow({
-    required this.product,
-    required this.price,
-    required this.quantity,
+/// One product on the bill: what it is, what this shop pays, and how many.
+class _LineRow extends StatelessWidget {
+  const _LineRow({
+    required this.line,
+    required this.unit,
     required this.onChanged,
+    required this.onStep,
+    required this.onRemove,
   });
 
-  final CachedProduct product;
-  final double price;
-  final double quantity;
+  final SaleLine line;
+  final String unit;
   final void Function(double) onChanged;
+  final void Function(double) onStep;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final chosen = quantity > 0;
-
-    return Container(
-      color: chosen ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3) : null,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(product.name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                Text(
-                  '${money(price)} per ${product.unitCode.toLowerCase()}',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(line.productName, style: const TextStyle(fontWeight: FontWeight.w500)),
+                    Text(
+                      // Read-only, deliberately. The office sets what this shop pays.
+                      '${money(line.unitPrice)} per ${unit.toLowerCase()}',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          // Big targets: this is used one-handed, standing up, often in a hurry.
-          IconButton.filledTonal(
-            onPressed: quantity > 0 ? () => onChanged(quantity - 1) : null,
-            icon: const Icon(Icons.remove),
-          ),
-          SizedBox(
-            width: 56,
-            child: TextField(
-              key: ValueKey('qty-${product.id}-$quantity'),
-              controller: TextEditingController(
-                text: quantity == 0 ? '' : quantity.toStringAsFixed(0),
               ),
-              textAlign: TextAlign.center,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              decoration: const InputDecoration(isDense: true, hintText: '0'),
-              onSubmitted: (value) => onChanged(double.tryParse(value) ?? 0),
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            ),
+              Text(
+                money(line.lineTotal),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              IconButton(
+                tooltip: 'Remove',
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: onRemove,
+              ),
+            ],
           ),
-          IconButton.filledTonal(
-            onPressed: () => onChanged(quantity + 1),
-            icon: const Icon(Icons.add),
+          Row(
+            children: [
+              // Big targets: this is used one-handed, standing up, often in a hurry.
+              IconButton.filledTonal(
+                onPressed: () => onStep(-1),
+                icon: const Icon(Icons.remove),
+              ),
+              SizedBox(
+                width: 72,
+                child: TextField(
+                  key: ValueKey('qty-${line.productId}-${line.quantity}'),
+                  controller: TextEditingController(text: _label(line.quantity)),
+                  textAlign: TextAlign.center,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                  decoration: const InputDecoration(isDense: true),
+                  onSubmitted: (value) => onChanged(double.tryParse(value) ?? 0),
+                  onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                ),
+              ),
+              IconButton.filledTonal(
+                onPressed: () => onStep(1),
+                icon: const Icon(Icons.add),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  static String _label(double value) =>
+      value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toString();
+}
+
+/// Search rather than scroll. The catalogue only grows; a route sells a handful of things.
+class _ProductPicker extends StatefulWidget {
+  const _ProductPicker({required this.products, required this.prices, required this.draft});
+
+  final List<CachedProduct> products;
+  final Map<String, double?> prices;
+  final BillDraft draft;
+
+  @override
+  State<_ProductPicker> createState() => _ProductPickerState();
+}
+
+class _ProductPickerState extends State<_ProductPicker> {
+  String _term = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final needle = _term.trim().toLowerCase();
+    final matches = needle.isEmpty
+        ? widget.products
+        : widget.products.where((p) => p.name.toLowerCase().contains(needle)).toList();
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                autofocus: true,
+                onChanged: (value) => setState(() => _term = value),
+                decoration: const InputDecoration(
+                  hintText: 'Search or select product',
+                  prefixIcon: Icon(Icons.search),
+                ),
+              ),
+            ),
+            Expanded(
+              child: matches.isEmpty
+                  ? const Center(child: Text('Nothing by that name.'))
+                  : ListView.separated(
+                      itemCount: matches.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final product = matches[index];
+                        final already = widget.draft.quantityOf(product.id);
+
+                        return ListTile(
+                          title: Text(product.name),
+                          subtitle: Text(
+                            '${money(widget.prices[product.id]!)} per ${product.unitCode.toLowerCase()}',
+                          ),
+                          // Says plainly that picking it again adds to the line already there.
+                          trailing: already > 0
+                              ? Chip(label: Text('${_LineRow._label(already)} on bill'))
+                              : const Icon(Icons.add),
+                          onTap: () => Navigator.of(context).pop(product),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyBill extends StatelessWidget {
+  const _EmptyBill({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.receipt_long_outlined, size: 40),
+              const SizedBox(height: 12),
+              Text('Nothing on this bill yet', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              const Text('Add what you delivered.', textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add),
+                label: const Text('Add product'),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _Total extends StatelessWidget {

@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../core/money.dart';
+import '../../data/local/database.dart';
+import '../sale/sale_screen.dart';
+import '../shops/shop_picker_screen.dart';
 import '../sync/sync_views.dart';
 
 /// The salesperson's own day, at a glance.
@@ -42,6 +45,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     await _load();
   }
 
+  /// Home -> shop -> products -> payment -> save, with no detour through the shop list. The rest
+  /// of the flow is the existing one: the same sale screen the shop page opens, so there is one
+  /// way a bill is written and one place it can go wrong.
+  Future<void> _newBill() async {
+    final shop = await Navigator.of(context).push<CachedCustomer>(
+      MaterialPageRoute(builder: (_) => const ShopPickerScreen()),
+    );
+
+    if (shop == null || !mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => SaleScreen(shop: shop)),
+    );
+
+    // A saved bill changes today's figures and the pending count.
+    if (mounted) await _load();
+  }
+
   double _money(String key) => (_day?[key] as num?)?.toDouble() ?? 0;
 
   int _count(String key) => (_day?[key] as num?)?.toInt() ?? 0;
@@ -68,6 +89,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   : ListView(
                       padding: const EdgeInsets.all(12),
                       children: [
+                        _NewBillCard(onTap: _newBill),
                         if (_day == null)
                           const _NothingYet()
                         else ...[
@@ -139,6 +161,55 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ref.read(syncProvider).lastSyncedAt.then((value) {
       if (mounted) setState(() => _lastSync = value);
     });
+  }
+}
+
+/// The one thing a salesperson does more than anything else, at the top of the first screen.
+class _NewBillCard extends StatelessWidget {
+  const _NewBillCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: scheme.primary,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.add_circle_outline, size: 32, color: scheme.onPrimary),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'New bill',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: scheme.onPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    Text(
+                      'Record a new shop sale',
+                      style: TextStyle(color: scheme.onPrimary.withValues(alpha: 0.85)),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: scheme.onPrimary),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

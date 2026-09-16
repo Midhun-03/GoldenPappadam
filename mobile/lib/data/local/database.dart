@@ -261,6 +261,32 @@ class AppDatabase extends _$AppDatabase {
         ..orderBy([(e) => OrderingTerm(expression: e.recordedAt, mode: OrderingMode.desc)]))
       .watch();
 
+  /// Shops this phone has recorded something for lately, newest first.
+  ///
+  /// Derived from the outbox because that is the only record of where the salesperson has actually
+  /// been - and it works with no signal, which a server-side "recent shops" would not. Entries that
+  /// are not about a shop (a van load, a stock request) yield a name that matches no customer and
+  /// fall out when the caller looks them up.
+  Future<List<String>> recentShopNames({int limit = 5}) async {
+    final entries = await (select(outboxEntries)
+          ..orderBy([(e) => OrderingTerm(expression: e.recordedAt, mode: OrderingMode.desc)])
+          ..limit(120))
+        .get();
+
+    final names = <String>[];
+
+    for (final entry in entries) {
+      final name = entry.summary.split('·').first.trim();
+
+      if (name.isEmpty || names.contains(name)) continue;
+
+      names.add(name);
+      if (names.length >= limit) break;
+    }
+
+    return names;
+  }
+
   Stream<int> watchPendingCount() => watchUnfinished().map((rows) => rows.length);
 
   Future<void> markSynced(String clientRequestId, String? serverRecordId) =>
