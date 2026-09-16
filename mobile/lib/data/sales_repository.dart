@@ -171,6 +171,83 @@ class SalesRepository {
     );
   }
 
+  /// What the salesperson actually took from the warehouse this morning.
+  ///
+  /// The payload names no van and no direction: the server puts it on this phone's own van, from
+  /// the main warehouse. That is deliberately the only stock a salesperson can move.
+  Future<String> recordVanLoad({
+    required List<SaleLine> lines,
+    String? notes,
+  }) async {
+    if (lines.isEmpty) {
+      throw ArgumentError('A load needs at least one product.');
+    }
+
+    final id = _uuid.v4();
+    final total = lines.fold<double>(0, (sum, line) => sum + line.quantity);
+
+    await _db.enqueue(
+      clientRequestId: id,
+      type: 'VanLoad',
+      recordedAt: DateTime.now().toUtc(),
+      summary: 'Van load · ${quantityLabel(total)} items',
+      payload: {
+        'vanLoad': {
+          'lines': [
+            for (final line in lines)
+              {'productId': line.productId, 'quantity': line.quantity}
+          ],
+          'notes': notes,
+        }
+      },
+    );
+
+    return id;
+  }
+
+  /// What the salesperson needs the packing unit to pack, and when. Not a customer order: nothing
+  /// is billed and no stock moves.
+  Future<String> recordStockRequest({
+    required DateTime requiredDate,
+    required List<SaleLine> lines,
+    String? notes,
+  }) async {
+    if (lines.isEmpty) {
+      throw ArgumentError('A request needs at least one product.');
+    }
+
+    final id = _uuid.v4();
+    final day = requiredDate.toIso8601String().substring(0, 10);
+
+    await _db.enqueue(
+      clientRequestId: id,
+      type: 'StockRequest',
+      recordedAt: DateTime.now().toUtc(),
+      summary: 'Asked for ${lines.length} product${lines.length == 1 ? '' : 's'} for $day',
+      payload: {
+        'stockRequest': {
+          'requiredDate': day,
+          'lines': [
+            for (final line in lines)
+              {'productId': line.productId, 'quantity': line.quantity}
+          ],
+          'notes': notes,
+        }
+      },
+    );
+
+    return id;
+  }
+
+  /// Payments this phone has taken that the office has not confirmed, newest first.
+  Future<List<OutboxEntry>> unsentPaymentsFor(String customerName) async {
+    final entries = await _db.watchUnfinished().first;
+
+    return entries
+        .where((entry) => entry.type == 'Payment' && entry.summary.startsWith('$customerName ·'))
+        .toList();
+  }
+
   /// What this shop has waiting to go up, so the screen can show the salesperson their own morning
   /// even with no signal.
   Future<List<OutboxEntry>> unsentFor(String customerName) async {
@@ -211,6 +288,10 @@ class SalesRepository {
 
   static String _money(double value) => '₹${value.toStringAsFixed(2)}';
 }
+
+/// Whole numbers read better than "350.0 items" on a load sheet.
+String quantityLabel(double value) =>
+    value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toStringAsFixed(3);
 
 /// The last balance the office told us, and when. Shown with the "as of" so nobody mistakes a
 /// stale figure for a live one.

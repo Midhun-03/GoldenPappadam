@@ -59,6 +59,7 @@ class SyncEngine {
   static const _lastSyncKey = 'last_synced_at';
   static const _pricesAsOfKey = 'prices_as_of';
   static const _vanLocationKey = 'van_location_id';
+  static const _dayKey = 'day_summary';
 
   final AppDatabase _db;
   final ApiClient _api;
@@ -118,6 +119,7 @@ class SyncEngine {
       // otherwise the balances it gets back are already out of date.
       await _push();
       await _pull();
+      await _pullDay();
 
       await _db.writeMeta(_lastSyncKey, DateTime.now().toUtc().toIso8601String());
 
@@ -240,7 +242,22 @@ class SyncEngine {
             ))
         .toList();
 
-    await _db.replaceSnapshot(customers: customers, products: products, prices: prices);
+    final payments = (body['payments'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map((p) => PaymentsCompanion.insert(
+              id: p['id'] as String,
+              customerId: p['customerId'] as String,
+              paymentDate: p['paymentDate'] as String,
+              recordedAt: DateTime.parse(p['recordedAt'] as String),
+              amount: (p['amount'] as num).toDouble(),
+              method: p['method'] as String,
+              reference: Value(p['reference'] as String?),
+              notes: Value(p['notes'] as String?),
+            ))
+        .toList();
+
+    await _db.replaceSnapshot(
+        customers: customers, products: products, prices: prices, payments: payments);
 
     final pricesAsOf = body['pricesAsOf'];
     if (pricesAsOf is String) await _db.writeMeta(_pricesAsOfKey, pricesAsOf);
@@ -248,6 +265,24 @@ class SyncEngine {
     final vanLocation = body['vanLocationId'];
     if (vanLocation is String) await _db.writeMeta(_vanLocationKey, vanLocation);
   }
+
+  /// The office's version of today. Cached on every sync, because the home screen has to show
+  /// something sensible in a shop with no signal - with the pending count beside it saying how much
+  /// of today the office has not seen yet.
+  Future<Map<String, dynamic>?> cachedDay() async {
+    final raw = await _db.readMeta(_dayKey);
+
+    return raw == null ? null : Map<String, dynamic>.from(jsonDecode(raw) as Map);
+  }
+
+  Future<void> _pullDay() async {
+    final body = await _api.get('/api/mobile/day');
+    await _db.writeMeta(_dayKey, jsonEncode(body));
+  }
+
+  /// What is on the van: loaded today, sold, and what is left. Needs signal, so the screen keeps
+  /// the last answer and says when it was from.
+  Future<Map<String, dynamic>> vanStock() => _api.get('/api/mobile/van-stock');
 
   // ---------- status ----------
 

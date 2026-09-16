@@ -8,7 +8,10 @@ import 'data/local/database.dart';
 import 'data/sales_repository.dart';
 import 'data/remote/api_client.dart';
 import 'features/auth/login_screen.dart';
+import 'features/home/dashboard_screen.dart';
+import 'features/orders/orders_screen.dart';
 import 'features/shops/shops_screen.dart';
+import 'features/van/van_screen.dart';
 import 'sync/sync_engine.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -119,9 +122,39 @@ class _GoldenPappadamAppState extends ConsumerState<GoldenPappadamApp> {
       ),
       home: switch (session) {
         null => const Scaffold(body: Center(child: CircularProgressIndicator())),
-        true => const ShopsScreen(),
+        true => const SalesHome(),
         false => const LoginScreen(),
       },
     );
   }
+}
+
+/// The four things a salesperson does, one tap apart. No drawer and no nesting: on a doorstep,
+/// anything more than a tap is too far.
+class SalesHome extends StatefulWidget {
+  const SalesHome({super.key});
+
+  @override
+  State<SalesHome> createState() => _SalesHomeState();
+}
+
+class _SalesHomeState extends State<SalesHome> {
+  int _tab = 0;
+
+  static const _screens = [DashboardScreen(), ShopsScreen(), VanScreen(), OrdersScreen()];
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: IndexedStack(index: _tab, children: _screens),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (index) => setState(() => _tab = index),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.today_outlined), label: 'Today'),
+            NavigationDestination(icon: Icon(Icons.storefront_outlined), label: 'Shops'),
+            NavigationDestination(icon: Icon(Icons.local_shipping_outlined), label: 'Van'),
+            NavigationDestination(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
+          ],
+        ),
+      );
 }

@@ -74,6 +74,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
               ),
               const SizedBox(height: 8),
               _TodayHere(shopName: shop.name),
+              _PaymentHistory(shopId: shop.id, shopName: shop.name),
               _PricesHere(shopId: shop.id),
             ],
           ),
@@ -197,6 +198,76 @@ class _TodayHere extends ConsumerWidget {
                     : timeOfDay(entry.recordedAt)),
               ),
           ],
+        );
+      },
+    );
+  }
+}
+
+/// Money received from this shop. The office's record, cached at the last sync, with anything this
+/// phone has just taken shown above it as still waiting - so a payment collected two minutes ago is
+/// visible immediately rather than seeming to have vanished.
+class _PaymentHistory extends ConsumerWidget {
+  const _PaymentHistory({required this.shopId, required this.shopName});
+
+  final String shopId;
+  final String shopName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseProvider);
+
+    return StreamBuilder<List<OutboxEntry>>(
+      stream: db.watchOutboxOfType('Payment'),
+      builder: (context, outbox) {
+        final unsent = (outbox.data ?? const <OutboxEntry>[])
+            .where((entry) =>
+                entry.summary.startsWith('\$shopName ·') && entry.status != 'Synced')
+            .toList();
+
+        return FutureBuilder<List<CachedPayment>>(
+          future: db.paymentsFor(shopId),
+          builder: (context, snapshot) {
+            final settled = snapshot.data ?? const <CachedPayment>[];
+
+            if (settled.isEmpty && unsent.isEmpty) return const SizedBox.shrink();
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
+                  child: Text('Payment history', style: TextStyle(fontWeight: FontWeight.w500)),
+                ),
+                for (final entry in unsent)
+                  ListTile(
+                    dense: true,
+                    leading: Icon(
+                      entry.status == 'Failed' ? Icons.error_outline : Icons.schedule,
+                      color: entry.status == 'Failed'
+                          ? Theme.of(context).colorScheme.error
+                          : null,
+                    ),
+                    title: Text(entry.summary.split('·').last.trim()),
+                    subtitle: Text(entry.status == 'Failed'
+                        ? entry.lastError ?? 'The office refused this.'
+                        : 'Waiting to go up · \${timeOfDay(entry.recordedAt)}'),
+                  ),
+                for (final payment in settled)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.check_circle_outline),
+                    title: Text(money(payment.amount)),
+                    subtitle: Text([
+                      dayAndTime(payment.recordedAt),
+                      payment.method,
+                      if ((payment.reference ?? '').isNotEmpty) payment.reference!,
+                      if ((payment.notes ?? '').isNotEmpty) payment.notes!,
+                    ].join(' · ')),
+                  ),
+              ],
+            );
+          },
         );
       },
     );

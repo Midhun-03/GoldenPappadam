@@ -51,6 +51,28 @@ class CustomerPrices extends Table {
   Set<Column> get primaryKey => {customerId, productId};
 }
 
+/// Money already received from a shop, as the office has it. Replaced on every snapshot like the
+/// rest of the cache: payments the salesperson has just taken live in the outbox until they land.
+@DataClassName('CachedPayment')
+class Payments extends Table {
+  TextColumn get id => text()();
+  TextColumn get customerId => text()();
+
+  /// The business date, "2026-09-16".
+  TextColumn get paymentDate => text()();
+
+  /// When the office recorded it, for the time of day.
+  DateTimeColumn get recordedAt => dateTime()();
+
+  RealColumn get amount => real()();
+  TextColumn get method => text()();
+  TextColumn get reference => text().nullable()();
+  TextColumn get notes => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// Anything the app needs to remember between runs: the last sync, the device id, who is signed in.
 class Meta extends Table {
   TextColumn get key => text()();
@@ -109,13 +131,24 @@ extension OutboxStatusName on OutboxStatus {
       };
 }
 
-@DriftDatabase(tables: [Customers, Products, CustomerPrices, Meta, OutboxEntries])
+@DriftDatabase(tables: [Customers, Products, CustomerPrices, Payments, Meta, OutboxEntries])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'golden_pappadam'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          // 2: payment history, so the shop page can answer "when did I last collect from you?"
+          // with no signal. A cache table, so there is nothing to carry across - the next snapshot
+          // fills it.
+          if (from < 2) await m.createTable(payments);
+        },
+      );
 
   // ---------- the cache ----------
 
@@ -124,18 +157,28 @@ class AppDatabase extends _$AppDatabase {
     required List<CustomersCompanion> customers,
     required List<ProductsCompanion> products,
     required List<CustomerPricesCompanion> prices,
+    List<PaymentsCompanion> payments = const [],
   }) =>
       transaction(() async {
         await delete(this.customers).go();
         await delete(this.products).go();
         await delete(customerPrices).go();
+        await delete(this.payments).go();
 
         await batch((batch) {
           batch.insertAll(this.customers, customers);
           batch.insertAll(this.products, products);
           batch.insertAll(customerPrices, prices);
+          batch.insertAll(this.payments, payments);
         });
       });
+
+  /// What the office has received from this shop, newest first.
+  Future<List<CachedPayment>> paymentsFor(String customerId) =>
+      (select(payments)
+            ..where((p) => p.customerId.equals(customerId))
+            ..orderBy([(p) => OrderingTerm(expression: p.recordedAt, mode: OrderingMode.desc)]))
+          .get();
 
   Future<List<CachedCustomer>> allCustomers() =>
       (select(customers)..orderBy([(c) => OrderingTerm(expression: c.name)])).get();
@@ -212,6 +255,12 @@ class AppDatabase extends _$AppDatabase {
         ..orderBy([(e) => OrderingTerm(expression: e.recordedAt, mode: OrderingMode.desc)]))
       .watch();
 
+  /// Everything of one kind this phone has recorded, newest first - synced or not.
+  Stream<List<OutboxEntry>> watchOutboxOfType(String type) => (select(outboxEntries)
+        ..where((e) => e.type.equals(type))
+        ..orderBy([(e) => OrderingTerm(expression: e.recordedAt, mode: OrderingMode.desc)]))
+      .watch();
+
   Stream<int> watchPendingCount() => watchUnfinished().map((rows) => rows.length);
 
   Future<void> markSynced(String clientRequestId, String? serverRecordId) =>
@@ -262,6 +311,7 @@ class AppDatabase extends _$AppDatabase {
         await delete(customers).go();
         await delete(products).go();
         await delete(customerPrices).go();
+        await delete(payments).go();
         await (delete(outboxEntries)
               ..where((e) => e.status.equals(OutboxStatus.synced.stored)))
             .go();

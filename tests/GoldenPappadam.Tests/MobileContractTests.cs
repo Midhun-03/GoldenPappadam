@@ -46,6 +46,19 @@ public class MobileContractTests : IAsyncLifetime
         registered.EnsureSuccessStatusCode();
         var device = await registered.Content.ReadFromJsonAsync<JsonElement>();
         _deviceId = device.GetProperty("id").GetGuid();
+
+        await AssignVanAsync();
+    }
+
+    /// <summary>What the office does once: this phone rides in that van.</summary>
+    private async Task AssignVanAsync()
+    {
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var device = await db.Devices.SingleAsync(d => d.Id == _deviceId);
+        device.LocationId = KnownStockLocations.FirstVanId;
+        await db.SaveChangesAsync();
     }
 
     public async Task DisposeAsync()
@@ -186,6 +199,89 @@ public class MobileContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_body_the_app_sends_for_a_van_load_is_accepted()
+    {
+        // Exactly what SalesRepository.recordVanLoad writes: lines, and nothing that could name a
+        // location or a direction.
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "VanLoad",
+                  "recordedAt": "2026-09-16T01:00:00.000Z",
+                  "vanLoad": {
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 350.0 }
+                    ],
+                    "notes": null
+                  }
+                }
+              ]
+            }
+            """);
+
+        Assert.Equal("Accepted", response.GetProperty("results")[0].GetProperty("outcome").GetString());
+    }
+
+    [Fact]
+    public async Task The_body_the_app_sends_for_a_stock_request_is_accepted()
+    {
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "StockRequest",
+                  "recordedAt": "2026-09-16T01:00:00.000Z",
+                  "stockRequest": {
+                    "requiredDate": "2026-09-17",
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 250.0 }
+                    ],
+                    "notes": "Pepper sells well on Fridays"
+                  }
+                }
+              ]
+            }
+            """);
+
+        Assert.Equal("Accepted", response.GetProperty("results")[0].GetProperty("outcome").GetString());
+    }
+
+    [Fact]
+    public async Task The_van_screen_has_every_field_the_app_reads_out_of_it()
+    {
+        var van = await _phone.GetFromJsonAsync<JsonElement>("/api/mobile/van-stock");
+
+        Assert.True(van.TryGetProperty("lines", out var lines));
+        Assert.True(van.TryGetProperty("isSettled", out _));
+
+        // The van has opening stock from the seed, so there is a line to check the shape of.
+        foreach (var field in new[] { "productName", "loaded", "sold", "returned", "unaccounted" })
+        {
+            Assert.True(lines[0].TryGetProperty(field, out _), $"line.{field} is missing");
+        }
+    }
+
+    [Fact]
+    public async Task The_day_summary_has_every_field_the_home_screen_reads()
+    {
+        var day = await _phone.GetFromJsonAsync<JsonElement>("/api/mobile/day");
+
+        foreach (var field in new[]
+                 {
+                     "totalSales", "saleCount", "shopsVisited", "cashCollected",
+                     "creditSales", "noSaleVisits", "totalOutstanding"
+                 })
+        {
+            Assert.True(day.TryGetProperty(field, out _), $"day.{field} is missing");
+        }
+    }
+
+    [Fact]
     public async Task The_snapshot_has_every_field_the_app_reads_out_of_it()
     {
         var snapshot = await _phone.GetFromJsonAsync<JsonElement>("/api/mobile/sync/snapshot");
@@ -207,6 +303,8 @@ public class MobileContractTests : IAsyncLifetime
         {
             Assert.True(product.TryGetProperty(field, out _), $"product.{field} is missing");
         }
+
+        Assert.True(snapshot.TryGetProperty("payments", out _), "snapshot.payments is missing");
     }
 
     [Fact]
