@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDay, formatQuantity, todayInIndia } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { DevicesCard } from './DevicesCard'
 import { VanLoadDialog } from './VanLoadDialog'
 
 /**
@@ -205,6 +206,10 @@ export function VanPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="mt-4 lg:mt-5">
+        <DevicesCard />
+      </div>
 
       {selectedVan && (
         <VanLoadDialog

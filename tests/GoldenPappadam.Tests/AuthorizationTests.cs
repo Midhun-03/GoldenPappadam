@@ -28,7 +28,8 @@ public class AuthorizationTests : IAsyncLifetime
         "/api/fieldsales/day",
         "/api/fieldsales/van-loads",
         "/api/fieldsales/stock-requests",
-        "/api/fieldsales/stock-requests/packing-needs"
+        "/api/fieldsales/stock-requests/packing-needs",
+        "/api/fieldsales/devices"
     ];
 
     private ApiFactory _api = null!;
@@ -145,6 +146,19 @@ public class AuthorizationTests : IAsyncLifetime
         // is that authorization lets them through and only the business rule stops them.
         var van = await client.GetAsync("/api/mobile/van-stock");
         Assert.NotEqual(HttpStatusCode.Forbidden, van.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_salesperson_cannot_put_their_own_phone_on_a_van()
+    {
+        var client = await _api.SignInAsync("van@test.local");
+
+        // Which van a phone rides in is what decides where its stock movements land, so it has to
+        // be the office's decision. Otherwise the narrow permission would not be narrow at all.
+        var assign = await client.PostAsync(
+            $"/api/fieldsales/devices/{Guid.NewGuid()}/van?locationId={Guid.NewGuid()}", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, assign.StatusCode);
     }
 
     [Fact]

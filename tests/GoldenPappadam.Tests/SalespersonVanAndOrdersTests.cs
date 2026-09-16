@@ -130,6 +130,28 @@ public class SalespersonVanAndOrdersTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Assigning_the_van_is_what_unblocks_the_load()
+    {
+        // Straight off a real phone: the app said "not assigned to a van yet" and the load failed.
+        _device.LocationId = null;
+        await _database.Db.SaveChangesAsync();
+
+        var clientRequestId = Guid.NewGuid();
+        var refused = await SubmitAsync(VanLoadItem(clientRequestId, 350m));
+        Assert.Equal(SubmissionOutcome.Rejected, refused.Outcome);
+
+        // The office assigns the van, the salesperson taps "try again", and it goes through - the
+        // rejection wrote nothing, so the same client id is still free.
+        _device.LocationId = Van;
+        await _database.Db.SaveChangesAsync();
+
+        var accepted = await SubmitAsync(VanLoadItem(clientRequestId, 350m));
+
+        Assert.Equal(SubmissionOutcome.Accepted, accepted.Outcome);
+        Assert.Equal(350m, await _stock.GetQuantityOnHandAsync(_packet.Id, Van, default));
+    }
+
+    [Fact]
     public async Task The_van_screen_shows_loaded_sold_and_what_is_left()
     {
         await SubmitAsync(VanLoadItem(Guid.NewGuid(), 350m));

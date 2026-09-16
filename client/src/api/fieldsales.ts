@@ -1,6 +1,7 @@
 import { api } from '@/lib/api'
 import type {
   CreateVanLoadResponse,
+  FieldDevice,
   FieldSalesDay,
   PackingNeed,
   StockRequest,
@@ -47,4 +48,13 @@ export const stockRequestsApi = {
     api.get<PackingNeed[]>(`${base}/stock-requests/packing-needs${query(filters)}`),
   setStatus: (id: string, status: StockRequestStatus) =>
     api.post<StockRequest>(`${base}/stock-requests/${id}/status${query({ status })}`),
+}
+
+export const devicesApi = {
+  list: (filters: { includeInactive?: boolean } = {}) =>
+    api.get<FieldDevice[]>(`${base}/devices${query(filters)}`),
+  setVan: (id: string, locationId: string | null) =>
+    api.post<FieldDevice>(`${base}/devices/${id}/van${query({ locationId: locationId ?? '' })}`),
+  setActive: (id: string, isActive: boolean) =>
+    api.post<FieldDevice>(`${base}/devices/${id}/active${query({ isActive: String(isActive) })}`),
 }

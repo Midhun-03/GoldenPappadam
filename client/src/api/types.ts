@@ -428,3 +428,19 @@ export type PackingNeed = {
   quantity: number
   requestCount: number
 }
+
+/**
+ * A phone the sales team carries. `locationId` is the van it rides in — until the office sets it,
+ * that phone cannot record a load at all, because the server reads the van off the device rather
+ * than trusting what the phone sends.
+ */
+export type FieldDevice = {
+  id: string
+  name: string
+  platform: string
+  salesperson: string
+  locationId: string | null
+  vanName: string | null
+  lastSeenAt: string
+  isActive: boolean
+}
