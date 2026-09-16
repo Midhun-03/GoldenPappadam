@@ -1,4 +1,6 @@
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Api.Features.FieldSales.StockRequests;
+using GoldenPappadam.Api.Features.FieldSales.VanLoads;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
@@ -25,9 +27,14 @@ public class MobileSyncService(
     ICurrentUser currentUser,
     InvoiceService invoices,
     PaymentService payments,
-    CustomerPriceService prices)
+    CustomerPriceService prices,
+    VanLoadService vanLoads,
+    StockRequestService stockRequests)
 {
     private static readonly int[] UniqueViolationErrors = [2601, 2627];
+
+    /// <summary>How much payment history the phone carries. Enough to answer a doorway question.</summary>
+    private const int RecentPaymentDays = 90;
 
     // ---------- device ----------
 
@@ -96,6 +103,25 @@ public class MobileSyncService(
             .OrderByDescending(at => at)
             .FirstOrDefaultAsync(ct);
 
+        // Recent only. The shop page answers "when did I last collect from you?", not "show me
+        // three years of history", and the phone should not carry what it will never display.
+        var since = IndiaTime.Today().AddDays(-RecentPaymentDays);
+
+        var recentPayments = await db.Payments
+            .Where(p => p.PaymentDate >= since)
+            .OrderByDescending(p => p.PaymentDate)
+            .ThenByDescending(p => p.CreatedAt)
+            .Select(p => new SnapshotPaymentDto(
+                p.Id,
+                p.CustomerId,
+                p.PaymentDate,
+                p.CreatedAt,
+                p.Amount,
+                p.Method.ToString(),
+                p.Reference,
+                p.Notes))
+            .ToListAsync(ct);
+
         var device = await CurrentDeviceAsync(ct);
 
         return new SnapshotDto(
@@ -105,6 +131,7 @@ public class MobileSyncService(
             customers,
             products,
             priceRows,
+            recentPayments,
             Enum.GetNames<PaymentMethod>());
     }
 
@@ -165,6 +192,8 @@ public class MobileSyncService(
                 SubmissionType.Invoice => await AcceptSaleAsync(device, item, ct),
                 SubmissionType.Payment => await AcceptPaymentAsync(device, item, ct),
                 SubmissionType.Visit => await AcceptVisitAsync(device, item, ct),
+                SubmissionType.VanLoad => await AcceptVanLoadAsync(device, item, ct),
+                SubmissionType.StockRequest => await AcceptStockRequestAsync(device, item, ct),
                 _ => Rejected(item, $"{item.Type} is not something this device can send.")
             };
         }
@@ -273,6 +302,85 @@ public class MobileSyncService(
     }
 
     /// <summary>
+    /// The stock the salesperson took from the warehouse this morning.
+    ///
+    /// The van and the warehouse are decided here, from the device, not from anything the phone
+    /// sent - so the only stock movement a salesperson can cause is warehouse to their own van.
+    /// Both the office and the salesperson may record a load: the packing book says what was
+    /// packed, and the salesman writes down what he actually took, which is often less.
+    /// </summary>
+    private async Task<SubmissionResultDto> AcceptVanLoadAsync(
+        Device device,
+        SubmissionItemRequest item,
+        CancellationToken ct)
+    {
+        var load = item.VanLoad
+                   ?? throw new DomainException("This submission says it is a van load but carries none.");
+
+        if (device.LocationId is not { } vanId)
+        {
+            throw new DomainException(
+                "This phone is not assigned to a van yet. Ask the office to set that up.");
+        }
+
+        var created = await vanLoads.CreateAsync(
+            new CreateVanLoadRequest(
+                vanId,
+                VanLoadDirection.Loading,
+                item.RecordedAt,
+                load.Notes,
+                load.Lines.Select(l => new VanLoadLineRequest(l.ProductId, l.Quantity)).ToList()),
+            ct,
+            device.Id);
+
+        await RecordSubmissionAsync(device, item, created.VanLoad.Id, false, ct);
+
+        return new SubmissionResultDto(
+            item.ClientRequestId, SubmissionOutcome.Accepted, created.VanLoad.Id, null, false,
+            created.Warnings);
+    }
+
+    /// <summary>
+    /// What the salesperson wants packed. No money, no stock and no reservation - it only replaces
+    /// telling somebody in person what tomorrow needs to look like.
+    /// </summary>
+    private async Task<SubmissionResultDto> AcceptStockRequestAsync(
+        Device device,
+        SubmissionItemRequest item,
+        CancellationToken ct)
+    {
+        var request = item.StockRequest
+                      ?? throw new DomainException("This submission says it is a stock request but carries none.");
+
+        var created = await stockRequests.CreateAsync(
+            new CreateStockRequest(
+                request.RequiredDate,
+                request.Lines.Select(l => new StockRequestLineRequest(l.ProductId, l.Quantity)).ToList(),
+                request.Notes),
+            device.Id,
+            ct);
+
+        await RecordSubmissionAsync(device, item, created.Id, false, ct);
+
+        return new SubmissionResultDto(
+            item.ClientRequestId, SubmissionOutcome.Accepted, created.Id, null, false, []);
+    }
+
+    /// <summary>What is on this phone's van: loaded today, sold, and what is left.</summary>
+    public async Task<VanReconciliationDto> GetVanStockAsync(DateOnly businessDate, CancellationToken ct)
+    {
+        var device = await CurrentDeviceAsync(ct)
+                     ?? throw new NotFoundException("Device");
+
+        if (device.LocationId is not { } vanId)
+        {
+            throw new DomainException("This phone is not assigned to a van yet. Ask the office to set that up.");
+        }
+
+        return await vanLoads.GetReconciliationAsync(vanId, businessDate, ct);
+    }
+
+    /// <summary>
     /// True when the office has changed what this shop pays since the snapshot the phone priced
     /// from. The sale is still saved at the price it was made at - see docs B6.
     /// </summary>
@@ -376,15 +484,39 @@ public class MobileSyncService(
             .Join(db.Payments, s => s.CreatedRecordId, p => p.Id, (_, p) => p.Amount)
             .SumAsync(amount => (decimal?)amount, ct) ?? 0m;
 
-        var shops = await db.ShopVisits
+        var visits = await db.ShopVisits
             .Where(v => v.Device!.UserId == userId)
             .Where(v => v.VisitedAt >= dayStart && v.VisitedAt < dayEnd)
-            .Select(v => v.CustomerId)
-            .Distinct()
-            .CountAsync(ct);
+            .Select(v => new { v.CustomerId, v.Outcome })
+            .ToListAsync(ct);
+
+        // Delivered today and not settled on the spot. Read off the allocations rather than the
+        // day's payments, because money collected today may be settling last week's bills.
+        var creditSales = await db.SyncSubmissions
+            .Where(s => s.SubmissionType == SubmissionType.Invoice)
+            .Where(s => s.Device!.UserId == userId)
+            .Where(s => s.RecordedAt >= dayStart && s.RecordedAt < dayEnd)
+            .Join(db.Invoices, s => s.CreatedRecordId, i => i.Id, (_, i) => i)
+            .Where(i => i.Status == InvoiceStatus.Issued)
+            .Select(i => i.TotalAmount -
+                         (db.PaymentAllocations.Where(a => a.InvoiceId == i.Id).Sum(a => (decimal?)a.Amount) ?? 0m))
+            .SumAsync(outstanding => (decimal?)outstanding, ct) ?? 0m;
+
+        var outstanding = await CustomerQueries
+            .Project(db.Customers.Where(c => c.IsActive), db)
+            .Select(c => c.Balance)
+            .ToListAsync(ct);
 
         return new MobileDayDto(
-            businessDate, sales.Sum(s => s.TotalAmount), sales.Count, shops, cash, sales);
+            businessDate,
+            sales.Sum(s => s.TotalAmount),
+            sales.Count,
+            visits.Select(v => v.CustomerId).Distinct().Count(),
+            cash,
+            creditSales,
+            visits.Count(v => v.Outcome != VisitOutcome.Sold),
+            outstanding.Where(balance => balance > 0m).Sum(),
+            sales);
     }
 
     private Task<SyncSubmission?> FindSubmissionAsync(Guid clientRequestId, CancellationToken ct) =>

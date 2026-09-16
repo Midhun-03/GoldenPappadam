@@ -24,6 +24,11 @@ public class VanLoadConfiguration : IEntityTypeConfiguration<VanLoad>
             .HasForeignKey(x => x.WarehouseLocationId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(x => x.Device)
+            .WithMany()
+            .HasForeignKey(x => x.DeviceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasMany(x => x.Lines)
             .WithOne(x => x.VanLoad!)
             .HasForeignKey(x => x.VanLoadId)
@@ -40,6 +45,48 @@ public class VanLoadLineConfiguration : IEntityTypeConfiguration<VanLoadLine>
     {
         builder.ToTable("VanLoadLines", Schemas.FieldSales, table =>
             table.HasCheckConstraint("CK_VanLoadLines_Quantity", "[Quantity] > 0"));
+
+        builder.Property(x => x.Quantity).HasPrecision(18, 3);
+
+        builder.HasOne(x => x.Product)
+            .WithMany()
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => x.ProductId);
+    }
+}
+
+public class StockRequestConfiguration : IEntityTypeConfiguration<StockRequest>
+{
+    public void Configure(EntityTypeBuilder<StockRequest> builder)
+    {
+        builder.ToTable("StockRequests", Schemas.FieldSales);
+
+        builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Notes).HasMaxLength(300);
+
+        builder.HasOne(x => x.Device)
+            .WithMany()
+            .HasForeignKey(x => x.DeviceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(x => x.Lines)
+            .WithOne(x => x.StockRequest!)
+            .HasForeignKey(x => x.StockRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // "What does the packing unit need to make for tomorrow?" - the question this table exists for.
+        builder.HasIndex(x => new { x.RequiredDate, x.Status });
+    }
+}
+
+public class StockRequestLineConfiguration : IEntityTypeConfiguration<StockRequestLine>
+{
+    public void Configure(EntityTypeBuilder<StockRequestLine> builder)
+    {
+        builder.ToTable("StockRequestLines", Schemas.FieldSales, table =>
+            table.HasCheckConstraint("CK_StockRequestLines_Quantity", "[Quantity] > 0"));
 
         builder.Property(x => x.Quantity).HasPrecision(18, 3);
 

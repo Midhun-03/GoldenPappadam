@@ -25,6 +25,14 @@ public class VanLoad : Entity
 
     public VanLoadDirection Direction { get; set; }
 
+    /// <summary>
+    /// The phone that recorded this, when the salesperson entered it themselves. Null means the
+    /// office did. Both are legitimate: the packing book says what was packed, and the salesman
+    /// writes down what he actually took, which is often less.
+    /// </summary>
+    public Guid? DeviceId { get; set; }
+    public Device? Device { get; set; }
+
     /// <summary>UTC.</summary>
     public DateTime OccurredAt { get; set; }
 

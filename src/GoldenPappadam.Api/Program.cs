@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Dashboard;
 using GoldenPappadam.Api.Features.FieldSales.Day;
+using GoldenPappadam.Api.Features.FieldSales.StockRequests;
 using GoldenPappadam.Api.Features.FieldSales.VanLoads;
 using GoldenPappadam.Api.Features.Inventory.Packing;
 using GoldenPappadam.Api.Features.Mobile;
@@ -100,6 +101,7 @@ builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<VanLoadService>();
 builder.Services.AddScoped<MobileSyncService>();
 builder.Services.AddScoped<FieldSalesDayService>();
+builder.Services.AddScoped<StockRequestService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));

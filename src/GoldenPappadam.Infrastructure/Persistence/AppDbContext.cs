@@ -30,6 +30,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<ShopVisit> ShopVisits => Set<ShopVisit>();
     public DbSet<SyncSubmission> SyncSubmissions => Set<SyncSubmission>();
+    public DbSet<StockRequest> StockRequests => Set<StockRequest>();
+    public DbSet<StockRequestLine> StockRequestLines => Set<StockRequestLine>();
     public DbSet<VanLoad> VanLoads => Set<VanLoad>();
     public DbSet<VanLoadLine> VanLoadLines => Set<VanLoadLine>();
 

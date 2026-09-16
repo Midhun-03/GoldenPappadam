@@ -26,6 +26,8 @@ public record VanLoadDto(
     Guid VanLocationId,
     string VanCode,
     VanLoadDirection Direction,
+    /// <summary>The phone that recorded it. Null means the office did.</summary>
+    string? DeviceName,
     DateTime OccurredAt,
     DateOnly BusinessDate,
     string? Notes,

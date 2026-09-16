@@ -1,4 +1,5 @@
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Api.Features.FieldSales.VanLoads;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -30,6 +31,14 @@ public class MobileController(MobileSyncService sync) : ControllerBase
     [HttpPost("sync/submissions")]
     public Task<SubmissionBatchResponse> Submit(SubmissionBatchRequest request, CancellationToken ct) =>
         sync.SubmitAsync(request, ct);
+
+    /// <summary>
+    /// What is on this phone's van: loaded today, sold, and what is left. Read-only - the only way
+    /// a salesperson changes van stock is by recording a load through the submission batch.
+    /// </summary>
+    [HttpGet("van-stock")]
+    public Task<VanReconciliationDto> VanStock(DateOnly? businessDate = null, CancellationToken ct = default) =>
+        sync.GetVanStockAsync(businessDate ?? IndiaTime.Today(), ct);
 
     /// <summary>The salesperson's own day, for the app's summary screen.</summary>
     [HttpGet("day")]

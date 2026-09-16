@@ -12,6 +12,14 @@ export type StockMovementType =
 
 export type Role = 'Admin' | 'Salesperson'
 
+export type UserAccount = {
+  id: string
+  email: string
+  fullName: string
+  role: Role
+  isActive: boolean
+}
+
 export type CurrentUser = {
   id: string
   email: string

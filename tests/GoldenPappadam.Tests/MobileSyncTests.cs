@@ -1,5 +1,7 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.FieldSales.StockRequests;
+using GoldenPappadam.Api.Features.FieldSales.VanLoads;
 using GoldenPappadam.Api.Features.Mobile;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Invoices;
@@ -37,7 +39,9 @@ public class MobileSyncTests : IAsyncLifetime
             _database.CurrentUser,
             new InvoiceService(_database.Db, _stock, _prices),
             new PaymentService(_database.Db),
-            _prices);
+            _prices,
+            new VanLoadService(_database.Db, _stock),
+            new StockRequestService(_database.Db));
 
         var (_, packet) = await _database.SeedProductsAsync();
         packet.SellingPrice = 45m;

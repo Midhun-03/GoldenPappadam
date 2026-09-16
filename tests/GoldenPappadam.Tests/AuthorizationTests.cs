@@ -26,7 +26,9 @@ public class AuthorizationTests : IAsyncLifetime
         "/api/sales/invoices",
         "/api/sales/payments",
         "/api/fieldsales/day",
-        "/api/fieldsales/van-loads"
+        "/api/fieldsales/van-loads",
+        "/api/fieldsales/stock-requests",
+        "/api/fieldsales/stock-requests/packing-needs"
     ];
 
     private ApiFactory _api = null!;
@@ -138,19 +140,42 @@ public class AuthorizationTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/mobile/sync/snapshot")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/mobile/day")).StatusCode);
+
+        // The van screen is theirs too. Without a van assigned it answers 400, not 403 - the point
+        // is that authorization lets them through and only the business rule stops them.
+        var van = await client.GetAsync("/api/mobile/van-stock");
+        Assert.NotEqual(HttpStatusCode.Forbidden, van.StatusCode);
     }
 
     [Fact]
-    public async Task A_salesperson_cannot_move_stock_or_load_the_van()
+    public async Task A_salesperson_cannot_decide_what_gets_packed()
     {
         var client = await _api.SignInAsync("van@test.local");
 
+        // They may ask for stock; they may not answer the request or read the packing board.
+        var board = await client.GetAsync("/api/fieldsales/stock-requests/packing-needs");
+        Assert.Equal(HttpStatusCode.Forbidden, board.StatusCode);
+
+        var decide = await client.PostAsync(
+            $"/api/fieldsales/stock-requests/{Guid.NewGuid()}/status?status=Fulfilled", null);
+        Assert.Equal(HttpStatusCode.Forbidden, decide.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_salesperson_can_only_move_stock_onto_their_own_van()
+    {
+        var client = await _api.SignInAsync("van@test.local");
+
+        // No hand-written movements at all: no production, no damage, no adjustment.
         var entry = await client.PostAsJsonAsync("/api/inventory/stock/entries", new
         {
             productId = Guid.NewGuid(), movementType = "Production", quantity = 10
         });
         Assert.Equal(HttpStatusCode.Forbidden, entry.StatusCode);
 
+        // And not the office's van-load endpoint either, which can name any van and any direction.
+        // Their one way to move stock is the submission batch, where the server decides the van
+        // from the device and the direction is always warehouse to van.
         var load = await client.PostAsJsonAsync("/api/fieldsales/van-loads", new
         {
             vanLocationId = Guid.NewGuid(), direction = "Loading", lines = new[] { new { productId = Guid.NewGuid(), quantity = 1 } }

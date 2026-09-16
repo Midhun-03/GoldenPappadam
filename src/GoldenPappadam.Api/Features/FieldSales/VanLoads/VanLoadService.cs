@@ -14,7 +14,10 @@ namespace GoldenPappadam.Api.Features.FieldSales.VanLoads;
 /// </summary>
 public class VanLoadService(AppDbContext db, StockService stock)
 {
-    public async Task<CreateVanLoadResponse> CreateAsync(CreateVanLoadRequest request, CancellationToken ct)
+    public async Task<CreateVanLoadResponse> CreateAsync(
+        CreateVanLoadRequest request,
+        CancellationToken ct,
+        Guid? deviceId = null)
     {
         var van = await FindLocationAsync(request.VanLocationId, ct);
 
@@ -43,6 +46,7 @@ public class VanLoadService(AppDbContext db, StockService stock)
         {
             VanLocationId = van.Id,
             WarehouseLocationId = warehouse.Id,
+            DeviceId = deviceId,
             Direction = request.Direction,
             OccurredAt = occurredAt,
             BusinessDate = IndiaTime.ToIndiaDate(occurredAt),
@@ -277,6 +281,7 @@ public class VanLoadService(AppDbContext db, StockService stock)
             v.VanLocationId,
             v.VanLocation!.Code,
             v.Direction,
+            v.Device!.Name,
             v.OccurredAt,
             v.BusinessDate,
             v.Notes,

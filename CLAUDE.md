@@ -98,9 +98,16 @@ Keep payments simple and practical — not a full enterprise accounting system. 
   saved at the price the phone used; if the price changed while the phone was offline, the bill is *flagged*
   for the admin, not silently re-priced.
 - **Stock leaves the warehouse when the van is loaded**, not when a shop is billed. That makes stock
-  location-aware: `inventory.StockLocations` plus `StockMovement.LocationId`. The admin records the morning
-  load, unsold stock returns every evening, and a shortfall is **shown to the admin, never auto-adjusted** —
-  that reconciliation is what catches a sale nobody recorded.
+  location-aware: `inventory.StockLocations` plus `StockMovement.LocationId`. Unsold stock returns every
+  evening, and a shortfall is **shown to the admin, never auto-adjusted** — that reconciliation is what
+  catches a sale nobody recorded.
+- **Both the admin and the salesperson record the van load** (corrected 2026-09-16; the original answer was
+  admin-only). This is how the business already works: the packing book records what was packed, say 500, and
+  the salesman takes 350 and writes that in his own book. His entry is the honest record of what left. The
+  salesperson's power over stock is deliberately narrow — the mobile request carries no location and no
+  direction, so the server can only move stock from the main warehouse onto *that phone's own van*. No
+  adjustments, no damage, no other location. A load entered from a phone carries its `DeviceId`, and the
+  admin's van screen names the phone, which is how the office is told the salesman entered it.
 - **One user account per person**, with two roles: `Admin` and `Salesperson`.
 
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.

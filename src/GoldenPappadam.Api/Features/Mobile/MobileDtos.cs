@@ -32,6 +32,20 @@ public record SnapshotProductDto(
 public record SnapshotPriceDto(Guid CustomerId, Guid ProductId, decimal UnitPrice);
 
 /// <summary>
+/// Money already received from a shop, so the salesperson can answer "when did I last collect from
+/// you?" standing in the doorway with no signal. Recent only: the phone is not an archive.
+/// </summary>
+public record SnapshotPaymentDto(
+    Guid Id,
+    Guid CustomerId,
+    DateOnly PaymentDate,
+    DateTime RecordedAt,
+    decimal Amount,
+    string Method,
+    string? Reference,
+    string? Notes);
+
+/// <summary>
 /// Everything the phone needs to work with no signal at all. A full snapshot rather than a delta:
 /// there are tens of shops and tens of products, and a delta protocol would be more moving parts
 /// than the payload is worth.
@@ -46,6 +60,7 @@ public record SnapshotDto(
     IReadOnlyList<SnapshotCustomerDto> Customers,
     IReadOnlyList<SnapshotProductDto> Products,
     IReadOnlyList<SnapshotPriceDto> Prices,
+    IReadOnlyList<SnapshotPaymentDto> Payments,
     IReadOnlyList<string> PaymentMethods);
 
 // ---------- what the phone sends back ----------
@@ -84,6 +99,34 @@ public record MobileVisitRequest(
     Guid? PaymentClientRequestId,
     [MaxLength(300)] string? Notes);
 
+public record MobileVanLoadLineRequest(
+    [Required] Guid ProductId,
+    [Range(typeof(decimal), "0.001", "79228162514264337593543950335")] decimal Quantity);
+
+/// <summary>
+/// What the salesperson actually took from the warehouse this morning.
+///
+/// Deliberately carries no location and no direction: the server puts it on the van this phone
+/// belongs to, moving from the main warehouse, and nothing else. That is the whole of the
+/// salesperson's power over stock - they cannot adjust it, write it off, or move it anywhere else.
+/// </summary>
+public record MobileVanLoadRequest(
+    [Required, MinLength(1)] List<MobileVanLoadLineRequest> Lines,
+    [MaxLength(300)] string? Notes);
+
+public record MobileStockRequestLineRequest(
+    [Required] Guid ProductId,
+    [Range(typeof(decimal), "0.001", "79228162514264337593543950335")] decimal Quantity);
+
+/// <summary>
+/// What the salesperson needs the packing unit to pack, and when. Not a customer order: nothing is
+/// billed and no stock moves.
+/// </summary>
+public record MobileStockRequestRequest(
+    DateOnly RequiredDate,
+    [Required, MinLength(1)] List<MobileStockRequestLineRequest> Lines,
+    [MaxLength(300)] string? Notes);
+
 /// <summary>
 /// One thing the salesperson did. ClientRequestId is generated on the device when they save and is
 /// never regenerated, which is what makes a retry safe.
@@ -94,7 +137,9 @@ public record SubmissionItemRequest(
     DateTime RecordedAt,
     MobileSaleRequest? Sale,
     MobilePaymentRequest? Payment,
-    MobileVisitRequest? Visit);
+    MobileVisitRequest? Visit,
+    MobileVanLoadRequest? VanLoad = null,
+    MobileStockRequestRequest? StockRequest = null);
 
 public record SubmissionBatchRequest(
     [Required] Guid DeviceId,
@@ -137,4 +182,13 @@ public record MobileDayDto(
     int SaleCount,
     int ShopsVisited,
     decimal CashCollected,
+    /// <summary>Delivered today and not settled on the spot.</summary>
+    decimal CreditSales,
+    /// <summary>Stops that bought nothing. A number the business has never been able to see.</summary>
+    int NoSaleVisits,
+    /// <summary>
+    /// What every shop owes, as at the last sync. It ignores anything still sitting in the outbox,
+    /// because until the office has it the official answer has not changed.
+    /// </summary>
+    decimal TotalOutstanding,
     IReadOnlyList<MobileDaySaleDto> Sales);
