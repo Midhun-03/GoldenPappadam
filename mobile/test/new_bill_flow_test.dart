@@ -6,16 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golden_pappadam_sales/app.dart';
+import 'package:golden_pappadam_sales/core/money.dart';
 import 'package:golden_pappadam_sales/data/local/database.dart';
 import 'package:golden_pappadam_sales/data/sales_repository.dart';
 import 'package:golden_pappadam_sales/features/sale/sale_screen.dart';
-import 'package:golden_pappadam_sales/features/shops/shop_picker_screen.dart';
 
-/// Home to a saved bill, driven through the real widgets.
-///
-/// The sale itself still goes through the same repository and the same outbox as the shop page, so
-/// what is worth proving here is the new route to it: the button opens the shop picker, the picker
-/// hands a shop to the existing sale screen, and the search finds the right one.
+/// One page, like the admin's: a searchable shop dropdown, a card of product lines, the total at the
+/// bottom. The sale then goes through the same repository and outbox as ever.
 void main() {
   late AppDatabase db;
 
@@ -56,48 +53,8 @@ void main() {
         child: MaterialApp(home: child),
       );
 
-  testWidgets('the shop picker lists shops and hands one back', (tester) async {
-    CachedCustomer? picked;
-
-    await tester.pumpWidget(wrap(
-      Builder(
-        builder: (context) => ElevatedButton(
-          onPressed: () async {
-            picked = await Navigator.of(context).push<CachedCustomer>(
-              MaterialPageRoute(builder: (_) => const ShopPickerScreen()),
-            );
-          },
-          child: const Text('open'),
-        ),
-      ),
-    ));
-
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Which shop?'), findsOneWidget);
-    expect(find.text('Kumar Stores'), findsOneWidget);
-    expect(find.text('Anand Bakery'), findsOneWidget);
-
-    await tester.tap(find.text('Kumar Stores'));
-    await tester.pumpAndSettle();
-
-    expect(picked?.id, 'shop-1');
-  });
-
-  testWidgets('the picker searches by name', (tester) async {
-    await tester.pumpWidget(wrap(const ShopPickerScreen()));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, 'anand');
-    await tester.pumpAndSettle();
-
-    expect(find.text('Anand Bakery'), findsOneWidget);
-    expect(find.text('Kumar Stores'), findsNothing);
-  });
-
-  /// Pushes the sale screen the way the app does, so popping after a save has somewhere to go.
-  Future<void> openBill(WidgetTester tester, CachedCustomer shop) async {
+  /// Pushes the bill page the way Home does, so popping after a save has somewhere to go.
+  Future<void> openBill(WidgetTester tester, {CachedCustomer? shop}) async {
     await tester.pumpWidget(wrap(
       Builder(
         builder: (context) => Scaffold(
@@ -117,51 +74,115 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Finder dropdown<T>(int index) => find.byType(DropdownMenu<T>).at(index);
+
+  Finder fieldOf(Finder dropdown) =>
+      find.descendant(of: dropdown, matching: find.byType(TextField));
+
+  /// Types into a searchable dropdown and taps the entry, as a salesperson would.
+  Future<void> choose(WidgetTester tester, Finder field, String typed, String entry) async {
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    await tester.enterText(fieldOf(field), typed);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(entry).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> chooseShop(WidgetTester tester) =>
+      choose(tester, dropdown<CachedCustomer>(0), 'kum', 'Kumar Stores');
+
+  Future<void> chooseProduct(WidgetTester tester, int line, String name) =>
+      choose(tester, dropdown<String>(line), name.substring(0, 2), name);
+
   /// The sheet's own Save, not the one on the total bar behind it.
   Finder sheetButton(String label) => find.descendant(
         of: find.byType(BottomSheet),
         matching: find.widgetWithText(FilledButton, label),
       );
 
-  Future<void> addPacket(WidgetTester tester) async {
+  Finder saveBar() => find.widgetWithText(FilledButton, 'Save');
+
+  testWidgets('shop, products and total are on one page', (tester) async {
+    await openBill(tester);
+
+    expect(find.text('New bill'), findsOneWidget);
+    expect(find.text('Products'), findsOneWidget);
+    expect(find.text('Total'), findsOneWidget);
+
+    // Nothing can be saved until there is a shop and something on the bill.
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNull);
+  });
+
+  testWidgets('the shop dropdown filters as you type', (tester) async {
+    await openBill(tester);
+
+    await tester.tap(dropdown<CachedCustomer>(0));
+    await tester.pumpAndSettle();
+    await tester.enterText(fieldOf(dropdown<CachedCustomer>(0)), 'anand');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Anand Bakery'), findsWidgets);
+    expect(find.text('Kumar Stores'), findsNothing);
+  });
+
+  testWidgets('a shop can be found by its phone number', (tester) async {
+    await openBill(tester);
+
+    await choose(tester, dropdown<CachedCustomer>(0), '98470', 'Kumar Stores');
+
+    expect(find.textContaining('This shop already owes'), findsOneWidget);
+  });
+
+  testWidgets('choosing a product fills quantity 1 and totals at the shop price', (tester) async {
+    await openBill(tester);
+    await chooseShop(tester);
+    await chooseProduct(tester, 0, '20 piece packet');
+
+    final quantity = find.byKey(const ValueKey('qty-0'));
+    expect(tester.widget<TextField>(quantity).controller!.text, '1');
+
+    // Line total and the bar's total: the shop's agreed 35, not the product's 45.
+    expect(find.text(money(35)), findsNWidgets(2));
+
+    await tester.enterText(quantity, '3');
+    await tester.pumpAndSettle();
+
+    expect(find.text(money(105)), findsNWidgets(2));
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNotNull);
+  });
+
+  testWidgets('a product on one line is not offered on another', (tester) async {
+    await openBill(tester);
+    await chooseShop(tester);
+    await chooseProduct(tester, 0, '20 piece packet');
+
     await tester.tap(find.text('Add product'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('20 piece packet').last);
+
+    final second = tester.widget<DropdownMenu<String>>(dropdown<String>(1));
+    expect(second.dropdownMenuEntries.map((e) => e.value), ['p2']);
+  });
+
+  testWidgets('opened from a shop page, the shop is already chosen', (tester) async {
+    final shop = await db.findCustomer('shop-1');
+    await openBill(tester, shop: shop);
+
+    expect(tester.widget<TextField>(fieldOf(dropdown<CachedCustomer>(0))).controller!.text,
+        'Kumar Stores');
+    expect(find.byType(DropdownMenu<String>), findsOneWidget);
+  });
+
+  Future<void> billOnePacket(WidgetTester tester) async {
+    await openBill(tester);
+    await chooseShop(tester);
+    await chooseProduct(tester, 0, '20 piece packet');
+    await tester.tap(saveBar());
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the sale screen offers only products this shop has a price for', (tester) async {
-    final shop = await db.findCustomer('shop-1');
-    await openBill(tester, shop!);
-
-    await tester.tap(find.text('Add product'));
-    await tester.pumpAndSettle();
-
-    // p1 has an agreed price for this shop; p2 has only a product price, so it is sellable too.
-    expect(find.text('20 piece packet'), findsOneWidget);
-    expect(find.text('6 piece packet'), findsOneWidget);
-  });
-
-  testWidgets('picking the same product twice keeps one line', (tester) async {
-    final shop = await db.findCustomer('shop-1');
-    await openBill(tester, shop!);
-
-    await addPacket(tester);
-    await addPacket(tester);
-
-    // One line, quantity two - not two lines for the same packet.
-    expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('₹70.00'), findsWidgets);
-  });
-
   testWidgets('a bill saved on credit lands in the outbox and nowhere else', (tester) async {
-    final shop = await db.findCustomer('shop-1');
-    await openBill(tester, shop!);
-    await addPacket(tester);
-
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-
+    await billOnePacket(tester);
     await tester.tap(find.text('On credit'));
     await tester.pumpAndSettle();
 
@@ -176,16 +197,14 @@ void main() {
     final sale = entries.firstWhere((e) => e.type == 'Invoice');
     final line = ((jsonDecode(sale.payload)['sale']['lines']) as List).single;
     expect(line['unitPrice'], 35.0);
+
+    // Saving goes back to where the bill was opened from.
+    expect(find.text('open bill'), findsOneWidget);
   });
 
   testWidgets('a bill paid on the spot records the money too', (tester) async {
-    final shop = await db.findCustomer('shop-1');
-    await openBill(tester, shop!);
-    await addPacket(tester);
-
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Paid ₹35.00 now'));
+    await billOnePacket(tester);
+    await tester.tap(find.textContaining('now'));
     await tester.pumpAndSettle();
 
     final entries = await db.select(db.outboxEntries).get();
@@ -195,12 +214,7 @@ void main() {
   });
 
   testWidgets('part payment records what was actually handed over', (tester) async {
-    final shop = await db.findCustomer('shop-1');
-    await openBill(tester, shop!);
-    await addPacket(tester);
-
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
+    await billOnePacket(tester);
     await tester.tap(find.text('Paid part of it'));
     await tester.pumpAndSettle();
 
@@ -219,24 +233,11 @@ void main() {
   });
 
   testWidgets('every bill gets its own client request id', (tester) async {
-    final shop = await db.findCustomer('shop-1');
-
-    await openBill(tester, shop!);
-
-    Future<void> writeOne() async {
-      await addPacket(tester);
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
+    for (var i = 0; i < 2; i++) {
+      await billOnePacket(tester);
       await tester.tap(find.text('On credit'));
       await tester.pumpAndSettle();
-
-      // Saving pops back to the host screen, exactly as it does in the app.
-      await tester.tap(find.text('open bill'));
-      await tester.pumpAndSettle();
     }
-
-    await writeOne();
-    await writeOne();
 
     final ids = (await db.select(db.outboxEntries).get()).map((e) => e.clientRequestId).toSet();
 

@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../core/money.dart';
-import '../../data/local/database.dart';
 import '../sale/sale_screen.dart';
-import '../shops/shop_picker_screen.dart';
 import '../sync/sync_views.dart';
 
 /// The salesperson's own day, at a glance.
@@ -45,18 +43,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     await _load();
   }
 
-  /// Home -> shop -> products -> payment -> save, with no detour through the shop list. The rest
-  /// of the flow is the existing one: the same sale screen the shop page opens, so there is one
-  /// way a bill is written and one place it can go wrong.
+  /// Home -> the bill page, where the shop is chosen alongside the products. It is the same
+  /// screen a shop's page opens, so there is one way a bill is written.
   Future<void> _newBill() async {
-    final shop = await Navigator.of(context).push<CachedCustomer>(
-      MaterialPageRoute(builder: (_) => const ShopPickerScreen()),
-    );
-
-    if (shop == null || !mounted) return;
-
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => SaleScreen(shop: shop)),
+      MaterialPageRoute<void>(builder: (_) => const SaleScreen()),
     );
 
     // A saved bill changes today's figures and the pending count.
