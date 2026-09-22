@@ -445,8 +445,14 @@ the current LAN address added there. When the API is served over HTTPS, both fil
 
 **"The phone is not syncing" checklist** (2026-09-22, every cause seen so far):
 
-1. `netstat -ano | findstr :5207` must show `0.0.0.0:5207`. `127.0.0.1:5207` means the API was started with
-   the `http` profile — in Visual Studio pick **lan** in the launch-profile dropdown before pressing F5.
+1. `netstat -ano | findstr :5207` must show `0.0.0.0:5207`. Since 2026-09-22 the `http` and `https` launch
+   profiles bind `0.0.0.0:5207` too, so plain F5 works for the phone; `127.0.0.1:5207` means an old build or
+   a profile edited back to `localhost`.
+0. **McAfee Firewall is installed on the owner's laptop and overrides Windows Firewall.** A Windows allow-rule
+   for `goldenpappadam.api.exe` does nothing while McAfee is active. On an untrusted Wi-Fi it drops the
+   phone's connections: the PC reaches `http://<lan-ip>:5207` fine, the phone gets nothing. Allow TCP 5207
+   (or the exe) inside McAfee's firewall settings. Test from the phone itself with
+   `adb shell curl -s -o /dev/null -w '%{http_code}' http://<lan-ip>:5207/openapi/v1.json` — 200 means open.
 2. `ipconfig` → the Wi-Fi IPv4 address must match the app's `API_BASE_URL`. Ask the router for a DHCP
    reservation for the laptop so it stops changing.
 3. The phone must be on the same Wi-Fi as the laptop.
