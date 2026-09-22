@@ -220,7 +220,7 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-09-15_
+_Last updated: 2026-09-22_
 
 **Phase 1 is complete. Phase 3 is in progress** — a Flutter salesperson app that works offline and
 synchronizes with this API, designed in `docs/03-field-sales-design.md` (approved 2026-09-15).
@@ -309,6 +309,18 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   two readings of the same data: what to pack, added up per product per day, and the individual requests
   behind it. `/api/mobile/day` is cached on the phone at each sync, so the home screen shows the office's
   figures with the pending count beside them rather than a confident total that quietly omits unsent work.
+- **Customer branches done (2026-09-22):** a customer can be a parent company with several physical
+  shops, e.g. Danya Supermarket with Kundara and Coimbatore branches. `sales.CustomerBranches` (+
+  `Customers.HasMultipleBranches`) and `Invoices.BranchId`, admin-only, deactivated rather than
+  deleted so a closed branch's old bills still show it. Pricing is never duplicated per branch -
+  `CustomerPrices` stays keyed on the parent customer, so every branch inherits the one agreed
+  price. Admin New Bill shows a required branch picker only for a multi-branch customer, clearing
+  it the moment the customer changes. Shipped end-to-end, including the phone: the snapshot now
+  carries each customer's `hasMultipleBranches` flag and its active branches, `MobileSaleRequest`
+  gained an optional `BranchId`, and the sale screen shows the same required picker the admin panel
+  does, right after the shop is chosen. 8 new C# tests plus 4 `MobileContractTests`, 6 new Dart
+  tests (`new_bill_flow_test`, `sales_repository_test`, `sync_engine_test`). Drift schema bumped to
+  v3 (`Branches` table, `Customers.hasMultipleBranches` column).
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
@@ -425,9 +437,22 @@ flutter run
 flutter run --dart-define=API_BASE_URL=http://192.168.1.5:5207
 ```
 
-Android blocks plain HTTP by default, so `android/app/src/main/res/xml/network_security_config.xml` permits
-it for `10.0.2.2` and `localhost` only. **Add the LAN address there too**, or the phone fails to connect with
-no useful error. When the API is served over HTTPS, that file can go.
+Android blocks plain HTTP by default. **Debug builds** (`flutter run`, debug APKs) allow it to any address
+through `android/app/src/debug/res/xml/network_security_config.xml`, because the router keeps moving the
+laptop's address (192.168.1.2 → .8 → .3) and an exact list failed silently every time it did. **Release
+builds** still use the strict list in `src/main/res/xml/network_security_config.xml`, so a release APK needs
+the current LAN address added there. When the API is served over HTTPS, both files can go.
+
+**"The phone is not syncing" checklist** (2026-09-22, every cause seen so far):
+
+1. `netstat -ano | findstr :5207` must show `0.0.0.0:5207`. `127.0.0.1:5207` means the API was started with
+   the `http` profile — in Visual Studio pick **lan** in the launch-profile dropdown before pressing F5.
+2. `ipconfig` → the Wi-Fi IPv4 address must match the app's `API_BASE_URL`. Ask the router for a DHCP
+   reservation for the laptop so it stops changing.
+3. The phone must be on the same Wi-Fi as the laptop.
+4. The firewall rule for `goldenpappadam.api.exe` must cover the network's profile (Public or Private).
+5. `fieldsales.Devices.LastSeenAt` shows when the phone last reached the server, which tells you whether
+   the phone never arrived or arrived and was refused.
 
 The phone needs a **Salesperson** account, created by an admin from the users screen. It cannot use an admin
 account's password to reach anything except its own endpoints, which is the point.

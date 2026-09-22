@@ -21,6 +21,8 @@ mono_crash.*
 
 # Build results
 [Dd]ebug/
+# ...but not the Android debug source set, which holds real source (manifest, network config).
+!mobile/android/app/src/debug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/

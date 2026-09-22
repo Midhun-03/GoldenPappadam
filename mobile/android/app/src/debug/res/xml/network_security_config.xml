@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only. Replaces src/main's version of this file, which lists exact addresses.
+
+  The office laptop gets its address from the router, and the router hands out a different one
+  from time to time (it moved from 192.168.1.2 to 192.168.1.3). With an exact list, every move
+  made the phone fail to reach the API with no error on screen - Android simply refuses plain
+  HTTP to an address it was not told about. A debug build therefore allows plain HTTP anywhere,
+  so only API_BASE_URL has to follow the laptop.
+
+  Release builds keep the strict list in src/main. Once the API is served over HTTPS, both files
+  can go.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
