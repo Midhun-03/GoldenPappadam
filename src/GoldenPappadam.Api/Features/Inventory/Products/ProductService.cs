@@ -1,5 +1,6 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Domain.Inventory;
+using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +22,7 @@ public class ProductService(AppDbContext db)
 
         // A brand new product cannot be part of a cycle, because nothing can point at it yet.
         var (sourceProductId, sourceQuantityPerPack) = await ResolveSourceAsync(Guid.Empty, request, ct);
+        var tax = ResolveTax(request);
 
         var product = new Product
         {
@@ -32,7 +34,10 @@ public class ProductService(AppDbContext db)
             SellingPrice = request.SellingPrice,
             LowStockThreshold = request.LowStockThreshold,
             SourceProductId = sourceProductId,
-            SourceQuantityPerPack = sourceQuantityPerPack
+            SourceQuantityPerPack = sourceQuantityPerPack,
+            HsnCode = tax.HsnCode,
+            TaxTreatment = tax.Treatment,
+            GstRate = tax.GstRate
         };
 
         db.Products.Add(product);
@@ -66,6 +71,7 @@ public class ProductService(AppDbContext db)
         // never leaves a half-changed product behind in the change tracker.
         var (sourceProductId, sourceQuantityPerPack) = await ResolveSourceAsync(product.Id, request, ct);
         await EnsureNoCycleAsync(product.Id, sourceProductId, ct);
+        var tax = ResolveTax(request);
 
         product.ProductCode = request.ProductCode.Trim();
         product.Name = request.Name.Trim();
@@ -75,6 +81,11 @@ public class ProductService(AppDbContext db)
         product.LowStockThreshold = request.LowStockThreshold;
         product.SourceProductId = sourceProductId;
         product.SourceQuantityPerPack = sourceQuantityPerPack;
+
+        // A new rate applies from the next bill. Invoices already made keep the tax they printed.
+        product.HsnCode = tax.HsnCode;
+        product.TaxTreatment = tax.Treatment;
+        product.GstRate = tax.GstRate;
 
         await db.SaveChangesAsync(ct);
 
@@ -95,6 +106,32 @@ public class ProductService(AppDbContext db)
         await db.SaveChangesAsync(ct);
 
         return product;
+    }
+
+    /// <summary>
+    /// The tax fields as they will be stored. Which treatment and rate are right is the accountant's
+    /// decision; this only makes sure the three fields make sense together.
+    /// </summary>
+    private static (string? HsnCode, TaxTreatment? Treatment, decimal? GstRate) ResolveTax(SaveProductRequest request)
+    {
+        var hsn = string.IsNullOrWhiteSpace(request.HsnCode) ? null : request.HsnCode.Trim();
+
+        if (hsn is not null && !(hsn.Length is 4 or 6 or 8 && hsn.All(char.IsAsciiDigit)))
+        {
+            throw new DomainException("An HSN code is 4, 6 or 8 digits.");
+        }
+
+        if (request.TaxTreatment != TaxTreatment.Taxable)
+        {
+            return (hsn, request.TaxTreatment, null);
+        }
+
+        if (request.GstRate is not (> 0m and <= 100m))
+        {
+            throw new DomainException("A taxable product needs its GST rate, as a percentage above zero.");
+        }
+
+        return (hsn, TaxTreatment.Taxable, request.GstRate);
     }
 
     /// <summary>Works out the source fields for a request without touching the entity.</summary>

@@ -32,5 +32,8 @@ public static class CustomerQueries
             db.CustomerBranches.Count(b => b.CustomerId == c.Id && b.IsActive),
             db.Users.Where(u => u.Id == c.CreatedBy).Select(u => u.FullName).FirstOrDefault(),
             db.UserRoles.Any(ur =>
-                ur.UserId == c.CreatedBy && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson))));
+                ur.UserId == c.CreatedBy && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson)),
+            c.Email,
+            c.Gstin,
+            c.StateCode));
 }

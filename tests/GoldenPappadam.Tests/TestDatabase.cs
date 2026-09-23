@@ -21,15 +21,47 @@ public sealed class TestDatabase : IAsyncDisposable
     /// </summary>
     public TestCurrentUser CurrentUser { get; } = new();
 
+    private readonly DbContextOptions<AppDbContext> _options;
+
     public TestDatabase()
     {
         var name = $"GoldenPappadam_Tests_{Guid.NewGuid():N}";
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        var options = _options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlServer($"Server=.\\SQLEXPRESS;Database={name};Trusted_Connection=True;TrustServerCertificate=True")
             .Options;
 
         Db = new AppDbContext(options, CurrentUser);
         Db.Database.EnsureCreated();
+    }
+
+    /// <summary>
+    /// Another connection to the same database, the way a second device's request would arrive.
+    /// Concurrency tests give each simulated device its own.
+    /// </summary>
+    public AppDbContext NewContext() => new(_options, CurrentUser);
+
+    /// <summary>Switches GST on (or off, with a null GSTIN) the way the settings screen does.</summary>
+    public async Task ConfigureGstAsync(
+        string? gstin = "32AAAAA1234A1Z5",
+        bool pricesIncludeTax = false,
+        bool roundToNearestRupee = false,
+        string seriesCode = "GP")
+    {
+        var settings = await Db.InvoiceSettings.SingleAsync(s => s.Id == InvoiceSettings.SingletonId);
+        settings.Gstin = gstin;
+        settings.PricesIncludeTax = pricesIncludeTax;
+        settings.RoundToNearestRupee = roundToNearestRupee;
+        settings.SeriesCode = seriesCode;
+        await Db.SaveChangesAsync();
+    }
+
+    public async Task SetTaxAsync(Guid productId, TaxTreatment treatment, decimal? gstRate = null, string? hsn = "19059040")
+    {
+        var product = await Db.Products.SingleAsync(p => p.Id == productId);
+        product.TaxTreatment = treatment;
+        product.GstRate = gstRate;
+        product.HsnCode = hsn;
+        await Db.SaveChangesAsync();
     }
 
     /// <summary>Category, unit, a loose product and a packet packed from it.</summary>

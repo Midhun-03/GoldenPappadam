@@ -1,5 +1,8 @@
 export type ProductKind = 'Loose' | 'Packed'
 
+/** How GST applies to a product. Null on a product means nobody has decided yet. */
+export type TaxTreatment = 'Taxable' | 'NilRated' | 'Exempt' | 'NonGst'
+
 export type StockMovementType =
   | 'Opening'
   | 'Production'
@@ -67,6 +70,10 @@ export type Product = {
   sellingPrice: number | null
   lowStockThreshold: number | null
   isActive: boolean
+  hsnCode: string | null
+  taxTreatment: TaxTreatment | null
+  /** Full GST rate in percent; only for a taxable product. */
+  gstRate: number | null
 }
 
 export type SaveProduct = {
@@ -79,6 +86,9 @@ export type SaveProduct = {
   sourceQuantityPerPack: number | null
   sellingPrice: number | null
   lowStockThreshold: number | null
+  hsnCode: string | null
+  taxTreatment: TaxTreatment | null
+  gstRate: number | null
 }
 
 export type StockOnHand = {
@@ -165,6 +175,10 @@ export type Customer = {
   createdByName: string | null
   /** A salesperson found this shop and added it from the phone. */
   addedBySalesperson: boolean
+  email: string | null
+  gstin: string | null
+  /** GST state code, "32" for Kerala. */
+  stateCode: string | null
 }
 
 /**
@@ -193,6 +207,9 @@ export type SaveCustomer = {
   openingBalance: number
   notes: string | null
   hasMultipleBranches: boolean
+  email: string | null
+  gstin: string | null
+  stateCode: string | null
 }
 
 /** One physical shop under a multi-branch customer, e.g. "Kundara" under Danya Supermarket. */
@@ -205,6 +222,8 @@ export type CustomerBranch = {
   phone: string | null
   contactPerson: string | null
   isActive: boolean
+  gstin: string | null
+  stateCode: string | null
 }
 
 export type SaveCustomerBranch = {
@@ -213,6 +232,8 @@ export type SaveCustomerBranch = {
   address: string | null
   phone: string | null
   contactPerson: string | null
+  gstin: string | null
+  stateCode: string | null
 }
 
 export type LedgerEntry = {
@@ -235,14 +256,31 @@ export type OutstandingInvoice = {
   outstanding: number
 }
 
+/** What the printed document is called: decided by GST law, not chosen. */
+export type InvoiceDocumentType = 'Invoice' | 'TaxInvoice' | 'BillOfSupply'
+
+export type InvoiceEmailStatus = 'Sent' | 'Failed'
+
 export type InvoiceLine = {
   id: string
   productId: string
   description: string
   unitCode: string
+  hsnCode: string | null
   quantity: number
   unitPrice: number
+  /** Quantity × rate, before discount. */
   lineTotal: number
+  discountAmount: number
+  taxTreatment: TaxTreatment | null
+  gstRate: number
+  taxableValue: number
+  cgstAmount: number
+  sgstAmount: number
+  igstAmount: number
+  cessAmount: number
+  /** What the line adds to the grand total. */
+  amount: number
 }
 
 export type InvoiceListItem = {
@@ -257,16 +295,107 @@ export type InvoiceListItem = {
   totalAmount: number
   amountPaid: number
   outstanding: number
+  documentType: InvoiceDocumentType
+  hasPdf: boolean
+  lastEmailStatus: InvoiceEmailStatus | null
 }
 
-export type InvoiceDetail = InvoiceListItem & {
+/** A supplier, customer or branch exactly as printed on the invoice. */
+export type InvoiceParty = {
+  name: string
+  address: string | null
+  phone: string | null
+  gstin: string | null
+  stateCode: string | null
+}
+
+export type InvoiceDocumentInfo = {
+  fileName: string
+  sizeBytes: number
+  sha256: string
+  generatedAt: string
+}
+
+export type InvoiceTotals = {
   subTotal: number
   discountAmount: number
-  notes: string | null
-  cancelledAt: string | null
-  cancellationReason: string | null
+  taxableAmount: number
+  cgstAmount: number
+  sgstAmount: number
+  igstAmount: number
+  cessAmount: number
+  roundOff: number
+  totalAmount: number
+}
+
+export type InvoiceDetail = InvoiceListItem &
+  InvoiceTotals & {
+    seriesCode: string
+    financialYear: string
+    supplier: InvoiceParty
+    customer: InvoiceParty
+    branch: InvoiceParty | null
+    placeOfSupplyStateCode: string | null
+    isInterState: boolean
+    reverseCharge: boolean
+    pricesIncludeTax: boolean
+    notes: string | null
+    finalizedAt: string
+    finalizedByName: string | null
+    /** The phone a synced sale came from. */
+    recordedOnDevice: string | null
+    cancelledAt: string | null
+    cancelledByName: string | null
+    cancellationReason: string | null
+    /** Null until the PDF has been made. */
+    document: InvoiceDocumentInfo | null
+    customerEmail: string | null
+    lines: InvoiceLine[]
+  }
+
+/** What a bill would come to, worked out by the server exactly as it will finalize it. */
+export type InvoicePreview = InvoiceTotals & {
+  documentType: InvoiceDocumentType
+  placeOfSupplyStateCode: string | null
+  isInterState: boolean
+  pricesIncludeTax: boolean
   lines: InvoiceLine[]
 }
+
+export type InvoiceEmailLog = {
+  id: string
+  attemptedAt: string
+  recipient: string
+  subject: string
+  status: InvoiceEmailStatus
+  errorMessage: string | null
+  attemptNumber: number
+  sentByName: string | null
+}
+
+export type InvoiceSettings = {
+  legalName: string
+  address: string | null
+  phone: string | null
+  email: string | null
+  /** Null means GST is off: bills are plain invoices with no tax. */
+  gstin: string | null
+  stateCode: string
+  seriesCode: string
+  pricesIncludeTax: boolean
+  roundToNearestRupee: boolean
+  paymentTerms: string | null
+  bankDetails: string | null
+  termsAndConditions: string | null
+  gstEnabled: boolean
+  /** What the next bill dated today would be called. Shown, never reserved. */
+  nextInvoiceNumber: string
+  updatedAt: string | null
+}
+
+export type SaveInvoiceSettings = Omit<InvoiceSettings, 'gstEnabled' | 'nextInvoiceNumber' | 'updatedAt'>
+
+export type IndianState = { code: string; name: string }
 
 export type CreateInvoiceResponse = {
   invoice: InvoiceDetail

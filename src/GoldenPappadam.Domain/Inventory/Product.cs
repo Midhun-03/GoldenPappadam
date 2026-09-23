@@ -1,4 +1,5 @@
 using GoldenPappadam.Domain.Common;
+using GoldenPappadam.Domain.Sales;
 
 namespace GoldenPappadam.Domain.Inventory;
 
@@ -40,6 +41,18 @@ public class Product : AuditableEntity
 
     /// <summary>Null means no low-stock alert for this product.</summary>
     public decimal? LowStockThreshold { get; set; }
+
+    /// <summary>HSN code printed on GST invoices, 4 to 8 digits. Confirmed by the accountant.</summary>
+    public string? HsnCode { get; set; }
+
+    /// <summary>
+    /// Null until someone decides. Harmless while the business has no GSTIN on file; once it has
+    /// one, a product with no treatment cannot be billed, because guessing a tax is worse than asking.
+    /// </summary>
+    public TaxTreatment? TaxTreatment { get; set; }
+
+    /// <summary>The full GST rate in percent (5 means CGST 2.5 + SGST 2.5, or IGST 5). Taxable products only.</summary>
+    public decimal? GstRate { get; set; }
 
     public bool IsActive { get; set; } = true;
 }

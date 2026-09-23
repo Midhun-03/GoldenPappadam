@@ -12,7 +12,11 @@ using GoldenPappadam.Api.Features.Sales.CustomerBranches;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
+using GoldenPappadam.Api.Features.Sales.Invoices.Documents;
 using GoldenPappadam.Api.Features.Sales.Payments;
+using GoldenPappadam.Api.Features.Sales.Settings;
+using GoldenPappadam.Infrastructure.Documents;
+using GoldenPappadam.Infrastructure.Email;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -104,6 +108,26 @@ builder.Services.AddScoped<VanLoadService>();
 builder.Services.AddScoped<MobileSyncService>();
 builder.Services.AddScoped<FieldSalesDayService>();
 builder.Services.AddScoped<StockRequestService>();
+builder.Services.AddScoped<InvoiceSettingsService>();
+builder.Services.AddScoped<InvoiceDocumentService>();
+builder.Services.AddScoped<InvoiceEmailService>();
+
+// Invoice PDFs go through an abstraction, so moving them to Supabase Storage (or any object store)
+// later is one registration here. Relative paths resolve against the app, never a fixed drive.
+builder.Services.AddSingleton<IInvoiceDocumentStorage>(new LocalInvoiceDocumentStorage(
+    Path.Combine(
+        builder.Environment.ContentRootPath,
+        builder.Configuration["InvoiceDocuments:LocalRootPath"] ?? "App_Data/invoice-documents")));
+
+// Mail settings come from configuration; the password from user-secrets or Email__Password, never Git.
+var emailOptions = builder.Configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>() ?? new EmailOptions();
+builder.Services.AddSingleton<IEmailSender>(emailOptions.Provider switch
+{
+    EmailProvider.Smtp => new SmtpEmailSender(emailOptions),
+    EmailProvider.Pickup => new PickupDirectoryEmailSender(
+        Path.Combine(builder.Environment.ContentRootPath, emailOptions.PickupDirectory), emailOptions),
+    _ => new UnconfiguredEmailSender()
+});
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));

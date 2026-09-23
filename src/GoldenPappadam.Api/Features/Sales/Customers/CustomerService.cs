@@ -1,4 +1,6 @@
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Api.Features.Sales.Settings;
+using GoldenPappadam.Domain.Common;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +16,7 @@ public class CustomerService(AppDbContext db)
     public async Task<Customer> CreateAsync(SaveCustomerRequest request, CancellationToken ct, Guid? id = null)
     {
         await EnsureNameIsFreeAsync(request.Name, null, ct);
+        var (gstin, stateCode) = ResolveTaxIdentity(request);
 
         var customer = new Customer
         {
@@ -24,7 +27,10 @@ public class CustomerService(AppDbContext db)
             Address = Clean(request.Address),
             OpeningBalance = request.OpeningBalance,
             Notes = Clean(request.Notes),
-            HasMultipleBranches = request.HasMultipleBranches
+            HasMultipleBranches = request.HasMultipleBranches,
+            Email = Clean(request.Email),
+            Gstin = gstin,
+            StateCode = stateCode
         };
 
         db.Customers.Add(customer);
@@ -39,6 +45,7 @@ public class CustomerService(AppDbContext db)
                        ?? throw new NotFoundException("Customer");
 
         await EnsureNameIsFreeAsync(request.Name, id, ct);
+        var (gstin, stateCode) = ResolveTaxIdentity(request);
 
         if (customer.OpeningBalance != request.OpeningBalance &&
             await db.Invoices.AnyAsync(i => i.CustomerId == id, ct))
@@ -62,6 +69,9 @@ public class CustomerService(AppDbContext db)
         customer.OpeningBalance = request.OpeningBalance;
         customer.Notes = Clean(request.Notes);
         customer.HasMultipleBranches = request.HasMultipleBranches;
+        customer.Email = Clean(request.Email);
+        customer.Gstin = gstin;
+        customer.StateCode = stateCode;
 
         await db.SaveChangesAsync(ct);
 
@@ -179,5 +189,24 @@ public class CustomerService(AppDbContext db)
         {
             throw new DomainException($"A customer named '{trimmed}' already exists.");
         }
+    }
+
+    /// <summary>
+    /// A GSTIN carries its state in its first two digits, so a registered shop with no state picked
+    /// gets it from the GSTIN, and one whose picked state disagrees is refused.
+    /// </summary>
+    private static (string? Gstin, string? StateCode) ResolveTaxIdentity(SaveCustomerRequest request)
+    {
+        var gstin = Gstin.Normalise(request.Gstin);
+        var stateCode = Clean(request.StateCode);
+
+        if (stateCode is not null && !IndianStates.IsValid(stateCode))
+        {
+            throw new DomainException($"'{stateCode}' is not a GST state code.");
+        }
+
+        InvoiceSettingsService.EnsureGstinMatchesState(gstin, stateCode, request.Name.Trim());
+
+        return (gstin, stateCode ?? (gstin is null ? null : Gstin.StateCodeOf(gstin)));
     }
 }

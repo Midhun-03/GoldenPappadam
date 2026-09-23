@@ -14,6 +14,9 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(x => x.ContactPerson).HasMaxLength(100);
         builder.Property(x => x.Phone).HasMaxLength(20);
         builder.Property(x => x.Address).HasMaxLength(300);
+        builder.Property(x => x.Email).HasMaxLength(256);
+        builder.Property(x => x.Gstin).HasMaxLength(15);
+        builder.Property(x => x.StateCode).HasMaxLength(2);
         builder.Property(x => x.Notes).HasMaxLength(300);
         builder.Property(x => x.OpeningBalance).HasPrecision(18, 2);
         builder.Property(x => x.HasMultipleBranches).HasDefaultValue(false);

@@ -13,6 +13,18 @@ public class Customer : AuditableEntity
 
     public string? Address { get; set; }
 
+    /// <summary>Where invoices are emailed.</summary>
+    public string? Email { get; set; }
+
+    /// <summary>Set for a GST-registered shop; printed on its invoices.</summary>
+    public string? Gstin { get; set; }
+
+    /// <summary>
+    /// GST state code ("32" for Kerala). For a single-location customer this is the place of
+    /// supply, which decides between CGST + SGST and IGST.
+    /// </summary>
+    public string? StateCode { get; set; }
+
     /// <summary>
     /// What this customer already owed when the system started being used.
     /// Zero for customers added later.

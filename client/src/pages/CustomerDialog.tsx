@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { customersApi } from '@/api/sales'
 import type { Customer, SaveCustomer } from '@/api/types'
+import { StateSelect } from '@/components/StateSelect'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -28,6 +29,9 @@ const empty = {
   openingBalance: '',
   notes: '',
   hasMultipleBranches: false,
+  email: '',
+  gstin: '',
+  stateCode: '',
 }
 
 export function CustomerDialog({
@@ -58,6 +62,9 @@ export function CustomerDialog({
             openingBalance: customer.openingBalance ? String(customer.openingBalance) : '',
             notes: customer.notes ?? '',
             hasMultipleBranches: customer.hasMultipleBranches,
+            email: customer.email ?? '',
+            gstin: customer.gstin ?? '',
+            stateCode: customer.stateCode ?? '',
           }
         : empty,
     )
@@ -93,6 +100,9 @@ export function CustomerDialog({
       openingBalance: form.openingBalance.trim() === '' ? 0 : Number(form.openingBalance),
       notes: form.notes.trim() || null,
       hasMultipleBranches: form.hasMultipleBranches,
+      email: form.email.trim() || null,
+      gstin: form.gstin.trim().toUpperCase() || null,
+      stateCode: form.stateCode || null,
     })
   }
 
@@ -149,6 +159,46 @@ export function CustomerDialog({
               onChange={(event) => setForm({ ...form, address: event.target.value })}
             />
           </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="email">Email for invoices</Label>
+            <Input
+              id="email"
+              type="email"
+              maxLength={256}
+              placeholder="accounts@shop.com"
+              value={form.email}
+              onChange={(event) => setForm({ ...form, email: event.target.value })}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="gstin">GSTIN</Label>
+              <Input
+                id="gstin"
+                maxLength={15}
+                className="font-mono uppercase placeholder:font-sans placeholder:normal-case"
+                placeholder="If the shop is registered"
+                value={form.gstin}
+                onChange={(event) => setForm({ ...form, gstin: event.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="stateCode">State</Label>
+              <StateSelect
+                id="stateCode"
+                allowNone
+                value={form.stateCode}
+                onChange={(stateCode) => setForm({ ...form, stateCode })}
+              />
+            </div>
+          </div>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            The state is the place of supply on this shop's invoices: Kerala means CGST + SGST, any other state IGST.
+            {form.hasMultipleBranches && ' Each branch sets its own.'}
+          </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">

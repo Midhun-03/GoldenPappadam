@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { customerBranchesApi } from '@/api/sales'
 import type { CustomerBranch } from '@/api/types'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
+import { StateSelect } from '@/components/StateSelect'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -146,7 +147,7 @@ export function CustomerBranchesCard({ customerId }: { customerId: string }) {
   )
 }
 
-const emptyBranch = { name: '', location: '', address: '', phone: '', contactPerson: '' }
+const emptyBranch = { name: '', location: '', address: '', phone: '', contactPerson: '', gstin: '', stateCode: '' }
 
 function BranchDialog({
   open,
@@ -176,6 +177,8 @@ function BranchDialog({
             address: branch.address ?? '',
             phone: branch.phone ?? '',
             contactPerson: branch.contactPerson ?? '',
+            gstin: branch.gstin ?? '',
+            stateCode: branch.stateCode ?? '',
           }
         : emptyBranch,
     )
@@ -189,6 +192,8 @@ function BranchDialog({
         address: form.address.trim() || null,
         phone: form.phone.trim() || null,
         contactPerson: form.contactPerson.trim() || null,
+        gstin: form.gstin.trim().toUpperCase() || null,
+        stateCode: form.stateCode || null,
       }
 
       return branch
@@ -284,6 +289,34 @@ function BranchDialog({
                 onChange={(event) => setForm({ ...form, contactPerson: event.target.value })}
               />
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="branch-state">State</Label>
+                <StateSelect
+                  id="branch-state"
+                  allowNone
+                  value={form.stateCode}
+                  onChange={(stateCode) => setForm({ ...form, stateCode })}
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="branch-gstin">GSTIN</Label>
+                <Input
+                  id="branch-gstin"
+                  maxLength={15}
+                  className="font-mono uppercase placeholder:font-sans placeholder:normal-case"
+                  placeholder="If registered separately"
+                  value={form.gstin}
+                  onChange={(event) => setForm({ ...form, gstin: event.target.value })}
+                />
+              </div>
+            </div>
+            <p className="-mt-2 text-xs text-muted-foreground">
+              A branch bill's place of supply is the branch itself, so a Coimbatore branch is billed IGST even when
+              the head office is in Kerala.
+            </p>
 
             {error && (
               <Alert variant="destructive">

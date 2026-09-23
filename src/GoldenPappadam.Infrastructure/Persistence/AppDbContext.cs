@@ -7,6 +7,7 @@ using GoldenPappadam.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace GoldenPappadam.Infrastructure.Persistence;
 
@@ -26,6 +27,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<CustomerPriceChange> CustomerPriceChanges => Set<CustomerPriceChange>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
+    public DbSet<InvoiceSettings> InvoiceSettings => Set<InvoiceSettings>();
+    public DbSet<InvoiceNumberSequence> InvoiceNumberSequences => Set<InvoiceNumberSequence>();
+    public DbSet<InvoiceDocument> InvoiceDocuments => Set<InvoiceDocument>();
+    public DbSet<InvoiceEmailLog> InvoiceEmailLogs => Set<InvoiceEmailLog>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
 
@@ -103,6 +108,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
                             "Correct them with a new record instead.");
                     }
 
+                    if (entry.Entity is Invoice)
+                    {
+                        EnsureOnlyCancellationChanged(entry);
+                    }
+
                     auditable.UpdatedAt = now;
                     auditable.UpdatedBy = userId;
                     entry.Property(nameof(Entity.CreatedAt)).IsModified = false;
@@ -119,6 +129,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
 
                     break;
             }
+        }
+    }
+
+    /// <summary>
+    /// A finalized invoice is an accounting document. The only change it may ever receive is being
+    /// cancelled; anything else - an amount, a customer, a date - is refused here, whichever code
+    /// path tried it, rather than trusting every service to remember.
+    /// </summary>
+    private static void EnsureOnlyCancellationChanged(EntityEntry entry)
+    {
+        var changed = entry.Properties
+            .Where(p => p.IsModified && !Invoice.PropertiesEditableAfterFinalization.Contains(p.Metadata.Name))
+            .Select(p => p.Metadata.Name)
+            .ToList();
+
+        if (changed.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"A finalized invoice cannot be changed ({string.Join(", ", changed)}). " +
+                "Cancel it and issue a new one instead.");
         }
     }
 }

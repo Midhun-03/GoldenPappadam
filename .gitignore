@@ -482,3 +482,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Invoice PDFs and development mail written by the API. Business records, never source.
+App_Data/

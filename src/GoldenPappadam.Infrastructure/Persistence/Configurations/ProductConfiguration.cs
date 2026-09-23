@@ -20,6 +20,12 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             table.HasCheckConstraint(
                 "CK_Products_SourceNotSelf",
                 "[SourceProductId] IS NULL OR [SourceProductId] <> [Id]");
+
+            // A rate belongs to taxable products only; exempt and nil-rated goods carry none.
+            table.HasCheckConstraint(
+                "CK_Products_GstRate",
+                "([TaxTreatment] = 'Taxable' AND [GstRate] > 0 AND [GstRate] <= 100) " +
+                "OR (([TaxTreatment] IS NULL OR [TaxTreatment] <> 'Taxable') AND [GstRate] IS NULL)");
         });
 
         builder.Property(x => x.ProductCode).HasMaxLength(30).IsRequired();
@@ -28,6 +34,9 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.SourceQuantityPerPack).HasPrecision(18, 3);
         builder.Property(x => x.SellingPrice).HasPrecision(18, 2);
         builder.Property(x => x.LowStockThreshold).HasPrecision(18, 3);
+        builder.Property(x => x.HsnCode).HasMaxLength(8);
+        builder.Property(x => x.TaxTreatment).HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.GstRate).HasPrecision(5, 2);
 
         builder.HasIndex(x => x.ProductCode).IsUnique();
 

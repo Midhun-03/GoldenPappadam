@@ -23,5 +23,8 @@ public static class ProductQueries
             p.SourceQuantityPerPack,
             p.SellingPrice,
             p.LowStockThreshold,
-            p.IsActive));
+            p.IsActive,
+            p.HsnCode,
+            p.TaxTreatment,
+            p.GstRate));
 }

@@ -37,7 +37,7 @@ public class InvoiceServiceTests : IAsyncLifetime
                 [new InvoiceLineRequest(packet.Id, 40m, null)]),
             default);
 
-        Assert.Equal("INV-2026-00001", result.Invoice.InvoiceNumber);
+        Assert.Equal("GP/26-27/000001", result.Invoice.InvoiceNumber);
         Assert.Equal(1280m, result.Invoice.SubTotal);   // 40 × 32
         Assert.Equal(1280m, result.Invoice.TotalAmount);
         Assert.Equal(1280m, result.Invoice.Outstanding);
@@ -64,9 +64,9 @@ public class InvoiceServiceTests : IAsyncLifetime
         var april = await CreateAsync(customer.Id, packet.Id, new DateOnly(2026, 4, 1));
         var september = await CreateAsync(customer.Id, packet.Id, new DateOnly(2026, 9, 14));
 
-        Assert.Equal("INV-2025-00001", march.Invoice.InvoiceNumber);
-        Assert.Equal("INV-2026-00001", april.Invoice.InvoiceNumber);
-        Assert.Equal("INV-2026-00002", september.Invoice.InvoiceNumber);
+        Assert.Equal("GP/25-26/000001", march.Invoice.InvoiceNumber);
+        Assert.Equal("GP/26-27/000001", april.Invoice.InvoiceNumber);
+        Assert.Equal("GP/26-27/000002", september.Invoice.InvoiceNumber);
     }
 
     [Fact]

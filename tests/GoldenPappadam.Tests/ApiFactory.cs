@@ -5,7 +5,11 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using GoldenPappadam.Infrastructure.Documents;
+using GoldenPappadam.Infrastructure.Email;
 
 namespace GoldenPappadam.Tests;
 
@@ -23,10 +27,23 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private string ConnectionString =>
         $"Server=.\\SQLEXPRESS;Database={_databaseName};Trusted_Connection=True;TrustServerCertificate=True";
 
+    private readonly string _documentsPath = Path.Combine(Path.GetTempPath(), $"GoldenPappadam_Docs_{Guid.NewGuid():N}");
+
+    /// <summary>Records what the app sent, and fails on demand, so email tests need no mail server.</summary>
+    public FakeEmailSender Email { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:GoldenPappadam", ConnectionString);
+
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IInvoiceDocumentStorage>();
+            services.AddSingleton<IInvoiceDocumentStorage>(new LocalInvoiceDocumentStorage(_documentsPath));
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(Email);
+        });
     }
 
     /// <summary>
@@ -47,6 +64,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         }
 
         await base.DisposeAsync();
+
+        if (Directory.Exists(_documentsPath))
+        {
+            Directory.Delete(_documentsPath, recursive: true);
+        }
     }
 
     public async Task<ApplicationUser> CreateUserAsync(string email, string role)
@@ -100,7 +122,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await users.UpdateSecurityStampAsync(user);
     }
 
-    private AppDbContext NewContext() =>
+    public AppDbContext NewContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>().UseSqlServer(ConnectionString).Options, new NoUser());
 
     public record TokenPair(string AccessToken, string RefreshToken, long ExpiresIn);
@@ -108,5 +130,33 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private sealed class NoUser : ICurrentUser
     {
         public Guid? UserId => null;
+    }
+
+    public sealed class FakeEmailSender : IEmailSender
+    {
+        private readonly List<EmailMessage> _sent = [];
+
+        /// <summary>When set, every send fails with this reason, as an unreachable mail server would.</summary>
+        public string? FailWith { get; set; }
+
+        public IReadOnlyList<EmailMessage> Sent
+        {
+            get
+            {
+                lock (_sent) return _sent.ToList();
+            }
+        }
+
+        public Task SendAsync(EmailMessage message, CancellationToken ct)
+        {
+            if (FailWith is not null)
+            {
+                throw new EmailDeliveryException(FailWith);
+            }
+
+            lock (_sent) _sent.Add(message);
+
+            return Task.CompletedTask;
+        }
     }
 }

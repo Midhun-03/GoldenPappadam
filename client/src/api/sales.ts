@@ -6,8 +6,13 @@ import type {
   CustomerBranch,
   CustomerPrice,
   CustomerPriceChange,
+  IndianState,
   InvoiceDetail,
+  InvoiceEmailLog,
+  InvoiceEmailStatus,
   InvoiceListItem,
+  InvoicePreview,
+  InvoiceSettings,
   InvoiceStatus,
   LedgerEntry,
   OutstandingInvoice,
@@ -15,6 +20,7 @@ import type {
   PaymentMethod,
   SaveCustomer,
   SaveCustomerBranch,
+  SaveInvoiceSettings,
 } from './types'
 
 const base = '/api/sales'
@@ -78,6 +84,10 @@ export type InvoiceFilters = {
   to?: string
   status?: InvoiceStatus
   unpaidOnly?: boolean
+  /** Matches the invoice number, customer or branch as printed. */
+  search?: string
+  /** Failed finds invoices whose last email did not go. */
+  emailStatus?: InvoiceEmailStatus
 }
 
 export type CreateInvoice = {
@@ -93,7 +103,22 @@ export const invoicesApi = {
   list: (filters: InvoiceFilters = {}) => api.get<InvoiceListItem[]>(`${base}/invoices${query(filters)}`),
   get: (id: string) => api.get<InvoiceDetail>(`${base}/invoices/${id}`),
   create: (invoice: CreateInvoice) => api.post<CreateInvoiceResponse>(`${base}/invoices`, invoice),
+  /** The server's own calculation of a bill that has not been saved: agreed rates, tax, round-off. */
+  preview: (invoice: CreateInvoice) => api.post<InvoicePreview>(`${base}/invoices/preview`, invoice),
   cancel: (id: string, reason: string) => api.post<InvoiceDetail>(`${base}/invoices/${id}/cancel`, { reason }),
+  /** The stored PDF - the same file every time it is asked for. */
+  pdf: (id: string) => api.blob(`${base}/invoices/${id}/pdf`),
+  generatePdf: (id: string) => api.post<InvoiceDetail>(`${base}/invoices/${id}/pdf`),
+  /** Leave the recipient empty to use the customer's address. A failed send comes back as a Failed attempt. */
+  email: (id: string, recipient?: string) =>
+    api.post<InvoiceEmailLog>(`${base}/invoices/${id}/email`, { recipient: recipient || null }),
+  emails: (id: string) => api.get<InvoiceEmailLog[]>(`${base}/invoices/${id}/emails`),
+}
+
+export const invoiceSettingsApi = {
+  get: () => api.get<InvoiceSettings>(`${base}/invoice-settings`),
+  save: (settings: SaveInvoiceSettings) => api.put<InvoiceSettings>(`${base}/invoice-settings`, settings),
+  states: () => api.get<IndianState[]>(`${base}/states`),
 }
 
 export type CreatePayment = {

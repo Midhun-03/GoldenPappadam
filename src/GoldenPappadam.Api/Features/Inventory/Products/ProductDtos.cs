@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GoldenPappadam.Domain.Inventory;
+using GoldenPappadam.Domain.Sales;
 
 namespace GoldenPappadam.Api.Features.Inventory.Products;
 
@@ -17,10 +18,14 @@ public record ProductDto(
     decimal? SourceQuantityPerPack,
     decimal? SellingPrice,
     decimal? LowStockThreshold,
-    bool IsActive);
+    bool IsActive,
+    string? HsnCode,
+    TaxTreatment? TaxTreatment,
+    decimal? GstRate);
 
 /// <summary>
 /// Source fields are required for packed products and ignored for loose ones.
+/// GstRate is required for a taxable product and ignored for any other treatment.
 /// </summary>
 public record SaveProductRequest(
     [Required, MaxLength(30)] string ProductCode,
@@ -31,4 +36,7 @@ public record SaveProductRequest(
     Guid? SourceProductId,
     decimal? SourceQuantityPerPack,
     decimal? SellingPrice,
-    decimal? LowStockThreshold);
+    decimal? LowStockThreshold,
+    [MaxLength(8)] string? HsnCode = null,
+    TaxTreatment? TaxTreatment = null,
+    decimal? GstRate = null);

@@ -22,6 +22,15 @@ public class CustomerBranch : AuditableEntity
 
     public string? ContactPerson { get; set; }
 
+    /// <summary>A branch in another state is registered separately, so it has its own GSTIN.</summary>
+    public string? Gstin { get; set; }
+
+    /// <summary>
+    /// GST state code. A branch bill's place of supply is the branch, never the parent company:
+    /// Danya's Coimbatore shop is in Tamil Nadu however Kerala the head office is.
+    /// </summary>
+    public string? StateCode { get; set; }
+
     /// <summary>
     /// Deactivated rather than deleted: a closed branch's historical bills must keep showing it.
     /// </summary>

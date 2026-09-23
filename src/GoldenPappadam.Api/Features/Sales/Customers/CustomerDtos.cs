@@ -15,7 +15,10 @@ public record CustomerDto(
     bool HasMultipleBranches,
     int ActiveBranchCount,
     string? CreatedByName,
-    bool AddedBySalesperson);
+    bool AddedBySalesperson,
+    string? Email,
+    string? Gstin,
+    string? StateCode);
 
 public record SaveCustomerRequest(
     [Required, MaxLength(150)] string Name,
@@ -24,7 +27,10 @@ public record SaveCustomerRequest(
     [MaxLength(300)] string? Address,
     decimal OpeningBalance,
     [MaxLength(300)] string? Notes,
-    bool HasMultipleBranches);
+    bool HasMultipleBranches,
+    [MaxLength(256), EmailAddress] string? Email = null,
+    [MaxLength(15)] string? Gstin = null,
+    [StringLength(2, MinimumLength = 2)] string? StateCode = null);
 
 /// <summary>One row of the customer's account: what was billed, what was paid, what is left.</summary>
 public record LedgerEntryDto(

@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useDeferredValue, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { productsApi, stockApi } from '@/api/inventory'
-import { customerBranchesApi, customersApi, invoicesApi } from '@/api/sales'
+import { customerBranchesApi, customersApi, invoicesApi, type CreateInvoice } from '@/api/sales'
 import { PageHeader } from '@/components/PageHeader'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -52,34 +52,69 @@ export function NewInvoicePage() {
     setBranchId('')
   }
 
+  const discountValue = discount.trim() === '' ? 0 : Number(discount)
+  const filled = lines
+    .map((line) => ({ line, quantity: line.quantity.trim() === '' ? 0 : Number(line.quantity) }))
+    .filter((row) => row.line.productId !== '' && row.quantity > 0)
+
+  const request: CreateInvoice = {
+    customerId,
+    branchId: needsBranch ? branchId : undefined,
+    invoiceDate,
+    discountAmount: discountValue,
+    notes: notes.trim() || undefined,
+    lines: filled.map((row) => ({
+      productId: row.line.productId,
+      quantity: row.quantity,
+      unitPrice: row.line.unitPrice.trim() === '' ? undefined : Number(row.line.unitPrice),
+    })),
+  }
+
+  // The totals on this screen are the server's, worked out by the same code that finalizes the
+  // bill: the shop's agreed rate, the discount, GST and the round-off. The request is deferred so
+  // typing a quantity does not fire a request per keystroke.
+  const deferredRequest = useDeferredValue(request)
+  const previewKey = useMemo(() => JSON.stringify(deferredRequest), [deferredRequest])
+  const canPreview =
+    deferredRequest.customerId !== '' &&
+    (!needsBranch || deferredRequest.branchId !== '') &&
+    deferredRequest.lines.length > 0 &&
+    discountValue >= 0
+
+  const preview = useQuery({
+    queryKey: ['invoice-preview', previewKey],
+    queryFn: () => invoicesApi.preview(deferredRequest),
+    enabled: canPreview,
+    placeholderData: keepPreviousData,
+    retry: false,
+  })
+
+  const shown = canPreview ? preview.data : undefined
+
   const priced = lines.map((line) => {
     const product = products.data?.find((candidate) => candidate.id === line.productId)
     const quantity = line.quantity.trim() === '' ? 0 : Number(line.quantity)
-    const unitPrice = line.unitPrice.trim() !== '' ? Number(line.unitPrice) : (product?.sellingPrice ?? 0)
+    const position = filled.findIndex((row) => row.line.key === line.key)
+    const fromServer = position >= 0 ? shown?.lines[position] : undefined
+    const unitPrice =
+      line.unitPrice.trim() !== '' ? Number(line.unitPrice) : (fromServer?.unitPrice ?? product?.sellingPrice ?? 0)
 
-    return { line, product, quantity, unitPrice, total: Math.round(quantity * unitPrice * 100) / 100 }
+    return {
+      line,
+      product,
+      quantity,
+      /** The rate the server will charge when none is typed - the shop's agreed rate if it has one. */
+      rate: fromServer?.unitPrice ?? product?.sellingPrice ?? null,
+      total: fromServer ? fromServer.lineTotal : Math.round(quantity * unitPrice * 100) / 100,
+    }
   })
 
-  const subTotal = priced.reduce((sum, row) => sum + row.total, 0)
-  const discountValue = discount.trim() === '' ? 0 : Number(discount)
-  const total = subTotal - discountValue
+  const subTotal = shown?.subTotal ?? priced.reduce((sum, row) => sum + row.total, 0)
+  const total = shown?.totalAmount ?? subTotal - discountValue
+  const taxed = shown?.documentType === 'TaxInvoice'
 
   const create = useMutation({
-    mutationFn: () =>
-      invoicesApi.create({
-        customerId,
-        branchId: needsBranch ? branchId : undefined,
-        invoiceDate,
-        discountAmount: discountValue,
-        notes: notes.trim() || undefined,
-        lines: priced
-          .filter((row) => row.line.productId !== '' && row.quantity > 0)
-          .map((row) => ({
-            productId: row.line.productId,
-            quantity: row.quantity,
-            unitPrice: row.line.unitPrice.trim() === '' ? undefined : Number(row.line.unitPrice),
-          })),
-      }),
+    mutationFn: () => invoicesApi.create(request),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ['invoices'] })
       await queryClient.invalidateQueries({ queryKey: ['stock'] })
@@ -121,7 +156,7 @@ export function NewInvoicePage() {
       <PageHeader
         back={{ to: '/invoices', label: 'Bills' }}
         title="New bill"
-        description="Prices come from the product and can be changed on any line."
+        description="Each line charges the shop's agreed rate, else the product price, and can be changed."
       />
 
       <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-5">
@@ -270,7 +305,7 @@ export function NewInvoicePage() {
                           step="0.01"
                           min="0"
                           className="text-right"
-                          placeholder={row.product?.sellingPrice ? String(row.product.sellingPrice) : '0'}
+                          placeholder={row.rate !== null ? String(row.rate) : '0'}
                           value={row.line.unitPrice}
                           onChange={(event) => updateLine(row.line.key, { unitPrice: event.target.value })}
                         />
@@ -348,12 +383,55 @@ export function NewInvoicePage() {
               />
             </div>
 
+            {taxed && shown && (
+              <div className="grid gap-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taxable value</span>
+                  <span className="tabular-nums">{formatMoney(shown.taxableAmount)}</span>
+                </div>
+                {shown.isInterState ? (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">IGST</span>
+                    <span className="tabular-nums">{formatMoney(shown.igstAmount)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">CGST</span>
+                      <span className="tabular-nums">{formatMoney(shown.cgstAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">SGST</span>
+                      <span className="tabular-nums">{formatMoney(shown.sgstAmount)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {shown && shown.roundOff !== 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Round off</span>
+                <span className="tabular-nums">
+                  {shown.roundOff > 0 ? '+' : '−'} {formatMoney(Math.abs(shown.roundOff))}
+                </span>
+              </div>
+            )}
+
             <div className="mt-1 flex items-baseline justify-between border-t pt-3">
               <span className="text-sm font-medium">Total</span>
               <span className={cn('font-heading text-2xl font-semibold tabular-nums', total < 0 && 'text-destructive')}>
                 {formatMoney(total)}
               </span>
             </div>
+
+            {canPreview && preview.isError && !error && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {preview.error instanceof ApiError ? preview.error.message : 'Could not work out the bill.'}
+                </AlertDescription>
+              </Alert>
+            )}
 
             {error && (
               <Alert variant="destructive">
@@ -372,7 +450,8 @@ export function NewInvoicePage() {
             </Button>
 
             <p className="text-xs text-muted-foreground">
-              Stock comes off when the bill is saved. Short stock warns but never blocks.
+              The bill is numbered and stock comes off when it is saved; its PDF is made straight after. Short stock
+              warns but never blocks.
             </p>
           </CardContent>
         </Card>

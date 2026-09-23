@@ -86,7 +86,7 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 - **Pricing:** every product has a default selling price, overridable on a sale line. Customer-specific pricing must be addable later without redesign. Never hard-code one unchangeable price.
 - **Returns:** the design must stay return-ready (extensible movement types + the reference pattern). Do not build a returns workflow in phase 1.
 - **Discounts:** a simple bill-level discount field is enough for now; item-level discounts must remain addable later. No promotion/discount engine.
-- **Tax/GST:** the invoice structure must allow tax fields (GSTIN, HSN/SAC, tax %, tax amount, CGST/SGST/IGST) to be added later without restructuring sales. Do **not** assume sales are GST-exempt and do not implement tax logic until the accountant confirms it.
+- **Tax/GST:** the invoice structure must allow tax fields (GSTIN, HSN/SAC, tax %, tax amount, CGST/SGST/IGST) to be added later without restructuring sales. Do **not** assume sales are GST-exempt. _Superseded 2026-09-23: the owner asked for configurable GST to be built - see "Invoices and GST" below. The rates and treatments themselves are still the accountant's to confirm._
 
 ### Confirmed requirements (2026-09-15, phase 3)
 
@@ -148,9 +148,26 @@ Keep payments simple and practical — not a full enterprise accounting system. 
   rate, who changed it and when — the office's changes and the salesperson's alike. A recorded bill is still
   never re-priced; a rate change applies from the next bill.
 
+### Confirmed requirements (2026-09-23, invoices and GST)
+
+- **An invoice is an accounting document.** Once finalized it is never edited or deleted; the only change
+  allowed is cancellation, which keeps the number. `AppDbContext` enforces this for every code path.
+- **Numbers come from the database, never a device.** `GP/26-27/000125`: series, Indian financial year, six
+  digits, at most 16 characters as GST requires. Consecutive, restarting each financial year on its own.
+  Offline phones never number anything: the server numbers a sale when it syncs.
+- **The invoice keeps a snapshot** of the supplier, customer, branch, prices and tax as printed, so later
+  master-data changes never alter it.
+- **GST is configurable, never hard-coded, and off until the business GSTIN is entered.** Each product
+  carries HSN, treatment (Taxable / Exempt / Nil rated / Non-GST) and rate. Intra-state is CGST + SGST,
+  inter-state IGST, decided by the place of supply - the branch for a branch bill. Once GST is on, a product
+  with no treatment or a taxable sale with no known state is refused rather than guessed.
+- **The PDF is made once, stored, fingerprinted and never regenerated**; printing and email use that same
+  file. Storage is behind `IInvoiceDocumentStorage` so it can move to Supabase Storage.
+- **Email failure never affects the invoice.** Every attempt is logged; the office retries.
+
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
 
-The full inventory design is in `docs/01-inventory-design.md`.
+The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`.
 
 ## 5. Technology stack
 
@@ -253,7 +270,7 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-23_
 
 **Phase 1 is complete. Phase 3 is in progress** — a Flutter salesperson app that works offline and
 synchronizes with this API, designed in `docs/03-field-sales-design.md` (approved 2026-09-15).
@@ -366,6 +383,23 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   rate history on each customer's price card, and "Rates changed by the sales team" on Today on the road.
   Admin endpoints are unchanged and still admin-only. **Not yet built:** the Flutter screens for adding a
   shop, a branch and a rate - the API is ready for them.
+- **Invoice management done (2026-09-23)**, designed in `docs/04-invoice-design.md`. The bill *is* the
+  invoice: `sales.Invoices` gained its number parts, document type, a supplier/customer/branch snapshot, the
+  tax basis and GST totals; lines gained a line number, HSN, treatment, discount share and CGST/SGST/IGST.
+  New tables: `InvoiceSettings` (one row: business details, GSTIN, series, rounding), `InvoiceNumberSequences`
+  (the counters), `InvoiceDocuments` (stored PDF + SHA-256), `InvoiceEmailLogs`. Products gained HSN /
+  treatment / rate; customers email / GSTIN / state; branches GSTIN / state. Migration
+  `AddInvoiceManagement` backfilled the 14 existing bills (series `INV`, snapshot from today's customer)
+  with every total and stock figure unchanged. `GstCalculator` is the only place amounts are worked out,
+  used by `POST /api/sales/invoices/preview` (New Bill now shows the shop's agreed rate and the tax - it used
+  to show the product price), finalizing and the PDF. QuestPDF renders the PDF; MailKit sends; `IEmailSender`
+  has None / Pickup / Smtp providers. Admin: invoice history with search, status and "email failed"
+  filters and row actions; the invoice page shows PDF and email status, print, download, email and retry,
+  email history, who finalized/cancelled and from which phone; Settings has "Invoices and GST".
+  49 new tests (239 total): GST arithmetic, amount in words, 25 simultaneous finalizations, two office
+  computers plus a phone racing through real HTTP, new-year counter race, counter repair, immutability,
+  snapshots, PDF storage, email failure and retry, authorization. The phone app is unchanged; its sales
+  get their PDF the first time the office opens them.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
@@ -417,6 +451,11 @@ Decisions made:
 - 2026-09-15 — Integration tests: `Microsoft.AspNetCore.Mvc.Testing` against a throwaway SQL Express database, for things that only real HTTP can prove (authorization, later idempotency).
 
 - 2026-09-14 — Open the solution in **Visual Studio 2026** (18.7). VS 2022 cannot target .NET 10, and the solution stays on .NET 10 because it is the current LTS release.
+
+- 2026-09-23 — **Invoice management**: `docs/04-invoice-design.md`. Numbers from a database counter row
+  locked inside the finalizing transaction (gapless, never reused); no saved drafts; GST configurable and
+  off until a GSTIN is entered; PDF by QuestPDF, stored once behind `IInvoiceDocumentStorage`; email via
+  MailKit behind `IEmailSender`, credentials only in user-secrets / environment.
 
 Pending decisions:
 
@@ -511,6 +550,23 @@ account's password to reach anything except its own endpoints, which is the poin
 First sign-in needs a connection: it registers the handset and pulls the first snapshot. After that the app
 works with no signal at all.
 
+### Invoice PDFs and email
+
+PDFs are stored under `src/GoldenPappadam.Api/App_Data/invoice-documents` (git-ignored). In development
+email is **not sent**: the `Pickup` provider writes each message as an `.eml` file to
+`src/GoldenPappadam.Api/App_Data/mail-outbox` - open one in Outlook to see exactly what a customer would get.
+To send for real, configure SMTP, keeping the password out of Git:
+
+```bash
+dotnet user-secrets set "Email:Provider" "Smtp" --project src/GoldenPappadam.Api
+dotnet user-secrets set "Email:Host" "smtp.example.com" --project src/GoldenPappadam.Api
+dotnet user-secrets set "Email:Username" "billing@example.com" --project src/GoldenPappadam.Api
+dotnet user-secrets set "Email:Password" "<app password>" --project src/GoldenPappadam.Api
+dotnet user-secrets set "Email:FromEmail" "billing@example.com" --project src/GoldenPappadam.Api
+```
+
+On a server use environment variables instead (`Email__Provider`, `Email__Password`, ...).
+
 Development uses the **SQL Express** instance `.\SQLEXPRESS` (SQL Server 2022), set in `src/GoldenPappadam.Api/appsettings.json`; the tests create throwaway databases on the same instance. A server overrides the connection with the `ConnectionStrings__GoldenPappadam` environment variable. Inspect the data with SSMS or `sqlcmd -S ".\SQLEXPRESS" -d GoldenPappadam`.
 
 LocalDB is deliberately **not** used: its engine is started on demand by the first process that connects and repeatedly failed to auto-start on this machine ("SQL Server process failed to start", 0x89c5010a). SQL Express runs as a Windows service, so it is always up. The owner's other projects still use LocalDB — leave that instance alone.
@@ -530,6 +586,7 @@ Never design around an assumption for these; ask, or keep the design open.
 | ~~1~~ | ~~Do different shops pay different prices?~~ | **Answered 2026-09-15: yes.** See §4 "Confirmed requirements" | sales pricing |
 | 2 | Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded? | TBD — owner to confirm the actual process | inventory + sales |
 | 3 | Are discounts given, and at bill level or item level? | TBD — owner to confirm | invoice totals |
-| 4 | Must bills carry GST (GSTIN, HSN/SAC, tax amounts)? | TBD — confirm with the accountant | invoice structure |
+| 4 | GST: the GSTIN, each product's HSN / treatment / rate, whether agreed rates include GST, rounding to the rupee | **Structure built 2026-09-23, GST off.** Accountant to confirm the values, then enter them in Settings and on each product | invoices |
+| 5 | Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now? | TBD — owner / accountant | invoice numbering |
 
 Answered on 2026-09-14 and now part of the design: stock shortfall warns instead of blocking; one loose variety can be packed into many packet sizes; a pack can occasionally be made from another pack.

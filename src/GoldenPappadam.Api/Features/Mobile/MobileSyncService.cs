@@ -427,9 +427,12 @@ public class MobileSyncService(
 
             await customers.UpdateAsync(
                 request.Id,
+                // The phone does not carry email, GSTIN or state yet, so an edit from it keeps the
+                // office's values rather than wiping them.
                 new SaveCustomerRequest(
                     request.Name, request.ContactPerson, request.Phone, request.Address,
-                    existing.OpeningBalance, existing.Notes, request.HasMultipleBranches),
+                    existing.OpeningBalance, existing.Notes, request.HasMultipleBranches,
+                    existing.Email, existing.Gstin, existing.StateCode),
                 ct);
         }
 
@@ -456,10 +459,12 @@ public class MobileSyncService(
             throw new DomainException("A new branch needs an id from the phone.");
         }
 
-        var details = new SaveCustomerBranchRequest(
-            request.Name, request.Location, request.Address, request.Phone, request.ContactPerson);
-
         var existing = await db.CustomerBranches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == request.Id, ct);
+
+        // As for customers: GSTIN and state are the office's, so an edit from the phone keeps them.
+        var details = new SaveCustomerBranchRequest(
+            request.Name, request.Location, request.Address, request.Phone, request.ContactPerson,
+            existing?.Gstin, existing?.StateCode);
 
         if (existing is null)
         {

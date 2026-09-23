@@ -1,4 +1,6 @@
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Api.Features.Sales.Settings;
+using GoldenPappadam.Domain.Common;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -45,6 +47,7 @@ public class CustomerBranchService(AppDbContext db)
         }
 
         await EnsureNameIsFreeAsync(customerId, request.Name, null, ct);
+        var (gstin, stateCode) = ResolveTaxIdentity(request);
 
         var branch = new CustomerBranch
         {
@@ -54,7 +57,9 @@ public class CustomerBranchService(AppDbContext db)
             Location = Clean(request.Location),
             Address = Clean(request.Address),
             Phone = Clean(request.Phone),
-            ContactPerson = Clean(request.ContactPerson)
+            ContactPerson = Clean(request.ContactPerson),
+            Gstin = gstin,
+            StateCode = stateCode
         };
 
         db.CustomerBranches.Add(branch);
@@ -74,12 +79,15 @@ public class CustomerBranchService(AppDbContext db)
         var branch = await FindBranchAsync(customerId, branchId, ct);
 
         await EnsureNameIsFreeAsync(customerId, request.Name, branchId, ct);
+        var (gstin, stateCode) = ResolveTaxIdentity(request);
 
         branch.Name = request.Name.Trim();
         branch.Location = Clean(request.Location);
         branch.Address = Clean(request.Address);
         branch.Phone = Clean(request.Phone);
         branch.ContactPerson = Clean(request.ContactPerson);
+        branch.Gstin = gstin;
+        branch.StateCode = stateCode;
 
         await db.SaveChangesAsync(ct);
 
@@ -121,5 +129,21 @@ public class CustomerBranchService(AppDbContext db)
 
     private static CustomerBranchDto ToDto(CustomerBranch branch) => new(
         branch.Id, branch.CustomerId, branch.Name, branch.Location, branch.Address,
-        branch.Phone, branch.ContactPerson, branch.IsActive);
+        branch.Phone, branch.ContactPerson, branch.IsActive, branch.Gstin, branch.StateCode);
+
+    /// <summary>Same rule as a customer: the GSTIN's first two digits are the branch's state.</summary>
+    private static (string? Gstin, string? StateCode) ResolveTaxIdentity(SaveCustomerBranchRequest request)
+    {
+        var gstin = Gstin.Normalise(request.Gstin);
+        var stateCode = Clean(request.StateCode);
+
+        if (stateCode is not null && !IndianStates.IsValid(stateCode))
+        {
+            throw new DomainException($"'{stateCode}' is not a GST state code.");
+        }
+
+        InvoiceSettingsService.EnsureGstinMatchesState(gstin, stateCode, $"the {request.Name.Trim()} branch");
+
+        return (gstin, stateCode ?? (gstin is null ? null : Gstin.StateCodeOf(gstin)));
+    }
 }

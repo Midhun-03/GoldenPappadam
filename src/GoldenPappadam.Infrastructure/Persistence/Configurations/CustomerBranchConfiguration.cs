@@ -15,6 +15,8 @@ public class CustomerBranchConfiguration : IEntityTypeConfiguration<CustomerBran
         builder.Property(x => x.Address).HasMaxLength(300);
         builder.Property(x => x.Phone).HasMaxLength(20);
         builder.Property(x => x.ContactPerson).HasMaxLength(100);
+        builder.Property(x => x.Gstin).HasMaxLength(15);
+        builder.Property(x => x.StateCode).HasMaxLength(2);
 
         // One branch name per customer, so "Kundara" cannot be added twice under the same shop.
         builder.HasIndex(x => new { x.CustomerId, x.Name }).IsUnique();

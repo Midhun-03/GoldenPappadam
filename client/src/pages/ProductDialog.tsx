@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { productsApi } from '@/api/inventory'
-import type { Category, Product, ProductKind, SaveProduct, Unit } from '@/api/types'
+import type { Category, Product, ProductKind, SaveProduct, TaxTreatment, Unit } from '@/api/types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -38,7 +38,19 @@ const empty = {
   sourceQuantityPerPack: '',
   sellingPrice: '',
   lowStockThreshold: '',
+  hsnCode: '',
+  taxTreatment: '' as TaxTreatment | '',
+  gstRate: '',
 }
+
+const NOT_DECIDED = 'undecided'
+
+const treatments: { value: TaxTreatment; label: string }[] = [
+  { value: 'Taxable', label: 'Taxable' },
+  { value: 'Exempt', label: 'Exempt' },
+  { value: 'NilRated', label: 'Nil rated' },
+  { value: 'NonGst', label: 'Non-GST' },
+]
 
 const toNumber = (value: string) => (value.trim() === '' ? null : Number(value))
 
@@ -63,6 +75,9 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             sourceQuantityPerPack: product.sourceQuantityPerPack?.toString() ?? '',
             sellingPrice: product.sellingPrice?.toString() ?? '',
             lowStockThreshold: product.lowStockThreshold?.toString() ?? '',
+            hsnCode: product.hsnCode ?? '',
+            taxTreatment: product.taxTreatment ?? '',
+            gstRate: product.gstRate?.toString() ?? '',
           }
         : empty,
     )
@@ -96,6 +111,9 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
       sourceQuantityPerPack: isPacked ? toNumber(form.sourceQuantityPerPack) : null,
       sellingPrice: toNumber(form.sellingPrice),
       lowStockThreshold: toNumber(form.lowStockThreshold),
+      hsnCode: form.hsnCode.trim() || null,
+      taxTreatment: form.taxTreatment || null,
+      gstRate: form.taxTreatment === 'Taxable' ? toNumber(form.gstRate) : null,
     })
   }
 
@@ -260,6 +278,67 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
               />
             </div>
           </div>
+
+          <fieldset className="grid gap-3 rounded-lg border p-3">
+            <legend className="px-1 text-xs font-medium text-muted-foreground">GST - confirm with the accountant</legend>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="product-hsn">HSN code</Label>
+                <Input
+                  id="product-hsn"
+                  inputMode="numeric"
+                  maxLength={8}
+                  className="font-mono"
+                  placeholder="19059040"
+                  value={form.hsnCode}
+                  onChange={(event) => setForm({ ...form, hsnCode: event.target.value })}
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="product-treatment">Treatment</Label>
+                <Select
+                  value={form.taxTreatment || NOT_DECIDED}
+                  onValueChange={(value) =>
+                    setForm({ ...form, taxTreatment: value === NOT_DECIDED ? '' : (value as TaxTreatment) })
+                  }
+                >
+                  <SelectTrigger id="product-treatment" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NOT_DECIDED}>Not decided</SelectItem>
+                    {treatments.map((treatment) => (
+                      <SelectItem key={treatment.value} value={treatment.value}>
+                        {treatment.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="product-gst-rate">GST rate %</Label>
+                <Input
+                  id="product-gst-rate"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max="100"
+                  disabled={form.taxTreatment !== 'Taxable'}
+                  placeholder={form.taxTreatment === 'Taxable' ? '5' : '—'}
+                  value={form.taxTreatment === 'Taxable' ? form.gstRate : ''}
+                  onChange={(event) => setForm({ ...form, gstRate: event.target.value })}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Only used once the business GSTIN is entered in Settings. From then on a product still "Not decided"
+              cannot be billed - the app will not guess a tax. A change applies from the next bill.
+            </p>
+          </fieldset>
 
           {error && (
             <Alert variant="destructive">
