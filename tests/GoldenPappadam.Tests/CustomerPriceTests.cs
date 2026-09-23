@@ -3,6 +3,7 @@ using GoldenPappadam.Api.Features.Inventory.Stock;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Domain.Inventory;
+using Microsoft.EntityFrameworkCore;
 
 namespace GoldenPappadam.Tests;
 
@@ -172,6 +173,38 @@ public class CustomerPriceTests : IAsyncLifetime
         // The loose product has no price anywhere, and the list says so rather than inventing one.
         Assert.Null(loose.AgreedPrice);
         Assert.Null(loose.EffectivePrice);
+    }
+
+    [Fact]
+    public async Task Every_rate_change_is_kept_with_what_it_was_before_and_who_changed_it()
+    {
+        var shop = await _database.SeedCustomerAsync("Danya Supermarket");
+        var office = Guid.NewGuid();
+        _database.CurrentUser.UserId = office;
+
+        await _prices.SetAsync(shop.Id, _packet.Id, 37m, default);
+        await _prices.SetAsync(shop.Id, _packet.Id, 36m, default);
+        await _prices.RemoveAsync(shop.Id, _packet.Id, default);
+
+        var history = await _prices.GetChangesAsync(shop.Id, false, null, null, 50, default);
+
+        // Newest first: removed, then 37 -> 36, then first agreed at 37.
+        List<(decimal?, decimal?)> expected = [(36m, null), (37m, 36m), (null, 37m)];
+        Assert.Equal(expected, history.Select(h => (h.PreviousPrice, h.NewPrice)));
+
+        var rows = await _database.Db.CustomerPriceChanges.ToListAsync();
+        Assert.All(rows, row => Assert.Equal(office, row.CreatedBy));
+    }
+
+    [Fact]
+    public async Task Setting_the_rate_a_shop_already_has_records_nothing()
+    {
+        var shop = await _database.SeedCustomerAsync("Shop A");
+
+        await _prices.SetAsync(shop.Id, _packet.Id, 37m, default);
+        await _prices.SetAsync(shop.Id, _packet.Id, 37m, default);
+
+        Assert.Single(await _prices.GetChangesAsync(shop.Id, false, null, null, 50, default));
     }
 
     private Task<CreateInvoiceResponse> BillAsync(Guid customerId, decimal quantity) =>

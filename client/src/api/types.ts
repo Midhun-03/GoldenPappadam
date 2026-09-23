@@ -159,6 +159,30 @@ export type Customer = {
   balance: number
   notes: string | null
   isActive: boolean
+  /** True for a parent company with several physical shops, e.g. Danya Supermarket. */
+  hasMultipleBranches: boolean
+  activeBranchCount: number
+  createdByName: string | null
+  /** A salesperson found this shop and added it from the phone. */
+  addedBySalesperson: boolean
+}
+
+/**
+ * One rate change. `previousPrice` null means the shop was on the standard price before;
+ * `newPrice` null means the agreed rate was removed.
+ */
+export type CustomerPriceChange = {
+  id: string
+  customerId: string
+  customerName: string
+  productId: string
+  productName: string
+  unitCode: string
+  previousPrice: number | null
+  newPrice: number | null
+  changedAt: string
+  changedBy: string | null
+  changedBySalesperson: boolean
 }
 
 export type SaveCustomer = {
@@ -168,6 +192,27 @@ export type SaveCustomer = {
   address: string | null
   openingBalance: number
   notes: string | null
+  hasMultipleBranches: boolean
+}
+
+/** One physical shop under a multi-branch customer, e.g. "Kundara" under Danya Supermarket. */
+export type CustomerBranch = {
+  id: string
+  customerId: string
+  name: string
+  location: string | null
+  address: string | null
+  phone: string | null
+  contactPerson: string | null
+  isActive: boolean
+}
+
+export type SaveCustomerBranch = {
+  name: string
+  location: string | null
+  address: string | null
+  phone: string | null
+  contactPerson: string | null
 }
 
 export type LedgerEntry = {
@@ -205,6 +250,8 @@ export type InvoiceListItem = {
   invoiceNumber: string
   customerId: string
   customerName: string
+  branchId: string | null
+  branchName: string | null
   invoiceDate: string
   status: InvoiceStatus
   totalAmount: number

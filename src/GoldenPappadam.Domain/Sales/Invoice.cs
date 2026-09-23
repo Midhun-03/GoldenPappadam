@@ -13,6 +13,13 @@ public class Invoice : AuditableEntity
     public Guid CustomerId { get; set; }
     public Customer? Customer { get; set; }
 
+    /// <summary>
+    /// Which shop of a multi-branch customer this bill is for. Null for a single-location
+    /// customer, and always null for one, since the branch picker never appears for them.
+    /// </summary>
+    public Guid? BranchId { get; set; }
+    public CustomerBranch? Branch { get; set; }
+
     /// <summary>The business date in IST, not a timestamp.</summary>
     public DateOnly InvoiceDate { get; set; }
 

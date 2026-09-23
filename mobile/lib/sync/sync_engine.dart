@@ -73,7 +73,9 @@ class SyncEngine {
   bool get isRunning => _running;
 
   void start() {
-    _timer ??= Timer.periodic(AppConfig.syncInterval, (_) => syncNow());
+    // Only the background timer honours the retry wait. It exists so a phone with no signal does
+    // not hammer the network; it must not also stop a person who can see the signal is back.
+    _timer ??= Timer.periodic(AppConfig.syncInterval, (_) => syncNow(respectBackoff: true));
     unawaited(syncNow());
   }
 
@@ -108,7 +110,13 @@ class SyncEngine {
 
   /// The whole cycle. Safe to call at any time and from anywhere; it simply returns if a run is
   /// already in progress.
-  Future<SyncStatus> syncNow() async {
+  ///
+  /// By default every waiting row is sent, even one still inside its retry wait: "Sync now", a
+  /// pull to refresh, opening the app and the signal coming back all mean "try now". Without this,
+  /// a phone that failed many times while the office was unreachable kept its rows parked for up to
+  /// fifteen minutes after the office came back, while the pull beside them succeeded - which looks
+  /// exactly like "not syncing". Resending is safe: the server's client request id makes it a no-op.
+  Future<SyncStatus> syncNow({bool respectBackoff = false}) async {
     if (_running) return _describe(SyncState.syncing);
 
     _running = true;
@@ -117,7 +125,7 @@ class SyncEngine {
     try {
       // Push first: the office should see what was done before the phone asks for fresh balances,
       // otherwise the balances it gets back are already out of date.
-      await _push();
+      await _push(respectBackoff: respectBackoff);
       await _pull();
       await _pullDay();
 
@@ -139,11 +147,11 @@ class SyncEngine {
 
   // ---------- local truth to the server ----------
 
-  Future<void> _push() async {
+  Future<void> _push({required bool respectBackoff}) async {
     final deviceId = await _db.readMeta(_deviceIdKey);
     if (deviceId == null) return;
 
-    final due = await _db.dueEntries(DateTime.now().toUtc());
+    final due = await _db.dueEntries(DateTime.now().toUtc(), ignoreBackoff: !respectBackoff);
     if (due.isEmpty) return;
 
     final items = due
@@ -219,6 +227,7 @@ class SyncEngine {
               phone: Value(c['phone'] as String?),
               address: Value(c['address'] as String?),
               balance: (c['balance'] as num).toDouble(),
+              hasMultipleBranches: Value(c['hasMultipleBranches'] as bool? ?? false),
             ))
         .toList();
 
@@ -256,8 +265,25 @@ class SyncEngine {
             ))
         .toList();
 
+    final branches = (body['branches'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map((b) => BranchesCompanion.insert(
+              id: b['id'] as String,
+              customerId: b['customerId'] as String,
+              name: b['name'] as String,
+              location: Value(b['location'] as String?),
+              address: Value(b['address'] as String?),
+              phone: Value(b['phone'] as String?),
+              contactPerson: Value(b['contactPerson'] as String?),
+            ))
+        .toList();
+
     await _db.replaceSnapshot(
-        customers: customers, products: products, prices: prices, payments: payments);
+        customers: customers,
+        products: products,
+        prices: prices,
+        payments: payments,
+        branches: branches);
 
     final pricesAsOf = body['pricesAsOf'];
     if (pricesAsOf is String) await _db.writeMeta(_pricesAsOfKey, pricesAsOf);

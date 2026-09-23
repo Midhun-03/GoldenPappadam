@@ -4,11 +4,13 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/theme.dart';
 import 'data/local/database.dart';
 import 'data/sales_repository.dart';
 import 'data/remote/api_client.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/dashboard_screen.dart';
+import 'features/more/more_screen.dart';
 import 'features/orders/orders_screen.dart';
 import 'features/shops/shops_screen.dart';
 import 'features/van/van_screen.dart';
@@ -109,17 +111,7 @@ class _GoldenPappadamAppState extends ConsumerState<GoldenPappadamApp> {
     return MaterialApp(
       title: 'Golden Pappadam',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFC8871B)),
-        // The salesperson is standing in a shop, often one-handed. Everything is big enough to
-        // hit without looking twice.
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-        ),
-        inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder()),
-        listTileTheme: const ListTileThemeData(minVerticalPadding: 12),
-      ),
+      theme: AppTheme.light(),
       home: switch (session) {
         null => const Scaffold(body: Center(child: CircularProgressIndicator())),
         true => const SalesHome(),
@@ -129,7 +121,7 @@ class _GoldenPappadamAppState extends ConsumerState<GoldenPappadamApp> {
   }
 }
 
-/// The four things a salesperson does, one tap apart. No drawer and no nesting: on a doorstep,
+/// The five things a salesperson does, one tap apart. No drawer and no nesting: on a doorstep,
 /// anything more than a tap is too far.
 class SalesHome extends StatefulWidget {
   const SalesHome({super.key});
@@ -141,20 +133,52 @@ class SalesHome extends StatefulWidget {
 class _SalesHomeState extends State<SalesHome> {
   int _tab = 0;
 
-  static const _screens = [DashboardScreen(), ShopsScreen(), VanScreen(), OrdersScreen()];
+  static const _screens = [
+    DashboardScreen(),
+    ShopsScreen(),
+    OrdersScreen(),
+    VanScreen(),
+    MoreScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) => Scaffold(
         body: IndexedStack(index: _tab, children: _screens),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _tab,
-          onDestinationSelected: (index) => setState(() => _tab = index),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.today_outlined), label: 'Today'),
-            NavigationDestination(icon: Icon(Icons.storefront_outlined), label: 'Shops'),
-            NavigationDestination(icon: Icon(Icons.local_shipping_outlined), label: 'Van'),
-            NavigationDestination(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
-          ],
+        bottomNavigationBar: DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AppColors.border)),
+          ),
+          child: NavigationBar(
+            selectedIndex: _tab,
+            onDestinationSelected: (index) => setState(() => _tab = index),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home),
+                label: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.storefront_outlined),
+                selectedIcon: Icon(Icons.storefront),
+                label: 'Shops',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.assignment_outlined),
+                selectedIcon: Icon(Icons.assignment),
+                label: 'Orders',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.local_shipping_outlined),
+                selectedIcon: Icon(Icons.local_shipping),
+                label: 'Van',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.menu),
+                selectedIcon: Icon(Icons.menu),
+                label: 'More',
+              ),
+            ],
+          ),
         ),
       );
 }

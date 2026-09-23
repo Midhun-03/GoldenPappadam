@@ -27,7 +27,7 @@ public class SyncSubmission : Entity
     /// <summary>UTC, when it reached the server. The gap is how long the phone was out of signal.</summary>
     public DateTime ReceivedAt { get; set; }
 
-    /// <summary>The invoice, payment or visit this became.</summary>
+    /// <summary>The record this became: an invoice, payment, visit, customer, branch or customer price.</summary>
     public Guid CreatedRecordId { get; set; }
 
     /// <summary>

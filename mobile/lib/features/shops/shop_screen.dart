@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../core/money.dart';
+import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import '../../data/local/database.dart';
 import '../payment/payment_screen.dart';
 import '../sale/sale_screen.dart';
@@ -35,46 +37,47 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
         return Scaffold(
           appBar: AppBar(title: Text(shop.name)),
           body: ListView(
-            padding: const EdgeInsets.only(bottom: 24),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
             children: [
               _BalanceCard(shop: shop),
               if ((shop.phone ?? '').isNotEmpty || (shop.address ?? '').isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
                   child: Text(
                     [shop.contactPerson, shop.phone, shop.address]
                         .where((part) => (part ?? '').isNotEmpty)
                         .join(' · '),
-                    style: TextStyle(color: Theme.of(context).hintColor),
+                    style: const TextStyle(color: AppColors.textMuted),
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: FilledButton.icon(
-                  icon: const Icon(Icons.add_shopping_cart),
-                  label: const Text('Record a delivery'),
-                  onPressed: () => _open(SaleScreen(shop: shop)),
-                ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Record sale'),
+                      onPressed: () => _open(SaleScreen(shop: shop)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.payments_outlined, size: 18),
+                      label: const Text('Collect'),
+                      onPressed: () => _open(PaymentScreen(shop: shop)),
+                    ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.payments_outlined),
-                  label: const Text('Collect a payment'),
-                  onPressed: () => _open(PaymentScreen(shop: shop)),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                ),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: () => _recordNoOrder(shop),
+                child: const Text('Visited, nothing needed'),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                child: TextButton(
-                  onPressed: () => _recordNoOrder(shop),
-                  child: const Text('Visited, nothing needed'),
-                ),
-              ),
-              const SizedBox(height: 8),
               _TodayHere(shopName: shop.name),
               _PaymentHistory(shopId: shop.id, shopName: shop.name),
+              if (shop.hasMultipleBranches) _BranchesHere(shopId: shop.id),
               _PricesHere(shopId: shop.id),
             ],
           ),
@@ -84,7 +87,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
   }
 
   Future<void> _open(Widget screen) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+    await Navigator.of(context).push(appRoute<void>((_) => screen));
 
     // The balance and the list below both change when something is recorded.
     if (mounted) setState(() {});
@@ -116,29 +119,25 @@ class _BalanceCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final owes = shop.balance > 0;
-    final scheme = Theme.of(context).colorScheme;
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: owes ? scheme.errorContainer : scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return AppCard(
+      margin: const EdgeInsets.only(top: 8),
+      color: owes ? AppColors.dangerSoft : AppColors.successSoft,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            owes ? 'Outstanding' : 'Nothing outstanding',
-            style: TextStyle(color: owes ? scheme.onErrorContainer : scheme.onSurfaceVariant),
+            owes ? 'Outstanding balance' : 'Nothing outstanding',
+            style: TextStyle(
+              color: owes ? AppColors.danger : AppColors.success,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             money(shop.balance),
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: owes ? scheme.onErrorContainer : scheme.onSurfaceVariant,
+                  color: owes ? AppColors.danger : AppColors.success,
                 ),
           ),
           const SizedBox(height: 6),
@@ -150,7 +149,7 @@ class _BalanceCard extends ConsumerWidget {
               'as of ${howLongAgo(snapshot.data)}',
               style: TextStyle(
                 fontSize: 12,
-                color: owes ? scheme.onErrorContainer : scheme.onSurfaceVariant,
+                color: (owes ? AppColors.danger : AppColors.success).withValues(alpha: 0.8),
               ),
             ),
           ),
@@ -180,23 +179,26 @@ class _TodayHere extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
-              child: Text('Recorded here, not yet with the office',
-                  style: TextStyle(fontWeight: FontWeight.w500)),
-            ),
-            for (final entry in mine)
-              ListTile(
-                dense: true,
-                leading: Icon(
-                  entry.status == 'Failed' ? Icons.error_outline : Icons.schedule,
-                  color: entry.status == 'Failed' ? Theme.of(context).colorScheme.error : null,
-                ),
-                title: Text(entry.summary),
-                subtitle: Text(entry.status == 'Failed'
-                    ? entry.lastError ?? 'The office refused this.'
-                    : timeOfDay(entry.recordedAt)),
+            const SectionHeader('Recorded here, not yet with the office'),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (final entry in mine)
+                    ListTile(
+                      dense: true,
+                      leading: Icon(
+                        entry.status == 'Failed' ? Icons.error_outline : Icons.schedule,
+                        color: entry.status == 'Failed' ? AppColors.danger : AppColors.textMuted,
+                      ),
+                      title: Text(entry.summary),
+                      subtitle: Text(entry.status == 'Failed'
+                          ? entry.lastError ?? 'The office refused this.'
+                          : timeOfDay(entry.recordedAt)),
+                    ),
+                ],
               ),
+            ),
           ],
         );
       },
@@ -235,39 +237,83 @@ class _PaymentHistory extends ConsumerWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
-                  child: Text('Payment history', style: TextStyle(fontWeight: FontWeight.w500)),
+                const SectionHeader('Payment history'),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (final entry in unsent)
+                        ListTile(
+                          dense: true,
+                          leading: Icon(
+                            entry.status == 'Failed' ? Icons.error_outline : Icons.schedule,
+                            color: entry.status == 'Failed' ? AppColors.danger : AppColors.textMuted,
+                          ),
+                          title: Text(entry.summary.split('·').last.trim()),
+                          subtitle: Text(entry.status == 'Failed'
+                              ? entry.lastError ?? 'The office refused this.'
+                              : 'Waiting to go up · \${timeOfDay(entry.recordedAt)}'),
+                        ),
+                      for (final payment in settled)
+                        ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.check_circle_outline, color: AppColors.success),
+                          title: Text(money(payment.amount)),
+                          subtitle: Text([
+                            dayAndTime(payment.recordedAt),
+                            payment.method,
+                            if ((payment.reference ?? '').isNotEmpty) payment.reference!,
+                            if ((payment.notes ?? '').isNotEmpty) payment.notes!,
+                          ].join(' · ')),
+                        ),
+                    ],
+                  ),
                 ),
-                for (final entry in unsent)
-                  ListTile(
-                    dense: true,
-                    leading: Icon(
-                      entry.status == 'Failed' ? Icons.error_outline : Icons.schedule,
-                      color: entry.status == 'Failed'
-                          ? Theme.of(context).colorScheme.error
-                          : null,
-                    ),
-                    title: Text(entry.summary.split('·').last.trim()),
-                    subtitle: Text(entry.status == 'Failed'
-                        ? entry.lastError ?? 'The office refused this.'
-                        : 'Waiting to go up · \${timeOfDay(entry.recordedAt)}'),
-                  ),
-                for (final payment in settled)
-                  ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.check_circle_outline),
-                    title: Text(money(payment.amount)),
-                    subtitle: Text([
-                      dayAndTime(payment.recordedAt),
-                      payment.method,
-                      if ((payment.reference ?? '').isNotEmpty) payment.reference!,
-                      if ((payment.notes ?? '').isNotEmpty) payment.notes!,
-                    ].join(' · ')),
-                  ),
               ],
             );
           },
+        );
+      },
+    );
+  }
+}
+
+/// The physical shops under a multi-branch customer, e.g. Kundara under Danya Supermarket - a
+/// reminder of which branches exist before the salesperson opens Record sale and has to pick one.
+class _BranchesHere extends ConsumerWidget {
+  const _BranchesHere({required this.shopId});
+
+  final String shopId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseProvider);
+
+    return FutureBuilder<List<CachedBranch>>(
+      future: db.branchesFor(shopId),
+      builder: (context, snapshot) {
+        final branches = snapshot.data ?? const <CachedBranch>[];
+        if (branches.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader('Branches'),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (final branch in branches)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.storefront_outlined, color: AppColors.textMuted),
+                      title: Text(branch.name),
+                      subtitle: (branch.location ?? '').isEmpty ? null : Text(branch.location!),
+                    ),
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
@@ -299,19 +345,23 @@ class _PricesHere extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
-              child: Text('What this shop pays', style: TextStyle(fontWeight: FontWeight.w500)),
-            ),
-            for (final product in priced)
-              ListTile(
-                dense: true,
-                title: Text(product.name),
-                trailing: Text(
-                  money(prices[product.id]!),
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
+            const SectionHeader('What this shop pays'),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (final product in priced)
+                    ListTile(
+                      dense: true,
+                      title: Text(product.name),
+                      trailing: Text(
+                        money(prices[product.id]!),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         );
       },

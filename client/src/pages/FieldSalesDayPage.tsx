@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Route, Store } from 'lucide-react'
+import { AlertTriangle, IndianRupee, Route, Store } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fieldSalesApi } from '@/api/fieldsales'
+import { customerPriceChangesApi } from '@/api/sales'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { FilterBar, FilterField } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
@@ -12,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime, formatMoney, todayInIndia } from '@/lib/format'
+import { PriceChangesTable } from './PriceChangesTable'
 
 /** How long the sale sat on the phone before the server heard about it. */
 function SyncGap({ recordedAt, receivedAt }: { recordedAt: string; receivedAt: string }) {
@@ -42,6 +44,12 @@ const outcomes: Record<string, string> = {
 
 export function FieldSalesDayPage() {
   const [businessDate, setBusinessDate] = useState(todayInIndia())
+
+  const rateChanges = useQuery({
+    queryKey: ['price-changes', 'sales-team', businessDate],
+    queryFn: () =>
+      customerPriceChangesApi.list({ salespersonOnly: true, from: businessDate, to: businessDate }),
+  })
 
   const day = useQuery({
     queryKey: ['fieldsales', 'day', businessDate],
@@ -222,6 +230,27 @@ export function FieldSalesDayPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4 lg:mt-5">
+        <CardHeader>
+          <CardTitle>Rates changed by the sales team</CardTitle>
+        </CardHeader>
+        <CardContent className="px-0">
+          {rateChanges.isPending ? (
+            <TableSkeleton columns={3} />
+          ) : rateChanges.isError ? (
+            <ErrorState error={rateChanges.error} />
+          ) : rateChanges.data.length === 0 ? (
+            <EmptyState
+              icon={IndianRupee}
+              title="No rates changed on the road"
+              description="When a salesperson agrees a new rate with a shop, it appears here for you to check."
+            />
+          ) : (
+            <PriceChangesTable changes={rateChanges.data} showCustomer />
           )}
         </CardContent>
       </Card>

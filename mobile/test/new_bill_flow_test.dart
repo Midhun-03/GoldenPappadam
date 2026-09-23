@@ -11,8 +11,9 @@ import 'package:golden_pappadam_sales/data/local/database.dart';
 import 'package:golden_pappadam_sales/data/sales_repository.dart';
 import 'package:golden_pappadam_sales/features/sale/sale_screen.dart';
 
-/// One page, like the admin's: a searchable shop dropdown, a card of product lines, the total at the
-/// bottom. The sale then goes through the same repository and outbox as ever.
+/// Three steps on one page: pick the shop, set a quantity on whatever it is priced for with the
+/// +/- stepper, then say how it was paid. The sale then goes through the same repository and
+/// outbox as ever.
 void main() {
   late AppDatabase db;
 
@@ -23,6 +24,11 @@ void main() {
       customers: [
         shopRow(id: 'shop-1', name: 'Kumar Stores', balance: 10000, phone: '9847012345'),
         shopRow(id: 'shop-2', name: 'Anand Bakery', balance: 0),
+        shopRow(id: 'shop-3', name: 'Danya Supermarket', balance: 0, hasMultipleBranches: true),
+      ],
+      branches: [
+        branchRow(id: 'branch-1', customerId: 'shop-3', name: 'Kundara', location: 'Kollam'),
+        branchRow(id: 'branch-2', customerId: 'shop-3', name: 'Coimbatore', location: 'Coimbatore'),
       ],
       products: [
         ProductsCompanion.insert(
@@ -37,9 +43,13 @@ void main() {
             name: '6 piece packet',
             unitCode: 'PKT',
             defaultPrice: const Value(15)),
+        // No default price and no agreed price for shop-1: never offered on its bill.
+        ProductsCompanion.insert(
+            id: 'p3', productCode: 'LOOSE', name: 'Loose pappadam', unitCode: 'KG'),
       ],
       prices: [
         CustomerPricesCompanion.insert(customerId: 'shop-1', productId: 'p1', unitPrice: 35),
+        CustomerPricesCompanion.insert(customerId: 'shop-3', productId: 'p1', unitPrice: 37),
       ],
     );
   });
@@ -74,41 +84,43 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Finder dropdown<T>(int index) => find.byType(DropdownMenu<T>).at(index);
+  Finder shopDropdown() => find.byType(DropdownMenu<CachedCustomer>);
 
   Finder fieldOf(Finder dropdown) =>
       find.descendant(of: dropdown, matching: find.byType(TextField));
 
-  /// Types into a searchable dropdown and taps the entry, as a salesperson would.
-  Future<void> choose(WidgetTester tester, Finder field, String typed, String entry) async {
+  /// Types into the shop's searchable dropdown and taps the entry, as a salesperson would.
+  Future<void> chooseShop(WidgetTester tester, {String typed = 'kum', String entry = 'Kumar Stores'}) async {
+    final field = fieldOf(shopDropdown());
     await tester.tap(field);
     await tester.pumpAndSettle();
-    await tester.enterText(fieldOf(field), typed);
+    await tester.enterText(field, typed);
     await tester.pumpAndSettle();
     await tester.tap(find.text(entry).last);
     await tester.pumpAndSettle();
   }
 
-  Future<void> chooseShop(WidgetTester tester) =>
-      choose(tester, dropdown<CachedCustomer>(0), 'kum', 'Kumar Stores');
+  /// The +/- stepper's plus button, scoped to one product's row so two rows never collide.
+  Future<void> tapPlus(WidgetTester tester, String productId, {int times = 1}) async {
+    final button = find.descendant(
+      of: find.byKey(ValueKey('product-row-$productId')),
+      matching: find.byIcon(Icons.add),
+    );
 
-  Future<void> chooseProduct(WidgetTester tester, int line, String name) =>
-      choose(tester, dropdown<String>(line), name.substring(0, 2), name);
+    for (var i = 0; i < times; i++) {
+      await tester.tap(button);
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+  }
 
-  /// The sheet's own Save, not the one on the total bar behind it.
-  Finder sheetButton(String label) => find.descendant(
-        of: find.byType(BottomSheet),
-        matching: find.widgetWithText(FilledButton, label),
-      );
-
-  Finder saveBar() => find.widgetWithText(FilledButton, 'Save');
+  Finder saveBar() => find.widgetWithText(FilledButton, 'Save Bill');
 
   testWidgets('shop, products and total are on one page', (tester) async {
     await openBill(tester);
 
-    expect(find.text('New bill'), findsOneWidget);
-    expect(find.text('Products'), findsOneWidget);
-    expect(find.text('Total'), findsOneWidget);
+    expect(find.text('New Bill'), findsOneWidget);
+    expect(find.text('Total amount'), findsOneWidget);
 
     // Nothing can be saved until there is a shop and something on the bill.
     expect(tester.widget<FilledButton>(saveBar()).onPressed, isNull);
@@ -117,9 +129,9 @@ void main() {
   testWidgets('the shop dropdown filters as you type', (tester) async {
     await openBill(tester);
 
-    await tester.tap(dropdown<CachedCustomer>(0));
+    await tester.tap(shopDropdown());
     await tester.pumpAndSettle();
-    await tester.enterText(fieldOf(dropdown<CachedCustomer>(0)), 'anand');
+    await tester.enterText(fieldOf(shopDropdown()), 'anand');
     await tester.pumpAndSettle();
 
     expect(find.text('Anand Bakery'), findsWidgets);
@@ -129,61 +141,58 @@ void main() {
   testWidgets('a shop can be found by its phone number', (tester) async {
     await openBill(tester);
 
-    await choose(tester, dropdown<CachedCustomer>(0), '98470', 'Kumar Stores');
+    await chooseShop(tester, typed: '98470', entry: 'Kumar Stores');
 
     expect(find.textContaining('This shop already owes'), findsOneWidget);
   });
 
-  testWidgets('choosing a product fills quantity 1 and totals at the shop price', (tester) async {
+  testWidgets('a product the shop has no price for is never listed', (tester) async {
     await openBill(tester);
     await chooseShop(tester);
-    await chooseProduct(tester, 0, '20 piece packet');
 
-    final quantity = find.byKey(const ValueKey('qty-0'));
-    expect(tester.widget<TextField>(quantity).controller!.text, '1');
-
-    // Line total and the bar's total: the shop's agreed 35, not the product's 45.
-    expect(find.text(money(35)), findsNWidgets(2));
-
-    await tester.enterText(quantity, '3');
-    await tester.pumpAndSettle();
-
-    expect(find.text(money(105)), findsNWidgets(2));
-    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNotNull);
+    expect(find.byKey(const ValueKey('product-row-p1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('product-row-p2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('product-row-p3')), findsNothing);
   });
 
-  testWidgets('a product on one line is not offered on another', (tester) async {
+  testWidgets('the plus button fills quantity 1 and totals at the shop price', (tester) async {
     await openBill(tester);
     await chooseShop(tester);
-    await chooseProduct(tester, 0, '20 piece packet');
+    await tapPlus(tester, 'p1');
 
-    await tester.tap(find.text('Add product'));
-    await tester.pumpAndSettle();
+    final quantity = find.byKey(const ValueKey('qty-p1'));
+    expect(tester.widget<TextField>(quantity).controller!.text, '1');
 
-    final second = tester.widget<DropdownMenu<String>>(dropdown<String>(1));
-    expect(second.dropdownMenuEntries.map((e) => e.value), ['p2']);
+    // The shop's agreed 35, not the product's default 45.
+    expect(find.text(money(35)), findsOneWidget);
+
+    await tapPlus(tester, 'p1', times: 2);
+
+    expect(tester.widget<TextField>(quantity).controller!.text, '3');
+    expect(find.text(money(105)), findsOneWidget);
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNotNull);
   });
 
   testWidgets('opened from a shop page, the shop is already chosen', (tester) async {
     final shop = await db.findCustomer('shop-1');
     await openBill(tester, shop: shop);
 
-    expect(tester.widget<TextField>(fieldOf(dropdown<CachedCustomer>(0))).controller!.text,
-        'Kumar Stores');
-    expect(find.byType(DropdownMenu<String>), findsOneWidget);
+    expect(tester.widget<TextField>(fieldOf(shopDropdown())).controller!.text, 'Kumar Stores');
+    expect(find.byKey(const ValueKey('product-row-p1')), findsOneWidget);
   });
 
   Future<void> billOnePacket(WidgetTester tester) async {
     await openBill(tester);
     await chooseShop(tester);
-    await chooseProduct(tester, 0, '20 piece packet');
-    await tester.tap(saveBar());
-    await tester.pumpAndSettle();
+    await tapPlus(tester, 'p1');
   }
 
-  testWidgets('a bill saved on credit lands in the outbox and nowhere else', (tester) async {
+  testWidgets('credit is the default plan, and a bill saved on it lands in the outbox and nowhere else',
+      (tester) async {
     await billOnePacket(tester);
-    await tester.tap(find.text('On credit'));
+
+    expect(find.text('Credit'), findsOneWidget);
+    await tester.tap(saveBar());
     await tester.pumpAndSettle();
 
     final entries = await db.select(db.outboxEntries).get();
@@ -204,7 +213,10 @@ void main() {
 
   testWidgets('a bill paid on the spot records the money too', (tester) async {
     await billOnePacket(tester);
-    await tester.tap(find.textContaining('now'));
+
+    await tester.tap(find.text('Paid'));
+    await tester.pumpAndSettle();
+    await tester.tap(saveBar());
     await tester.pumpAndSettle();
 
     final entries = await db.select(db.outboxEntries).get();
@@ -215,12 +227,16 @@ void main() {
 
   testWidgets('part payment records what was actually handed over', (tester) async {
     await billOnePacket(tester);
-    await tester.tap(find.text('Paid part of it'));
+
+    await tester.tap(find.text('Part Paid'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-        find.descendant(of: find.byType(BottomSheet), matching: find.byType(TextField)), '20');
-    await tester.tap(sheetButton('Save'));
+    // Nothing can be saved until an amount is entered.
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNull);
+
+    await tester.enterText(find.byKey(const ValueKey('partial-amount')), '20');
+    await tester.pumpAndSettle();
+    await tester.tap(saveBar());
     await tester.pumpAndSettle();
 
     final entries = await db.select(db.outboxEntries).get();
@@ -235,7 +251,7 @@ void main() {
   testWidgets('every bill gets its own client request id', (tester) async {
     for (var i = 0; i < 2; i++) {
       await billOnePacket(tester);
-      await tester.tap(find.text('On credit'));
+      await tester.tap(saveBar());
       await tester.pumpAndSettle();
     }
 
@@ -243,5 +259,52 @@ void main() {
 
     // Two bills, two visits, four ids. The server tells them apart by these and by nothing else.
     expect(ids, hasLength(4));
+  });
+
+  Finder branchDropdown() => find.byType(DropdownMenu<CachedBranch>);
+
+  testWidgets('a plain shop never shows a branch picker', (tester) async {
+    await openBill(tester);
+    await chooseShop(tester);
+
+    expect(branchDropdown(), findsNothing);
+  });
+
+  testWidgets('a multi-branch shop requires a branch before saving', (tester) async {
+    await openBill(tester);
+    await chooseShop(tester, typed: 'danya', entry: 'Danya Supermarket');
+    await tapPlus(tester, 'p1');
+
+    expect(branchDropdown(), findsOneWidget);
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNull);
+
+    final field = fieldOf(branchDropdown());
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kundara').last);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNotNull);
+
+    await tester.tap(saveBar());
+    await tester.pumpAndSettle();
+
+    final sale = (await db.select(db.outboxEntries).get()).firstWhere((e) => e.type == 'Invoice');
+    expect(jsonDecode(sale.payload)['sale']['branchId'], 'branch-1');
+  });
+
+  testWidgets('switching to a plain shop clears a previously chosen branch', (tester) async {
+    await openBill(tester);
+    await chooseShop(tester, typed: 'danya', entry: 'Danya Supermarket');
+
+    final field = fieldOf(branchDropdown());
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kundara').last);
+    await tester.pumpAndSettle();
+
+    await chooseShop(tester, typed: 'anand', entry: 'Anand Bakery');
+
+    expect(branchDropdown(), findsNothing);
   });
 }

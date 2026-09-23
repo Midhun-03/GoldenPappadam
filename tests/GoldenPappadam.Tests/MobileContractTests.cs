@@ -293,7 +293,8 @@ public class MobileContractTests : IAsyncLifetime
         Assert.True(snapshot.TryGetProperty("paymentMethods", out _));
 
         var customer = snapshot.GetProperty("customers")[0];
-        foreach (var field in new[] { "id", "name", "contactPerson", "phone", "address", "balance" })
+        foreach (var field in new[]
+                 { "id", "name", "contactPerson", "phone", "address", "balance", "hasMultipleBranches" })
         {
             Assert.True(customer.TryGetProperty(field, out _), $"customer.{field} is missing");
         }
@@ -305,6 +306,333 @@ public class MobileContractTests : IAsyncLifetime
         }
 
         Assert.True(snapshot.TryGetProperty("payments", out _), "snapshot.payments is missing");
+        Assert.True(snapshot.TryGetProperty("branches", out _), "snapshot.branches is missing");
+    }
+
+    [Fact]
+    public async Task A_multi_branch_customers_branches_appear_in_the_snapshot_with_every_field_the_app_reads()
+    {
+        await MakeShopMultiBranchAsync();
+
+        var snapshot = await _phone.GetFromJsonAsync<JsonElement>("/api/mobile/sync/snapshot");
+
+        var customer = snapshot.GetProperty("customers").EnumerateArray()
+            .Single(c => c.GetProperty("id").GetGuid() == _customerId);
+        Assert.True(customer.GetProperty("hasMultipleBranches").GetBoolean());
+
+        var branch = snapshot.GetProperty("branches").EnumerateArray()
+            .Single(b => b.GetProperty("customerId").GetGuid() == _customerId);
+
+        foreach (var field in new[] { "id", "customerId", "name", "location", "address", "phone", "contactPerson" })
+        {
+            Assert.True(branch.TryGetProperty(field, out _), $"branch.{field} is missing");
+        }
+
+        Assert.Equal("Kundara", branch.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task The_body_the_app_sends_for_a_sale_at_a_named_branch_is_accepted()
+    {
+        var branchId = await MakeShopMultiBranchAsync();
+        var saleId = Guid.NewGuid();
+
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{saleId}}",
+                  "type": "Invoice",
+                  "recordedAt": "2026-09-15T06:30:00.000Z",
+                  "sale": {
+                    "customerId": "{{_customerId}}",
+                    "branchId": "{{branchId}}",
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 10.0, "unitPrice": 35.0 }
+                    ],
+                    "pricesAsOf": "2026-09-15T05:00:00.000Z",
+                    "notes": null
+                  }
+                }
+              ]
+            }
+            """);
+
+        var result = response.GetProperty("results")[0];
+        Assert.Equal("Accepted", result.GetProperty("outcome").GetString());
+
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var invoice = await db.Invoices.SingleAsync(i => i.Id == result.GetProperty("recordId").GetGuid());
+        Assert.Equal(branchId, invoice.BranchId);
+    }
+
+    [Fact]
+    public async Task A_sale_for_a_multi_branch_customer_with_no_branch_is_rejected_not_dropped()
+    {
+        await MakeShopMultiBranchAsync();
+        var saleId = Guid.NewGuid();
+
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{saleId}}",
+                  "type": "Invoice",
+                  "recordedAt": "2026-09-15T06:30:00.000Z",
+                  "sale": {
+                    "customerId": "{{_customerId}}",
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 10.0, "unitPrice": 35.0 }
+                    ],
+                    "pricesAsOf": "2026-09-15T05:00:00.000Z",
+                    "notes": null
+                  }
+                }
+              ]
+            }
+            """);
+
+        var result = response.GetProperty("results")[0];
+        Assert.Equal("Rejected", result.GetProperty("outcome").GetString());
+        Assert.Contains("branch", result.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task A_new_shop_found_on_the_road_is_created_priced_and_billed_in_one_offline_batch()
+    {
+        // Every id below was made on the phone, with no signal, before the server had heard of any of it.
+        var shopId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "Customer",
+                  "recordedAt": "2026-09-23T05:00:00.000Z",
+                  "customer": {
+                    "id": "{{shopId}}",
+                    "name": "Danya Supermarket",
+                    "contactPerson": "Manager",
+                    "phone": "9847000000",
+                    "address": "Kundara",
+                    "hasMultipleBranches": true
+                  }
+                },
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "CustomerBranch",
+                  "recordedAt": "2026-09-23T05:00:01.000Z",
+                  "branch": {
+                    "id": "{{branchId}}",
+                    "customerId": "{{shopId}}",
+                    "name": "Kundara",
+                    "location": "Kollam",
+                    "address": null,
+                    "phone": null,
+                    "contactPerson": null
+                  }
+                },
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "CustomerPrice",
+                  "recordedAt": "2026-09-23T05:00:02.000Z",
+                  "customerPrice": {
+                    "customerId": "{{shopId}}",
+                    "productId": "{{_productId}}",
+                    "unitPrice": 37.0
+                  }
+                },
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "Invoice",
+                  "recordedAt": "2026-09-23T05:00:03.000Z",
+                  "sale": {
+                    "customerId": "{{shopId}}",
+                    "branchId": "{{branchId}}",
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 10.0, "unitPrice": 37.0 }
+                    ],
+                    "pricesAsOf": "2026-09-23T05:00:02.000Z",
+                    "notes": null
+                  }
+                }
+              ]
+            }
+            """);
+
+        var results = response.GetProperty("results");
+        foreach (var result in results.EnumerateArray())
+        {
+            Assert.Equal("Accepted", result.GetProperty("outcome").GetString());
+        }
+
+        // The rate the salesperson set is the rate the bill used, so nothing is flagged.
+        Assert.False(results[3].GetProperty("priceMismatch").GetBoolean());
+
+        using (var scope = _api.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var invoice = await db.Invoices.SingleAsync(i => i.Id == results[3].GetProperty("recordId").GetGuid());
+
+            Assert.Equal(shopId, invoice.CustomerId);
+            Assert.Equal(branchId, invoice.BranchId);
+            Assert.Equal(370m, invoice.TotalAmount);
+            Assert.Equal(0m, (await db.Customers.SingleAsync(c => c.Id == shopId)).OpeningBalance);
+        }
+
+        // The office sees who found the shop and who set its rate.
+        var office = await OfficeAsync();
+
+        var added = await office.GetFromJsonAsync<JsonElement>("/api/sales/customers?addedBySales=true");
+        var shop = Assert.Single(added.EnumerateArray());
+        Assert.Equal(shopId, shop.GetProperty("id").GetGuid());
+        Assert.Equal("van@test.local", shop.GetProperty("createdByName").GetString());
+
+        var changes = await office.GetFromJsonAsync<JsonElement>(
+            $"/api/sales/customer-price-changes?customerId={shopId}&salespersonOnly=true");
+        var change = Assert.Single(changes.EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, change.GetProperty("previousPrice").ValueKind);
+        Assert.Equal(37m, change.GetProperty("newPrice").GetDecimal());
+        Assert.Equal("van@test.local", change.GetProperty("changedBy").GetString());
+        Assert.True(change.GetProperty("changedBySalesperson").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Another_branch_of_a_known_shop_goes_under_it_rather_than_becoming_a_new_customer()
+    {
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "CustomerBranch",
+                  "recordedAt": "2026-09-23T05:00:00.000Z",
+                  "branch": {
+                    "id": "{{Guid.NewGuid()}}",
+                    "customerId": "{{_customerId}}",
+                    "name": "Coimbatore",
+                    "location": "Coimbatore",
+                    "address": null,
+                    "phone": null,
+                    "contactPerson": null
+                  }
+                }
+              ]
+            }
+            """);
+
+        Assert.Equal("Accepted", response.GetProperty("results")[0].GetProperty("outcome").GetString());
+
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        Assert.Equal(1, await db.Customers.CountAsync());
+        Assert.True((await db.Customers.SingleAsync()).HasMultipleBranches);
+        Assert.Equal("Coimbatore", (await db.CustomerBranches.SingleAsync()).Name);
+    }
+
+    [Fact]
+    public async Task A_salesperson_edit_changes_the_details_but_never_the_opening_balance_or_the_office_notes()
+    {
+        using (var scope = _api.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var customer = await db.Customers.SingleAsync(c => c.Id == _customerId);
+            customer.OpeningBalance = 500m;
+            customer.Notes = "Pays on the 5th";
+            await db.SaveChangesAsync();
+        }
+
+        var response = await SubmitAsync(CustomerItem(_customerId, "Kumar Stores", phone: "9000000001"));
+
+        Assert.Equal("Accepted", response.GetProperty("results")[0].GetProperty("outcome").GetString());
+
+        using (var scope = _api.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var customer = await db.Customers.SingleAsync(c => c.Id == _customerId);
+
+            Assert.Equal("9000000001", customer.Phone);
+            Assert.Equal(500m, customer.OpeningBalance);
+            Assert.Equal("Pays on the 5th", customer.Notes);
+        }
+    }
+
+    [Fact]
+    public async Task A_new_shop_with_a_name_the_office_already_has_is_refused()
+    {
+        var response = await SubmitAsync(CustomerItem(Guid.NewGuid(), "Kumar Stores"));
+
+        var result = response.GetProperty("results")[0];
+        Assert.Equal("Rejected", result.GetProperty("outcome").GetString());
+        Assert.Contains("already exists", result.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Sending_the_same_new_shop_again_never_makes_a_second_customer()
+    {
+        var shopId = Guid.NewGuid();
+
+        await SubmitAsync(CustomerItem(shopId, "Anand Bakery"));
+        var again = await SubmitAsync(CustomerItem(shopId, "Anand Bakery", phone: "9000000002"));
+
+        Assert.Equal("Accepted", again.GetProperty("results")[0].GetProperty("outcome").GetString());
+
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await db.Customers.CountAsync(c => c.Name == "Anand Bakery"));
+    }
+
+    private string CustomerItem(Guid id, string name, string? phone = null) => $$"""
+        {
+          "deviceId": "{{_deviceId}}",
+          "items": [
+            {
+              "clientRequestId": "{{Guid.NewGuid()}}",
+              "type": "Customer",
+              "recordedAt": "2026-09-23T05:00:00.000Z",
+              "customer": {
+                "id": "{{id}}",
+                "name": "{{name}}",
+                "contactPerson": null,
+                "phone": {{(phone is null ? "null" : $"\"{phone}\"")}},
+                "address": null,
+                "hasMultipleBranches": false
+              }
+            }
+          ]
+        }
+        """;
+
+    private async Task<HttpClient> OfficeAsync()
+    {
+        await _api.CreateUserAsync("office@test.local", Roles.Admin);
+
+        return await _api.SignInAsync("office@test.local");
+    }
+
+    /// <summary>Turns the seeded shop into a Danya-Supermarket-style customer with one branch, Kundara.</summary>
+    private async Task<Guid> MakeShopMultiBranchAsync()
+    {
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var customer = await db.Customers.SingleAsync(c => c.Id == _customerId);
+        customer.HasMultipleBranches = true;
+
+        var branch = new CustomerBranch { CustomerId = _customerId, Name = "Kundara" };
+        db.CustomerBranches.Add(branch);
+
+        await db.SaveChangesAsync();
+
+        return branch.Id;
     }
 
     [Fact]

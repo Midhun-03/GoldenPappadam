@@ -33,6 +33,11 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .HasForeignKey(x => x.CustomerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(x => x.Branch)
+            .WithMany()
+            .HasForeignKey(x => x.BranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasMany(x => x.Lines)
             .WithOne(x => x.Invoice!)
             .HasForeignKey(x => x.InvoiceId)

@@ -116,6 +116,39 @@ void main() {
     expect(waiting.single.lastError, 'No connection.');
   });
 
+  // What happened on 2026-09-22: a firewall dropped the phone's requests for days, every row
+  // reached the 15-minute wait, and once the office was reachable again "Sync now" pulled fresh
+  // data but sent nothing - the rows were still inside their wait.
+  test('asking to sync sends rows still inside their retry wait', () async {
+    await enqueueSale('sale-1');
+    await db.markForRetry(
+        'sale-1', 28, DateTime.now().toUtc().add(const Duration(minutes: 15)), 'Too slow.');
+
+    api.handler = (path, body) =>
+        path.endsWith('/sync/submissions') ? accepted(['sale-1']) : emptySnapshot();
+
+    final status = await engine.syncNow();
+
+    expect(api.submissions, hasLength(1));
+    expect(status.waiting, 0);
+    expect((await db.entriesWithStatus(OutboxStatus.synced)).single.serverRecordId, 'server-sale-1');
+  });
+
+  test('the background timer still waits, so a phone with no signal does not hammer the network',
+      () async {
+    await enqueueSale('sale-1');
+    await db.markForRetry(
+        'sale-1', 3, DateTime.now().toUtc().add(const Duration(minutes: 1)), 'No connection.');
+
+    api.handler = (path, body) =>
+        path.endsWith('/sync/submissions') ? accepted(['sale-1']) : emptySnapshot();
+
+    await engine.syncNow(respectBackoff: true);
+
+    expect(api.submissions, isEmpty);
+    expect(await db.entriesWithStatus(OutboxStatus.pending), hasLength(1));
+  });
+
   test('the backoff grows and then settles rather than growing forever', () {
     expect(backoffFor(1), const Duration(seconds: 5));
     expect(backoffFor(3), const Duration(minutes: 1));
@@ -274,6 +307,37 @@ void main() {
     expect(customers.single.balance, 2500.0);
 
     expect(await engine.pricesAsOf, '2026-09-15T10:00:00.000Z');
+  });
+
+  test('a multi-branch customer and its branches come down with the snapshot', () async {
+    api.handler = (path, body) => path.endsWith('/sync/submissions')
+        ? {'results': <dynamic>[]}
+        : {
+            'serverTime': DateTime.now().toUtc().toIso8601String(),
+            'customers': [
+              {
+                'id': 'danya',
+                'name': 'Danya Supermarket',
+                'balance': 0.0,
+                'hasMultipleBranches': true,
+              }
+            ],
+            'products': <dynamic>[],
+            'prices': <dynamic>[],
+            'branches': [
+              {'id': 'branch-1', 'customerId': 'danya', 'name': 'Kundara', 'location': 'Kollam'},
+              {'id': 'branch-2', 'customerId': 'danya', 'name': 'Coimbatore'},
+            ],
+          };
+
+    await engine.syncNow();
+
+    final customer = await db.findCustomer('danya');
+    expect(customer!.hasMultipleBranches, isTrue);
+
+    final branches = await db.branchesFor('danya');
+    expect(branches.map((b) => b.name), containsAll(['Kundara', 'Coimbatore']));
+    expect(branches.firstWhere((b) => b.name == 'Kundara').location, 'Kollam');
   });
 
   test('a shop with an agreed price pays it, and everything else falls back', () async {

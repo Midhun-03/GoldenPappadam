@@ -108,6 +108,38 @@ void main() {
     expect(sale['sale']['customerId'], 'shop-1');
   });
 
+  test('a sale for a named branch writes branchId into the payload', () async {
+    await repository.recordSale(
+      customerId: 'shop-1',
+      customerName: 'Kumar Stores',
+      lines: [line],
+      amountPaid: 0,
+      paymentMethod: 'Cash',
+      branchId: 'branch-1',
+    );
+
+    final sale = await payloadOf(
+        (await db.select(db.outboxEntries).get()).firstWhere((e) => e.type == 'Invoice'));
+
+    expect(sale['sale']['branchId'], 'branch-1');
+  });
+
+  test('a sale with no branch chosen carries no branchId key at all', () async {
+    await repository.recordSale(
+      customerId: 'shop-1',
+      customerName: 'Kumar Stores',
+      lines: [line],
+      amountPaid: 0,
+      paymentMethod: 'Cash',
+    );
+
+    final sale = await payloadOf(
+        (await db.select(db.outboxEntries).get()).firstWhere((e) => e.type == 'Invoice'));
+
+    // A plain shop's sale must never send a branchId the server would try to look up.
+    expect((sale['sale'] as Map<String, dynamic>).containsKey('branchId'), isFalse);
+  });
+
   test('a part payment records what was actually handed over, not the bill', () async {
     await repository.recordSale(
       customerId: 'shop-1',

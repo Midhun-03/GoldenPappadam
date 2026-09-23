@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IndianRupee, Loader2, Plus, X } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
-import { customerPricesApi } from '@/api/sales'
+import { customerPriceChangesApi, customerPricesApi } from '@/api/sales'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -22,10 +22,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApiError } from '@/lib/api'
 import { formatMoney } from '@/lib/format'
+import { PriceChangesTable } from './PriceChangesTable'
 
 /**
- * What this shop pays. Only the office can change these: the salesperson's app shows the price
- * as plain text with no way to edit it, and the API refuses them outright.
+ * What this shop pays, at every branch. The office and the sales team both set these, so the card
+ * shows the full rate history with who changed what - the office's way to review and correct.
  */
 export function CustomerPricesCard({ customerId }: { customerId: string }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -35,6 +36,12 @@ export function CustomerPricesCard({ customerId }: { customerId: string }) {
   const prices = useQuery({
     queryKey: ['customers', customerId, 'prices'],
     queryFn: () => customerPricesApi.list(customerId),
+  })
+
+  // Under 'prices', so every invalidation of the price list refreshes the history with it.
+  const history = useQuery({
+    queryKey: ['customers', customerId, 'prices', 'history'],
+    queryFn: () => customerPriceChangesApi.list({ customerId }),
   })
 
   const agreed = (prices.data ?? []).filter((price) => price.agreedPrice !== null)
@@ -125,6 +132,13 @@ export function CustomerPricesCard({ customerId }: { customerId: string }) {
               ))}
             </TableBody>
           </Table>
+        )}
+
+        {history.data && history.data.length > 0 && (
+          <div className="mt-4 border-t pt-4">
+            <h3 className="mb-2 px-4 text-sm font-medium">Rate history</h3>
+            <PriceChangesTable changes={history.data} />
+          </div>
         )}
       </CardContent>
 

@@ -93,6 +93,7 @@ export function InvoiceDetailPage() {
               <Link to={`/customers/${data.customerId}`} className="font-medium hover:underline">
                 {data.customerName}
               </Link>
+              {data.branchName && <> &middot; {data.branchName}</>}
               {' · '}
               {formatDay(data.invoiceDate)}
             </>

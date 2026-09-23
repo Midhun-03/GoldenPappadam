@@ -23,6 +23,26 @@ class Customers extends Table {
   /// What the shop owed as at the last sync. Shown with that caveat, never edited here.
   RealColumn get balance => real()();
 
+  /// True for a parent company with several physical shops, e.g. Danya Supermarket. The sale
+  /// screen shows a branch picker only when this is set - same rule as the admin panel.
+  BoolColumn get hasMultipleBranches => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// One physical shop under a multi-branch customer, e.g. Kundara under Danya Supermarket. Only
+/// populated for customers where [Customers.hasMultipleBranches] is true.
+@DataClassName('CachedBranch')
+class Branches extends Table {
+  TextColumn get id => text()();
+  TextColumn get customerId => text()();
+  TextColumn get name => text()();
+  TextColumn get location => text().nullable()();
+  TextColumn get address => text().nullable()();
+  TextColumn get phone => text().nullable()();
+  TextColumn get contactPerson => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -131,13 +151,13 @@ extension OutboxStatusName on OutboxStatus {
       };
 }
 
-@DriftDatabase(tables: [Customers, Products, CustomerPrices, Payments, Meta, OutboxEntries])
+@DriftDatabase(tables: [Customers, Products, CustomerPrices, Payments, Branches, Meta, OutboxEntries])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'golden_pappadam'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -147,6 +167,14 @@ class AppDatabase extends _$AppDatabase {
           // with no signal. A cache table, so there is nothing to carry across - the next snapshot
           // fills it.
           if (from < 2) await m.createTable(payments);
+
+          // 3: branches for multi-branch customers, so the sale screen can ask which shop of
+          // Danya Supermarket a bill is for. Both are cache tables/columns - the next snapshot
+          // fills them.
+          if (from < 3) {
+            await m.createTable(branches);
+            await m.addColumn(customers, customers.hasMultipleBranches);
+          }
         },
       );
 
@@ -158,18 +186,21 @@ class AppDatabase extends _$AppDatabase {
     required List<ProductsCompanion> products,
     required List<CustomerPricesCompanion> prices,
     List<PaymentsCompanion> payments = const [],
+    List<BranchesCompanion> branches = const [],
   }) =>
       transaction(() async {
         await delete(this.customers).go();
         await delete(this.products).go();
         await delete(customerPrices).go();
         await delete(this.payments).go();
+        await delete(this.branches).go();
 
         await batch((batch) {
           batch.insertAll(this.customers, customers);
           batch.insertAll(this.products, products);
           batch.insertAll(customerPrices, prices);
           batch.insertAll(this.payments, payments);
+          batch.insertAll(this.branches, branches);
         });
       });
 
@@ -185,6 +216,12 @@ class AppDatabase extends _$AppDatabase {
 
   Future<CachedCustomer?> findCustomer(String id) =>
       (select(customers)..where((c) => c.id.equals(id))).getSingleOrNull();
+
+  /// The branches under one multi-branch customer. Empty for a plain shop.
+  Future<List<CachedBranch>> branchesFor(String customerId) => (select(branches)
+        ..where((b) => b.customerId.equals(customerId))
+        ..orderBy([(b) => OrderingTerm(expression: b.name)]))
+      .get();
 
   Future<List<CachedProduct>> allProducts() =>
       (select(products)..orderBy([(p) => OrderingTerm(expression: p.name)])).get();
@@ -237,11 +274,20 @@ class AppDatabase extends _$AppDatabase {
 
   /// What is worth sending now: never tried, or failed transiently and due for another go.
   /// Oldest first, because a payment must not reach the server before the bill it settles.
-  Future<List<OutboxEntry>> dueEntries(DateTime now) => (select(outboxEntries)
-        ..where((e) => e.status.isIn([OutboxStatus.pending.stored, OutboxStatus.syncing.stored]))
-        ..where((e) => e.nextAttemptAt.isSmallerOrEqualValue(now) | e.nextAttemptAt.isNull())
-        ..orderBy([(e) => OrderingTerm(expression: e.recordedAt)]))
-      .get();
+  /// What the next push sends, oldest first. [ignoreBackoff] sends everything still waiting, retry
+  /// wait or not - for when a person asks, rather than the background timer. Failed rows are never
+  /// included: they wait for a person to put them back.
+  Future<List<OutboxEntry>> dueEntries(DateTime now, {bool ignoreBackoff = false}) {
+    final query = select(outboxEntries)
+      ..where((e) => e.status.isIn([OutboxStatus.pending.stored, OutboxStatus.syncing.stored]))
+      ..orderBy([(e) => OrderingTerm(expression: e.recordedAt)]);
+
+    if (!ignoreBackoff) {
+      query.where((e) => e.nextAttemptAt.isSmallerOrEqualValue(now) | e.nextAttemptAt.isNull());
+    }
+
+    return query.get();
+  }
 
   Future<List<OutboxEntry>> entriesWithStatus(OutboxStatus status) =>
       (select(outboxEntries)
@@ -338,6 +384,7 @@ class AppDatabase extends _$AppDatabase {
         await delete(products).go();
         await delete(customerPrices).go();
         await delete(payments).go();
+        await delete(branches).go();
         await (delete(outboxEntries)
               ..where((e) => e.status.equals(OutboxStatus.synced.stored)))
             .go();

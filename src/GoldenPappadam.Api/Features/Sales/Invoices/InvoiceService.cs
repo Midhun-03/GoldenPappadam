@@ -35,6 +35,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
         // delivery on the route. Defaults to the warehouse, which is what every bill meant before
         // the van kept its own stock.
         var locationId = await stock.ResolveLocationAsync(request.LocationId, ct);
+        var branchId = await ResolveBranchAsync(customer, request.BranchId, ct);
         var lines = await BuildLinesAsync(customer.Id, request.Lines, ct);
 
         var subTotal = decimal.Round(lines.Sum(l => l.LineTotal), 2, MidpointRounding.AwayFromZero);
@@ -49,7 +50,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             throw new DomainException("The discount cannot be more than the bill.");
         }
 
-        var invoice = await SaveInvoiceAsync(request, customer, invoiceDate, lines, subTotal, locationId, ct);
+        var invoice = await SaveInvoiceAsync(request, customer, invoiceDate, lines, subTotal, locationId, branchId, ct);
         var detail = await GetDetailAsync(invoice.Id, ct);
         var warnings = await WarningsForAsync(lines.Select(l => l.ProductId).Distinct(), locationId, ct);
 
@@ -112,6 +113,35 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
     public async Task<InvoiceDetailDto> GetDetailAsync(Guid id, CancellationToken ct) =>
         await InvoiceQueries.ProjectDetail(db.Invoices.Where(i => i.Id == id), db).FirstOrDefaultAsync(ct)
         ?? throw new NotFoundException("Invoice");
+
+    /// <summary>
+    /// A multi-branch customer must name the shop the goods are for; a plain customer must not,
+    /// since it has no branch to point at. This is what keeps a bill from ever landing on the
+    /// wrong Danya Supermarket branch, or on a branch that belongs to a different shop entirely.
+    /// </summary>
+    private async Task<Guid?> ResolveBranchAsync(Customer customer, Guid? requestedBranchId, CancellationToken ct)
+    {
+        if (!customer.HasMultipleBranches)
+        {
+            return null;
+        }
+
+        if (requestedBranchId is null)
+        {
+            throw new DomainException("Please select a branch before continuing.");
+        }
+
+        var branch = await db.CustomerBranches
+            .FirstOrDefaultAsync(b => b.Id == requestedBranchId && b.CustomerId == customer.Id, ct)
+            ?? throw new NotFoundException("Branch");
+
+        if (!branch.IsActive)
+        {
+            throw new DomainException($"Branch '{branch.Name}' is not active.");
+        }
+
+        return branch.Id;
+    }
 
     private async Task<List<InvoiceLine>> BuildLinesAsync(
         Guid customerId,
@@ -185,6 +215,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
         List<InvoiceLine> lines,
         decimal subTotal,
         Guid locationId,
+        Guid? branchId,
         CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
@@ -195,6 +226,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             {
                 InvoiceNumber = await NextInvoiceNumberAsync(invoiceDate, ct),
                 CustomerId = customer.Id,
+                BranchId = branchId,
                 InvoiceDate = invoiceDate,
                 Status = InvoiceStatus.Issued,
                 SubTotal = subTotal,

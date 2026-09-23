@@ -1,4 +1,5 @@
 using GoldenPappadam.Domain.Sales;
+using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
 
 namespace GoldenPappadam.Api.Features.Sales.Customers;
@@ -26,5 +27,10 @@ public static class CustomerQueries
                    .Where(p => p.CustomerId == c.Id)
                    .Sum(p => (decimal?)p.Amount) ?? 0m),
             c.Notes,
-            c.IsActive));
+            c.IsActive,
+            c.HasMultipleBranches,
+            db.CustomerBranches.Count(b => b.CustomerId == c.Id && b.IsActive),
+            db.Users.Where(u => u.Id == c.CreatedBy).Select(u => u.FullName).FirstOrDefault(),
+            db.UserRoles.Any(ur =>
+                ur.UserId == c.CreatedBy && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson))));
 }

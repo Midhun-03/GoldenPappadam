@@ -3,7 +3,9 @@ using GoldenPappadam.Api.Features.FieldSales.StockRequests;
 using GoldenPappadam.Api.Features.FieldSales.VanLoads;
 using GoldenPappadam.Api.Features.Inventory.Stock;
 using GoldenPappadam.Api.Features.Mobile;
+using GoldenPappadam.Api.Features.Sales.CustomerBranches;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
+using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Payments;
 using GoldenPappadam.Domain.FieldSales;
@@ -48,7 +50,9 @@ public class SalespersonVanAndOrdersTests : IAsyncLifetime
             new PaymentService(_database.Db),
             new CustomerPriceService(_database.Db),
             _vanLoads,
-            _requests);
+            _requests,
+            new CustomerService(_database.Db),
+            new CustomerBranchService(_database.Db));
 
         var (_, packet) = await _database.SeedProductsAsync();
         packet.SellingPrice = 45m;

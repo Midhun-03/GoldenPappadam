@@ -16,6 +16,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(x => x.Address).HasMaxLength(300);
         builder.Property(x => x.Notes).HasMaxLength(300);
         builder.Property(x => x.OpeningBalance).HasPrecision(18, 2);
+        builder.Property(x => x.HasMultipleBranches).HasDefaultValue(false);
 
         builder.HasIndex(x => x.Name);
     }

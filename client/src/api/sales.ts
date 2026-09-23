@@ -3,7 +3,9 @@ import type {
   CreateInvoiceResponse,
   CreatePaymentResponse,
   Customer,
+  CustomerBranch,
   CustomerPrice,
+  CustomerPriceChange,
   InvoiceDetail,
   InvoiceListItem,
   InvoiceStatus,
@@ -12,6 +14,7 @@ import type {
   Payment,
   PaymentMethod,
   SaveCustomer,
+  SaveCustomerBranch,
 } from './types'
 
 const base = '/api/sales'
@@ -26,7 +29,9 @@ function query(params: Record<string, string | boolean | undefined>) {
 }
 
 export const customersApi = {
-  list: (filters: { search?: string; includeInactive?: boolean; withBalanceOnly?: boolean } = {}) =>
+  list: (
+    filters: { search?: string; includeInactive?: boolean; withBalanceOnly?: boolean; addedBySales?: boolean } = {},
+  ) =>
     api.get<Customer[]>(`${base}/customers${query(filters)}`),
   get: (id: string) => api.get<Customer>(`${base}/customers/${id}`),
   create: (customer: SaveCustomer) => api.post<Customer>(`${base}/customers`, customer),
@@ -36,6 +41,19 @@ export const customersApi = {
   ledger: (id: string) => api.get<LedgerEntry[]>(`${base}/customers/${id}/ledger`),
   outstandingInvoices: (id: string) =>
     api.get<OutstandingInvoice[]>(`${base}/customers/${id}/outstanding-invoices`),
+}
+
+export const customerBranchesApi = {
+  list: (customerId: string, filters: { includeInactive?: boolean } = {}) =>
+    api.get<CustomerBranch[]>(`${base}/customers/${customerId}/branches${query(filters)}`),
+  create: (customerId: string, branch: SaveCustomerBranch) =>
+    api.post<CustomerBranch>(`${base}/customers/${customerId}/branches`, branch),
+  update: (customerId: string, branchId: string, branch: SaveCustomerBranch) =>
+    api.put<CustomerBranch>(`${base}/customers/${customerId}/branches/${branchId}`, branch),
+  setActive: (customerId: string, branchId: string, isActive: boolean) =>
+    api.post<CustomerBranch>(
+      `${base}/customers/${customerId}/branches/${branchId}/active${query({ isActive: String(isActive) })}`,
+    ),
 }
 
 /** Prices are admin-only on the server; the salesperson's app can only read its own snapshot. */
@@ -48,6 +66,12 @@ export const customerPricesApi = {
     api.del<void>(`${base}/customers/${customerId}/prices/${productId}`),
 }
 
+/** Every rate change, by the office or the sales team. Dates are IST business days. */
+export const customerPriceChangesApi = {
+  list: (filters: { customerId?: string; salespersonOnly?: boolean; from?: string; to?: string } = {}) =>
+    api.get<CustomerPriceChange[]>(`${base}/customer-price-changes${query(filters)}`),
+}
+
 export type InvoiceFilters = {
   customerId?: string
   from?: string
@@ -58,6 +82,7 @@ export type InvoiceFilters = {
 
 export type CreateInvoice = {
   customerId: string
+  branchId?: string
   invoiceDate?: string
   discountAmount: number
   notes?: string

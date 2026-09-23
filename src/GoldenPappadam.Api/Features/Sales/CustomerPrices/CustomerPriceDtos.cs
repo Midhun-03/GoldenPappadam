@@ -18,3 +18,20 @@ public record CustomerPriceDto(
 
 public record SetCustomerPriceRequest(
     [Range(typeof(decimal), "0", "79228162514264337593543950335")] decimal UnitPrice);
+
+/// <summary>
+/// One rate change. A null <paramref name="PreviousPrice"/> means the customer was on the standard
+/// price before; a null <paramref name="NewPrice"/> means the agreed rate was removed.
+/// </summary>
+public record CustomerPriceChangeDto(
+    Guid Id,
+    Guid CustomerId,
+    string CustomerName,
+    Guid ProductId,
+    string ProductName,
+    string UnitCode,
+    decimal? PreviousPrice,
+    decimal? NewPrice,
+    DateTime ChangedAt,
+    string? ChangedBy,
+    bool ChangedBySalesperson);

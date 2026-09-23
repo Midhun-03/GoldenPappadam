@@ -22,4 +22,12 @@ public class Customer : AuditableEntity
     public string? Notes { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// True for a parent company with several physical shops (see <see cref="CustomerBranch"/>).
+    /// A bill for such a customer must name the branch; a plain shop never shows the branch picker.
+    /// </summary>
+    public bool HasMultipleBranches { get; set; }
+
+    public List<CustomerBranch> Branches { get; set; } = [];
 }

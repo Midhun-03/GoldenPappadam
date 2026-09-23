@@ -79,6 +79,20 @@ public sealed class TestDatabase : IAsyncDisposable
         return customer;
     }
 
+    /// <summary>Sets the parent customer's flag too, so it stays consistent the way the service enforces it.</summary>
+    public async Task<CustomerBranch> SeedBranchAsync(Guid customerId, string name = "Kundara")
+    {
+        var branch = new CustomerBranch { CustomerId = customerId, Name = name };
+        Db.Add(branch);
+
+        var customer = await Db.Customers.FirstAsync(c => c.Id == customerId);
+        customer.HasMultipleBranches = true;
+
+        await Db.SaveChangesAsync();
+
+        return branch;
+    }
+
     public async Task AddStockAsync(Guid productId, decimal quantity, Guid? locationId = null)
     {
         Db.Add(new StockMovement

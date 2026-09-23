@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../core/money.dart';
+import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import '../../data/local/database.dart';
 import '../../data/sales_repository.dart';
 import '../sync/sync_views.dart';
@@ -11,121 +12,23 @@ import '../sync/sync_views.dart';
 /// What the salesperson needs the packing unit to pack, and when.
 ///
 /// Not a customer order: nothing is billed, no stock moves and nothing is reserved. It only
-/// replaces walking into the packing room and telling somebody what tomorrow looks like.
-class OrdersScreen extends ConsumerWidget {
+/// replaces walking into the packing room and telling somebody what tomorrow looks like. One
+/// product at a time, because that is how the request is actually said out loud.
+class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.watch(databaseProvider);
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Ask for stock')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _compose(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('New request'),
-      ),
-      body: Column(
-        children: [
-          const SyncBanner(),
-          Expanded(
-            child: StreamBuilder<List<OutboxEntry>>(
-              // Requests are shown from the outbox, which means one appears the instant it is
-              // written and stays visible whether or not the office has it yet.
-              stream: db.watchOutboxOfType('StockRequest'),
-              builder: (context, snapshot) {
-                final requests = snapshot.data ?? const <OutboxEntry>[];
-
-                if (requests.isEmpty) return const _NoRequests();
-
-                return ListView.separated(
-                  itemCount: requests.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final request = requests[index];
-                    final failed = request.status == 'Failed';
-                    final waiting = request.status == 'Pending' || request.status == 'Syncing';
-
-                    return ListTile(
-                      leading: Icon(
-                        failed
-                            ? Icons.error_outline
-                            : waiting
-                                ? Icons.schedule
-                                : Icons.check_circle_outline,
-                        color: failed ? Theme.of(context).colorScheme.error : null,
-                      ),
-                      title: Text(request.summary),
-                      subtitle: Text(
-                        failed
-                            ? request.lastError ?? 'The office refused this.'
-                            : waiting
-                                ? 'Saved here. It will go up on its own.'
-                                : 'The packing unit has it · ${dayAndTime(request.recordedAt)}',
-                      ),
-                      trailing: failed
-                          ? TextButton(
-                              onPressed: () => db.retryNow(request.clientRequestId),
-                              child: const Text('Try again'),
-                            )
-                          : null,
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _compose(BuildContext context, WidgetRef ref) async {
-    final result = await Navigator.of(context).push<_Request>(
-      MaterialPageRoute(builder: (_) => const _NewRequestScreen()),
-    );
-
-    if (result == null || !context.mounted) return;
-
-    await ref.read(salesRepositoryProvider).recordStockRequest(
-          requiredDate: result.requiredDate,
-          lines: result.lines,
-          notes: result.notes,
-        );
-
-    unawaitedSync(ref);
-
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Request saved. It goes up with the next sync.')),
-    );
-  }
+  ConsumerState<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _Request {
-  const _Request({required this.requiredDate, required this.lines, this.notes});
-
-  final DateTime requiredDate;
-  final List<SaleLine> lines;
-  final String? notes;
-}
-
-class _NewRequestScreen extends ConsumerStatefulWidget {
-  const _NewRequestScreen();
-
-  @override
-  ConsumerState<_NewRequestScreen> createState() => _NewRequestScreenState();
-}
-
-class _NewRequestScreenState extends ConsumerState<_NewRequestScreen> {
-  final Map<String, double> _quantities = {};
-  final _notes = TextEditingController();
-
-  // Tomorrow, because that is what a request nearly always means.
-  DateTime _requiredDate = DateTime.now().add(const Duration(days: 1));
+class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   List<CachedProduct> _products = const [];
+  String? _productId;
+  final _quantity = TextEditingController();
+  DateTime _requiredDate = DateTime.now().add(const Duration(days: 1));
+  final _notes = TextEditingController();
+  bool _notesOpen = false;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -137,100 +40,14 @@ class _NewRequestScreenState extends ConsumerState<_NewRequestScreen> {
 
   @override
   void dispose() {
+    _quantity.dispose();
     _notes.dispose();
     super.dispose();
   }
 
-  List<SaleLine> get _lines => [
-        for (final entry in _quantities.entries)
-          if (entry.value > 0)
-            SaleLine(
-              productId: entry.key,
-              productName: _products.firstWhere((p) => p.id == entry.key).name,
-              quantity: entry.value,
-              unitPrice: 0,
-            )
-      ];
+  double get _quantityValue => double.tryParse(_quantity.text) ?? 0;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('New request')),
-      bottomNavigationBar: _lines.isEmpty
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(_Request(
-                    requiredDate: _requiredDate,
-                    lines: _lines,
-                    notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-                  )),
-                  child: Text('Ask for ${_lines.length} product${_lines.length == 1 ? '' : 's'}'),
-                ),
-              ),
-            ),
-      body: ListView(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.event),
-            title: const Text('Needed by'),
-            subtitle: Text(dayAndTime(_requiredDate).split(',').first),
-            trailing: const Icon(Icons.edit_calendar_outlined),
-            onTap: _pickDate,
-          ),
-          const Divider(height: 1),
-          for (final product in _products) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(product.name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                        Text(product.unitCode.toLowerCase(),
-                            style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    width: 96,
-                    child: TextField(
-                      textAlign: TextAlign.center,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                      decoration: const InputDecoration(isDense: true, hintText: '0'),
-                      onChanged: (text) => setState(() {
-                        final parsed = double.tryParse(text) ?? 0;
-                        if (parsed <= 0) {
-                          _quantities.remove(product.id);
-                        } else {
-                          _quantities[product.id] = parsed;
-                        }
-                      }),
-                      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-          ],
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _notes,
-              decoration: const InputDecoration(labelText: 'Notes', hintText: 'Optional'),
-            ),
-          ),
-          const SizedBox(height: 80),
-        ],
-      ),
-    );
-  }
+  bool get _canSubmit => _productId != null && _quantityValue > 0 && !_saving;
 
   Future<void> _pickDate() async {
     final today = DateTime.now();
@@ -243,28 +60,248 @@ class _NewRequestScreenState extends ConsumerState<_NewRequestScreen> {
 
     if (picked != null && mounted) setState(() => _requiredDate = picked);
   }
-}
 
-class _NoRequests extends StatelessWidget {
-  const _NoRequests();
+  Future<void> _submit() async {
+    final product = _products.firstWhere((p) => p.id == _productId);
+
+    setState(() => _saving = true);
+
+    try {
+      await ref.read(salesRepositoryProvider).recordStockRequest(
+        requiredDate: _requiredDate,
+        lines: [
+          SaleLine(
+            productId: product.id,
+            productName: product.name,
+            quantity: _quantityValue,
+            unitPrice: 0,
+          ),
+        ],
+        notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+      );
+
+      unawaitedSync(ref);
+
+      if (!mounted) return;
+
+      setState(() {
+        _productId = null;
+        _quantity.clear();
+        _notes.clear();
+        _notesOpen = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Request saved. It goes up with the next sync.')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.inventory_2_outlined, size: 40),
-              const SizedBox(height: 12),
-              Text('Nothing asked for yet', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 4),
-              const Text(
-                'Tell the packing unit what you need and when. It works with no signal.',
-                textAlign: TextAlign.center,
+  Widget build(BuildContext context) {
+    final db = ref.watch(databaseProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Orders'), actions: const [PendingBadge()]),
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(syncProvider).syncNow(),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+          children: [
+            const SyncBanner(),
+            const SizedBox(height: 8),
+            StreamBuilder<List<OutboxEntry>>(
+              stream: db.watchOutboxOfType('StockRequest'),
+              builder: (context, snapshot) => _RequestStats(entries: snapshot.data ?? const []),
+            ),
+            const SectionHeader('New stock request'),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DropdownButtonFormField<String>(
+                    key: const ValueKey('request-product'),
+                    initialValue: _productId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Product'),
+                    icon: const Icon(Icons.expand_more),
+                    items: [
+                      for (final product in _products)
+                        DropdownMenuItem(
+                          value: product.id,
+                          child: Text(product.name, overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                    onChanged: (value) => setState(() => _productId = value),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('Quantity', style: TextStyle(fontWeight: FontWeight.w600)),
+                      ),
+                      QuantityStepper(
+                        controller: _quantity,
+                        fieldKey: const ValueKey('request-quantity'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    onTap: _pickDate,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Required date'),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(_formatDate(_requiredDate))),
+                          const Icon(Icons.calendar_today_outlined, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (!_notesOpen)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () => setState(() => _notesOpen = true),
+                        child: const Text('Add a note'),
+                      ),
+                    )
+                  else ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _notes,
+                      decoration: const InputDecoration(labelText: 'Notes', hintText: 'Optional'),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _canSubmit ? _submit : null,
+                    child: _saving
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Submit Request'),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            const SectionHeader('Recent requests'),
+            StreamBuilder<List<OutboxEntry>>(
+              stream: db.watchOutboxOfType('StockRequest'),
+              builder: (context, snapshot) {
+                final requests = snapshot.data ?? const <OutboxEntry>[];
+
+                if (requests.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: EmptyState(
+                      icon: Icons.inventory_2_outlined,
+                      title: 'Nothing asked for yet',
+                      message: 'Tell the packing unit what you need and when. It works with no signal.',
+                    ),
+                  );
+                }
+
+                return AppCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (final request in requests) ...[
+                        _RequestTile(request: request, onRetry: () => db.retryNow(request.clientRequestId)),
+                        if (request != requests.last) const Divider(height: 1),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
+
+  static String _formatDate(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+}
+
+/// Pending / Submitted / Synced / Failed, straight from the outbox - "submitted" is the existing
+/// Syncing status in words a salesperson uses, not a new state.
+class _RequestStats extends StatelessWidget {
+  const _RequestStats({required this.entries});
+
+  final List<OutboxEntry> entries;
+
+  int _count(String status) => entries.where((e) => e.status == status).length;
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = [
+      ('Pending', _count('Pending'), AppColors.textMuted),
+      ('Submitted', _count('Syncing'), AppColors.textMuted),
+      ('Synced', _count('Synced'), AppColors.success),
+      ('Failed', _count('Failed'), AppColors.danger),
+    ];
+
+    return AppCard(
+      child: Row(
+        children: [
+          for (final (label, count, color) in stats)
+            Expanded(
+              child: Column(
+                children: [
+                  Text('$count',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+                  const SizedBox(height: 2),
+                  Text(label.toUpperCase(), style: kEyebrowStyle),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestTile extends StatelessWidget {
+  const _RequestTile({required this.request, required this.onRetry});
+
+  final OutboxEntry request;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = request.status == 'Failed';
+    final waiting = request.status == 'Pending' || request.status == 'Syncing';
+
+    return ListTile(
+      leading: Icon(
+        failed
+            ? Icons.error_outline
+            : waiting
+                ? Icons.schedule
+                : Icons.check_circle_outline,
+        color: failed
+            ? AppColors.danger
+            : waiting
+                ? AppColors.warning
+                : AppColors.success,
+      ),
+      title: Text(request.summary, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(
+        failed
+            ? request.lastError ?? 'The office refused this.'
+            : waiting
+                ? 'Saved here. It will go up on its own.'
+                : 'The packing unit has it · ${dayAndTime(request.recordedAt)}',
+      ),
+      trailing: failed ? TextButton(onPressed: onRetry, child: const Text('Try again')) : null,
+    );
+  }
 }

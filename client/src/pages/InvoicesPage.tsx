@@ -178,6 +178,9 @@ export function InvoicesPage() {
                         <Link className="block truncate hover:underline" to={`/customers/${invoice.customerId}`}>
                           {invoice.customerName}
                         </Link>
+                        {invoice.branchName && (
+                          <div className="truncate text-xs text-muted-foreground">{invoice.branchName}</div>
+                        )}
                         <div className="mt-1 sm:hidden">
                           <Badge variant={state.variant}>{state.label}</Badge>
                         </div>

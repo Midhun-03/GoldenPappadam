@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
+import '../../core/theme.dart';
 import '../../data/remote/api_client.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -68,20 +69,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(color: AppColors.goldSoft, shape: BoxShape.circle),
+                  child: const Icon(Icons.storefront, color: AppColors.goldDark, size: 34),
+                ),
+                const SizedBox(height: 20),
                 Text('Golden Pappadam',
                     style: Theme.of(context).textTheme.headlineSmall,
                     textAlign: TextAlign.center),
                 const SizedBox(height: 4),
-                Text('Sales',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: Theme.of(context).hintColor),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 32),
+                const Text('Sales',
+                    style: TextStyle(color: AppColors.textMuted), textAlign: TextAlign.center),
+                const SizedBox(height: 36),
                 TextField(
                   controller: _email,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.mail_outline),
+                  ),
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   textInputAction: TextInputAction.next,
@@ -89,20 +97,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _password,
-                  decoration: const InputDecoration(labelText: 'Password'),
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
                   obscureText: true,
                   onSubmitted: (_) => _busy ? null : _signIn(),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
-                  Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(_error!, style: const TextStyle(color: AppColors.danger)),
                 ],
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: _busy ? null : _signIn,
                   child: _busy
                       ? const SizedBox(
-                          height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Sign in'),
                 ),
               ],

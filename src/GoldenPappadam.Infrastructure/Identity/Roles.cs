@@ -10,8 +10,9 @@ public static class Roles
     public const string Admin = "Admin";
 
     /// <summary>
-    /// The van. Reads shops, prices and balances; records deliveries, payments and visits.
-    /// Cannot price, cannot move stock, cannot cancel a bill, cannot touch master data.
+    /// The van. Reads shops, prices and balances; records deliveries, payments and visits; creates
+    /// the shops it finds, their branches and their rates. Cannot deactivate anything, cannot set an
+    /// opening balance, cannot cancel a bill, cannot touch product master data.
     /// </summary>
     public const string Salesperson = "Salesperson";
 

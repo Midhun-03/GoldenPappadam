@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDay, formatMoney } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { CustomerBranchesCard } from './CustomerBranchesCard'
 import { CustomerPricesCard } from './CustomerPricesCard'
 import { RecordPaymentDialog } from './RecordPaymentDialog'
 
@@ -54,7 +55,23 @@ export function CustomerLedgerPage() {
         back={{ to: '/customers', label: 'Customers' }}
         title={customer.data?.name ?? 'Customer'}
         description={
-          customer.isPending ? <Skeleton className="h-4 w-64" /> : contact || 'No contact details yet.'
+          customer.isPending ? (
+            <Skeleton className="h-4 w-64" />
+          ) : (
+            <>
+              {customer.data?.hasMultipleBranches && (
+                <Badge variant="outline" className="mr-2 align-middle">
+                  {customer.data.activeBranchCount} branches
+                </Badge>
+              )}
+              {contact || 'No contact details yet.'}
+              {customer.data?.addedBySalesperson && (
+                <span className="mt-1 block text-xs">
+                  Added from the phone by {customer.data.createdByName ?? 'a salesperson'}.
+                </span>
+              )}
+            </>
+          )
         }
         action={
           <>
@@ -245,6 +262,12 @@ export function CustomerLedgerPage() {
           </CardContent>
         </Card>
       </div>
+
+      {customer.data?.hasMultipleBranches && (
+        <div className="mt-4 lg:mt-5">
+          <CustomerBranchesCard customerId={customerId} />
+        </div>
+      )}
 
       <div className="mt-4 lg:mt-5">
         <CustomerPricesCard customerId={customerId} />

@@ -7,18 +7,24 @@ namespace GoldenPappadam.Api.Features.Sales.Customers;
 
 public class CustomerService(AppDbContext db)
 {
-    public async Task<Customer> CreateAsync(SaveCustomerRequest request, CancellationToken ct)
+    /// <summary>
+    /// <paramref name="id"/> is supplied by the phone, which names a shop it found offline before the
+    /// server has ever heard of it, so a sale for that shop in the same batch can refer to it.
+    /// </summary>
+    public async Task<Customer> CreateAsync(SaveCustomerRequest request, CancellationToken ct, Guid? id = null)
     {
         await EnsureNameIsFreeAsync(request.Name, null, ct);
 
         var customer = new Customer
         {
+            Id = id ?? Guid.Empty,
             Name = request.Name.Trim(),
             ContactPerson = Clean(request.ContactPerson),
             Phone = Clean(request.Phone),
             Address = Clean(request.Address),
             OpeningBalance = request.OpeningBalance,
-            Notes = Clean(request.Notes)
+            Notes = Clean(request.Notes),
+            HasMultipleBranches = request.HasMultipleBranches
         };
 
         db.Customers.Add(customer);
@@ -42,12 +48,20 @@ public class CustomerService(AppDbContext db)
                 "Record a payment or a new bill instead.");
         }
 
+        if (customer.HasMultipleBranches && !request.HasMultipleBranches &&
+            await db.CustomerBranches.AnyAsync(b => b.CustomerId == id && b.IsActive, ct))
+        {
+            throw new DomainException(
+                "This customer still has active branches. Deactivate them first, then turn off multiple branches.");
+        }
+
         customer.Name = request.Name.Trim();
         customer.ContactPerson = Clean(request.ContactPerson);
         customer.Phone = Clean(request.Phone);
         customer.Address = Clean(request.Address);
         customer.OpeningBalance = request.OpeningBalance;
         customer.Notes = Clean(request.Notes);
+        customer.HasMultipleBranches = request.HasMultipleBranches;
 
         await db.SaveChangesAsync(ct);
 

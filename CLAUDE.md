@@ -91,9 +91,10 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 ### Confirmed requirements (2026-09-15, phase 3)
 
 - **Customer-specific pricing is real** (closes §10 question 1). The same product has a different price for
-  different shops. Prices live in `sales.CustomerPrices` and are **admin-only**; a shop with no price row
-  pays the product's `SellingPrice`. A salesperson can never set or change a price — the mobile sale request
-  carries no price field at all.
+  different shops. Prices live in `sales.CustomerPrices`; a shop with no price row pays the product's
+  `SellingPrice`. *Who may set a price was changed on 2026-09-23 — see below; the admin-only rule no longer
+  holds.* A bill line still cannot be priced by hand on the phone: the salesperson changes the customer's
+  rate, which is audited, rather than typing a one-off price onto a bill.
 - **A recorded price is never rewritten.** An offline sale is a transaction that already happened, so it is
   saved at the price the phone used; if the price changed while the phone was offline, the bill is *flagged*
   for the admin, not silently re-priced.
@@ -114,6 +115,38 @@ Keep payments simple and practical — not a full enterprise accounting system. 
   to have delivered. It is refused rather than quietly drawn from the warehouse, which would balance the
   books and leave the van's wrong. Payments, visits and stock requests still work without a van, because
   none of them moves product.
+
+### Confirmed requirements (2026-09-22/23, customers and branches)
+
+- **Parent customer, physical branches.** A customer may be one shop or a parent company with several
+  physical shops ("Danya Supermarket" with Kundara, Coimbatore, Kundrathur, Elambalur). A branch is a
+  `sales.CustomerBranches` row under the parent, **never a separate customer**. Branches are deactivated,
+  never deleted, so a closed branch's old bills still name it.
+- **A bill for a multi-branch customer must name its branch**, stored on the bill (`Invoices.BranchId`);
+  a single-location customer never shows or stores one. Bills made before branches existed stay valid.
+- **Pricing is per customer, inherited by every branch.** Danya's ₹37 rate for Pappadam 200 g (MRP ₹45.50)
+  applies at all four branches. No branch-specific prices for now; the model must allow adding them later
+  (a nullable `BranchId` on `CustomerPrices`, resolved branch → customer → product) without a redesign.
+- **Salesmen acquire new shops** (2026-09-23), so they must not depend on the office to create customers.
+  A salesperson may: create a customer; say whether it has multiple branches; add branches to a new or
+  existing customer; edit a customer's and a branch's details; set and change customer-product rates,
+  including the initial rates for a new shop; and bill existing customers and branches.
+- **A salesperson may not:** delete or cancel sales; deactivate or delete customers, branches or prices
+  (removing a rate — sending the shop back to the standard price — is the office's call); set or change a
+  customer's opening balance (a shop the salesperson found owes nothing yet); change product master data;
+  or reach any office endpoint. Enforced by the API, not the app: the salesperson's only way in is
+  `/api/mobile/*`.
+- **Salesperson changes travel through the offline sync batch**, like sales, with ids generated on the
+  phone. A new shop can be created, priced and billed with no signal, and a retry never makes a second
+  customer.
+- **Do not duplicate a customer to record another branch.** Finding "Danya Supermarket – Coimbatore" means
+  adding or picking the Coimbatore branch under the existing Danya Supermarket. The server refuses an exact
+  duplicate customer name; the phone must search existing customers before offering "new customer".
+- **The office keeps full control:** add/edit/deactivate customers, branches and rates, see which customers
+  the sales team created, see every rate change, and override a rate at any time.
+- **Every rate change is recorded** in `sales.CustomerPriceChanges`: customer, product, previous rate, new
+  rate, who changed it and when — the office's changes and the salesperson's alike. A recorded bill is still
+  never re-priced; a rate change applies from the next bill.
 
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
 
@@ -321,6 +354,18 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   does, right after the shop is chosen. 8 new C# tests plus 4 `MobileContractTests`, 6 new Dart
   tests (`new_bill_flow_test`, `sales_repository_test`, `sync_engine_test`). Drift schema bumped to
   v3 (`Branches` table, `Customers.hasMultipleBranches` column).
+- **Salesmen onboard shops — backend and admin done (2026-09-23), phone screens next.** Rules in §4. Three
+  new sync submission types - `Customer`, `CustomerBranch`, `CustomerPrice` - create-or-update by an id the
+  phone generates, so a new shop can be created, given a branch, priced and billed in one offline batch
+  (proved end-to-end in `MobileContractTests`). They call the same `CustomerService`,
+  `CustomerBranchService` and `CustomerPriceService` as the office, so the rules are the same rules; what
+  the phone may not do (opening balance, notes, deactivation, removing a rate) is decided in
+  `MobileSyncService`. Every rate change, from anyone, goes to the immutable `sales.CustomerPriceChanges`
+  (existing agreed rates backfilled as its first entries). Who created a customer comes from the existing
+  `CreatedBy` audit field - no new column. The office sees a "Sales team" badge and filter on Customers, a
+  rate history on each customer's price card, and "Rates changed by the sales team" on Today on the road.
+  Admin endpoints are unchanged and still admin-only. **Not yet built:** the Flutter screens for adding a
+  shop, a branch and a rate - the API is ready for them.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:

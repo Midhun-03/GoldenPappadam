@@ -1,4 +1,5 @@
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,12 +15,16 @@ public class CustomersController(AppDbContext db, CustomerService customers) : C
         string? search = null,
         bool includeInactive = false,
         bool withBalanceOnly = false,
+        bool addedBySales = false,
         CancellationToken ct = default)
     {
         var rows = await CustomerQueries.Project(
                 db.Customers
                     .Where(c => includeInactive || c.IsActive)
                     .Where(c => search == null || c.Name.Contains(search) || c.Phone!.Contains(search))
+                    .Where(c => !addedBySales || db.UserRoles.Any(ur =>
+                        ur.UserId == c.CreatedBy &&
+                        db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson)))
                     .OrderBy(c => c.Name),
                 db)
             .ToListAsync(ct);

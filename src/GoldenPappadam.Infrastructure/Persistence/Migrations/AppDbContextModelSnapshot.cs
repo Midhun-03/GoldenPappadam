@@ -702,6 +702,11 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("HasMultipleBranches")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -733,6 +738,59 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("Customers", "sales");
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.Sales.CustomerBranch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("ContactPerson")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("CustomerBranches", "sales");
                 });
 
             modelBuilder.Entity("GoldenPappadam.Domain.Sales.CustomerPrice", b =>
@@ -779,10 +837,50 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("GoldenPappadam.Domain.Sales.CustomerPriceChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("NewPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("PreviousPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("CustomerId", "CreatedAt");
+
+                    b.ToTable("CustomerPriceChanges", "sales");
+                });
+
             modelBuilder.Entity("GoldenPappadam.Domain.Sales.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("BranchId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("CancellationReason")
@@ -837,6 +935,8 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
 
                     b.HasIndex("InvoiceDate");
 
@@ -1385,7 +1485,37 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("GoldenPappadam.Domain.Sales.CustomerBranch", b =>
+                {
+                    b.HasOne("GoldenPappadam.Domain.Sales.Customer", "Customer")
+                        .WithMany("Branches")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("GoldenPappadam.Domain.Sales.CustomerPrice", b =>
+                {
+                    b.HasOne("GoldenPappadam.Domain.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GoldenPappadam.Domain.Inventory.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.Sales.CustomerPriceChange", b =>
                 {
                     b.HasOne("GoldenPappadam.Domain.Sales.Customer", "Customer")
                         .WithMany()
@@ -1406,11 +1536,18 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("GoldenPappadam.Domain.Sales.Invoice", b =>
                 {
+                    b.HasOne("GoldenPappadam.Domain.Sales.CustomerBranch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GoldenPappadam.Domain.Sales.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Branch");
 
                     b.Navigation("Customer");
                 });
@@ -1523,6 +1660,11 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("GoldenPappadam.Domain.FieldSales.VanLoad", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.Sales.Customer", b =>
+                {
+                    b.Navigation("Branches");
                 });
 
             modelBuilder.Entity("GoldenPappadam.Domain.Sales.Invoice", b =>

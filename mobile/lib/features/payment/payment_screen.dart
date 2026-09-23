@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../core/money.dart';
+import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import '../../data/local/database.dart';
 
 /// Money collected against what the shop already owes, with no delivery today.
@@ -39,69 +41,90 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     final owed = widget.shop.balance;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Collect a payment')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(widget.shop.name, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          Text(
-            owed > 0 ? 'Owes ${money(owed)}' : 'Nothing outstanding at the last sync',
-            style: TextStyle(color: Theme.of(context).hintColor),
-          ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _amount,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Amount received', prefixText: '₹ '),
-            onChanged: (_) => setState(() {}),
-          ),
-          if (owed > 0) ...[
-            const SizedBox(height: 10),
-            // The whole balance in one tap, because "settling up" is the usual reason to be here.
-            OutlinedButton(
-              onPressed: () => setState(() => _amount.text = owed.toStringAsFixed(2)),
-              child: Text('The whole ${money(owed)}'),
+      appBar: AppBar(title: const Text('Receive Payment')),
+      body: FadeIn(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('SHOP', style: kEyebrowStyle),
+                  const SizedBox(height: 4),
+                  Text(widget.shop.name, style: Theme.of(context).textTheme.titleMedium),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Divider(height: 1),
+                  ),
+                  const Text('OUTSTANDING', style: kEyebrowStyle),
+                  const SizedBox(height: 4),
+                  Text(
+                    owed > 0 ? money(owed) : 'Nothing outstanding',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: owed > 0 ? AppColors.danger : AppColors.success,
+                        ),
+                  ),
+                ],
+              ),
             ),
-          ],
-          const SizedBox(height: 20),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'Cash', label: Text('Cash')),
-              ButtonSegment(value: 'UPI', label: Text('UPI')),
-              ButtonSegment(value: 'Cheque', label: Text('Cheque')),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _amount,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Amount', prefixText: '₹ '),
+              onChanged: (_) => setState(() {}),
+            ),
+            if (owed > 0) ...[
+              const SizedBox(height: 10),
+              // The whole balance in one tap, because "settling up" is the usual reason to be here.
+              OutlinedButton(
+                onPressed: () => setState(() => _amount.text = owed.toStringAsFixed(2)),
+                child: Text('The whole ${money(owed)}'),
+              ),
             ],
-            selected: {_method},
-            onSelectionChanged: (values) => setState(() => _method = values.first),
-          ),
-          if (_method != 'Cash') ...[
+            const SizedBox(height: 20),
+            DropdownButtonFormField<String>(
+              key: const ValueKey('payment-method'),
+              initialValue: _method,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Payment method'),
+              icon: const Icon(Icons.expand_more),
+              items: const [
+                DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+                DropdownMenuItem(value: 'UPI', child: Text('UPI')),
+                DropdownMenuItem(value: 'Cheque', child: Text('Cheque')),
+              ],
+              onChanged: (value) => setState(() => _method = value ?? _method),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _reference,
-              decoration: InputDecoration(
-                labelText: _method == 'UPI' ? 'UPI reference' : 'Cheque number',
+              decoration: const InputDecoration(
+                labelText: 'Reference (optional)',
+                hintText: 'Receipt or transaction number',
               ),
             ),
-          ],
-          if (_entered > owed && owed > 0) ...[
-            const SizedBox(height: 16),
-            Text(
-              'That is more than the ${money(owed)} showing. It will be kept on account, and the '
-              'office will see it against the next bill.',
-              style: TextStyle(color: Theme.of(context).colorScheme.tertiary),
+            if (_entered > owed && owed > 0) ...[
+              const SizedBox(height: 16),
+              Text(
+                'That is more than the ${money(owed)} showing. It will be kept on account, and the '
+                'office will see it against the next bill.',
+                style: const TextStyle(color: AppColors.warning),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 16),
+              Text(_error!, style: const TextStyle(color: AppColors.danger)),
+            ],
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _saving || _entered <= 0 ? null : _save,
+              child: const Text('Collect Payment'),
             ),
           ],
-          if (_error != null) ...[
-            const SizedBox(height: 16),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ],
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _saving || _entered <= 0 ? null : _save,
-            child: Text(_entered > 0 ? 'Record ${money(_entered)}' : 'Record payment'),
-          ),
-        ],
+        ),
       ),
     );
   }

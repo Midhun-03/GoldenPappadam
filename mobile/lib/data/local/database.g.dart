@@ -69,6 +69,20 @@ class $CustomersTable extends Customers
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _hasMultipleBranchesMeta =
+      const VerificationMeta('hasMultipleBranches');
+  @override
+  late final GeneratedColumn<bool> hasMultipleBranches = GeneratedColumn<bool>(
+    'has_multiple_branches',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_multiple_branches" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -77,6 +91,7 @@ class $CustomersTable extends Customers
     phone,
     address,
     balance,
+    hasMultipleBranches,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -132,6 +147,15 @@ class $CustomersTable extends Customers
     } else if (isInserting) {
       context.missing(_balanceMeta);
     }
+    if (data.containsKey('has_multiple_branches')) {
+      context.handle(
+        _hasMultipleBranchesMeta,
+        hasMultipleBranches.isAcceptableOrUnknown(
+          data['has_multiple_branches']!,
+          _hasMultipleBranchesMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -165,6 +189,10 @@ class $CustomersTable extends Customers
         DriftSqlType.double,
         data['${effectivePrefix}balance'],
       )!,
+      hasMultipleBranches: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}has_multiple_branches'],
+      )!,
     );
   }
 
@@ -183,6 +211,10 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
 
   /// What the shop owed as at the last sync. Shown with that caveat, never edited here.
   final double balance;
+
+  /// True for a parent company with several physical shops, e.g. Danya Supermarket. The sale
+  /// screen shows a branch picker only when this is set - same rule as the admin panel.
+  final bool hasMultipleBranches;
   const CachedCustomer({
     required this.id,
     required this.name,
@@ -190,6 +222,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
     this.phone,
     this.address,
     required this.balance,
+    required this.hasMultipleBranches,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -206,6 +239,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
       map['address'] = Variable<String>(address);
     }
     map['balance'] = Variable<double>(balance);
+    map['has_multiple_branches'] = Variable<bool>(hasMultipleBranches);
     return map;
   }
 
@@ -223,6 +257,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
           ? const Value.absent()
           : Value(address),
       balance: Value(balance),
+      hasMultipleBranches: Value(hasMultipleBranches),
     );
   }
 
@@ -238,6 +273,9 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
       phone: serializer.fromJson<String?>(json['phone']),
       address: serializer.fromJson<String?>(json['address']),
       balance: serializer.fromJson<double>(json['balance']),
+      hasMultipleBranches: serializer.fromJson<bool>(
+        json['hasMultipleBranches'],
+      ),
     );
   }
   @override
@@ -250,6 +288,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
       'phone': serializer.toJson<String?>(phone),
       'address': serializer.toJson<String?>(address),
       'balance': serializer.toJson<double>(balance),
+      'hasMultipleBranches': serializer.toJson<bool>(hasMultipleBranches),
     };
   }
 
@@ -260,6 +299,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
     Value<String?> phone = const Value.absent(),
     Value<String?> address = const Value.absent(),
     double? balance,
+    bool? hasMultipleBranches,
   }) => CachedCustomer(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -269,6 +309,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
     phone: phone.present ? phone.value : this.phone,
     address: address.present ? address.value : this.address,
     balance: balance ?? this.balance,
+    hasMultipleBranches: hasMultipleBranches ?? this.hasMultipleBranches,
   );
   CachedCustomer copyWithCompanion(CustomersCompanion data) {
     return CachedCustomer(
@@ -280,6 +321,9 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
       phone: data.phone.present ? data.phone.value : this.phone,
       address: data.address.present ? data.address.value : this.address,
       balance: data.balance.present ? data.balance.value : this.balance,
+      hasMultipleBranches: data.hasMultipleBranches.present
+          ? data.hasMultipleBranches.value
+          : this.hasMultipleBranches,
     );
   }
 
@@ -291,14 +335,22 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
           ..write('contactPerson: $contactPerson, ')
           ..write('phone: $phone, ')
           ..write('address: $address, ')
-          ..write('balance: $balance')
+          ..write('balance: $balance, ')
+          ..write('hasMultipleBranches: $hasMultipleBranches')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, contactPerson, phone, address, balance);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    contactPerson,
+    phone,
+    address,
+    balance,
+    hasMultipleBranches,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -308,7 +360,8 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
           other.contactPerson == this.contactPerson &&
           other.phone == this.phone &&
           other.address == this.address &&
-          other.balance == this.balance);
+          other.balance == this.balance &&
+          other.hasMultipleBranches == this.hasMultipleBranches);
 }
 
 class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
@@ -318,6 +371,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
   final Value<String?> phone;
   final Value<String?> address;
   final Value<double> balance;
+  final Value<bool> hasMultipleBranches;
   final Value<int> rowid;
   const CustomersCompanion({
     this.id = const Value.absent(),
@@ -326,6 +380,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     this.phone = const Value.absent(),
     this.address = const Value.absent(),
     this.balance = const Value.absent(),
+    this.hasMultipleBranches = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CustomersCompanion.insert({
@@ -335,6 +390,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     this.phone = const Value.absent(),
     this.address = const Value.absent(),
     required double balance,
+    this.hasMultipleBranches = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -346,6 +402,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     Expression<String>? phone,
     Expression<String>? address,
     Expression<double>? balance,
+    Expression<bool>? hasMultipleBranches,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -355,6 +412,8 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
       if (phone != null) 'phone': phone,
       if (address != null) 'address': address,
       if (balance != null) 'balance': balance,
+      if (hasMultipleBranches != null)
+        'has_multiple_branches': hasMultipleBranches,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -366,6 +425,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     Value<String?>? phone,
     Value<String?>? address,
     Value<double>? balance,
+    Value<bool>? hasMultipleBranches,
     Value<int>? rowid,
   }) {
     return CustomersCompanion(
@@ -375,6 +435,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
       phone: phone ?? this.phone,
       address: address ?? this.address,
       balance: balance ?? this.balance,
+      hasMultipleBranches: hasMultipleBranches ?? this.hasMultipleBranches,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -400,6 +461,9 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     if (balance.present) {
       map['balance'] = Variable<double>(balance.value);
     }
+    if (hasMultipleBranches.present) {
+      map['has_multiple_branches'] = Variable<bool>(hasMultipleBranches.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -415,6 +479,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
           ..write('phone: $phone, ')
           ..write('address: $address, ')
           ..write('balance: $balance, ')
+          ..write('hasMultipleBranches: $hasMultipleBranches, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1585,6 +1650,479 @@ class PaymentsCompanion extends UpdateCompanion<CachedPayment> {
   }
 }
 
+class $BranchesTable extends Branches
+    with TableInfo<$BranchesTable, CachedBranch> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BranchesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _customerIdMeta = const VerificationMeta(
+    'customerId',
+  );
+  @override
+  late final GeneratedColumn<String> customerId = GeneratedColumn<String>(
+    'customer_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _locationMeta = const VerificationMeta(
+    'location',
+  );
+  @override
+  late final GeneratedColumn<String> location = GeneratedColumn<String>(
+    'location',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _addressMeta = const VerificationMeta(
+    'address',
+  );
+  @override
+  late final GeneratedColumn<String> address = GeneratedColumn<String>(
+    'address',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _phoneMeta = const VerificationMeta('phone');
+  @override
+  late final GeneratedColumn<String> phone = GeneratedColumn<String>(
+    'phone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contactPersonMeta = const VerificationMeta(
+    'contactPerson',
+  );
+  @override
+  late final GeneratedColumn<String> contactPerson = GeneratedColumn<String>(
+    'contact_person',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    customerId,
+    name,
+    location,
+    address,
+    phone,
+    contactPerson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'branches';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedBranch> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('customer_id')) {
+      context.handle(
+        _customerIdMeta,
+        customerId.isAcceptableOrUnknown(data['customer_id']!, _customerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_customerIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('location')) {
+      context.handle(
+        _locationMeta,
+        location.isAcceptableOrUnknown(data['location']!, _locationMeta),
+      );
+    }
+    if (data.containsKey('address')) {
+      context.handle(
+        _addressMeta,
+        address.isAcceptableOrUnknown(data['address']!, _addressMeta),
+      );
+    }
+    if (data.containsKey('phone')) {
+      context.handle(
+        _phoneMeta,
+        phone.isAcceptableOrUnknown(data['phone']!, _phoneMeta),
+      );
+    }
+    if (data.containsKey('contact_person')) {
+      context.handle(
+        _contactPersonMeta,
+        contactPerson.isAcceptableOrUnknown(
+          data['contact_person']!,
+          _contactPersonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CachedBranch map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedBranch(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      customerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}customer_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      location: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location'],
+      ),
+      address: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}address'],
+      ),
+      phone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}phone'],
+      ),
+      contactPerson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}contact_person'],
+      ),
+    );
+  }
+
+  @override
+  $BranchesTable createAlias(String alias) {
+    return $BranchesTable(attachedDatabase, alias);
+  }
+}
+
+class CachedBranch extends DataClass implements Insertable<CachedBranch> {
+  final String id;
+  final String customerId;
+  final String name;
+  final String? location;
+  final String? address;
+  final String? phone;
+  final String? contactPerson;
+  const CachedBranch({
+    required this.id,
+    required this.customerId,
+    required this.name,
+    this.location,
+    this.address,
+    this.phone,
+    this.contactPerson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['customer_id'] = Variable<String>(customerId);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || location != null) {
+      map['location'] = Variable<String>(location);
+    }
+    if (!nullToAbsent || address != null) {
+      map['address'] = Variable<String>(address);
+    }
+    if (!nullToAbsent || phone != null) {
+      map['phone'] = Variable<String>(phone);
+    }
+    if (!nullToAbsent || contactPerson != null) {
+      map['contact_person'] = Variable<String>(contactPerson);
+    }
+    return map;
+  }
+
+  BranchesCompanion toCompanion(bool nullToAbsent) {
+    return BranchesCompanion(
+      id: Value(id),
+      customerId: Value(customerId),
+      name: Value(name),
+      location: location == null && nullToAbsent
+          ? const Value.absent()
+          : Value(location),
+      address: address == null && nullToAbsent
+          ? const Value.absent()
+          : Value(address),
+      phone: phone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(phone),
+      contactPerson: contactPerson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contactPerson),
+    );
+  }
+
+  factory CachedBranch.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedBranch(
+      id: serializer.fromJson<String>(json['id']),
+      customerId: serializer.fromJson<String>(json['customerId']),
+      name: serializer.fromJson<String>(json['name']),
+      location: serializer.fromJson<String?>(json['location']),
+      address: serializer.fromJson<String?>(json['address']),
+      phone: serializer.fromJson<String?>(json['phone']),
+      contactPerson: serializer.fromJson<String?>(json['contactPerson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'customerId': serializer.toJson<String>(customerId),
+      'name': serializer.toJson<String>(name),
+      'location': serializer.toJson<String?>(location),
+      'address': serializer.toJson<String?>(address),
+      'phone': serializer.toJson<String?>(phone),
+      'contactPerson': serializer.toJson<String?>(contactPerson),
+    };
+  }
+
+  CachedBranch copyWith({
+    String? id,
+    String? customerId,
+    String? name,
+    Value<String?> location = const Value.absent(),
+    Value<String?> address = const Value.absent(),
+    Value<String?> phone = const Value.absent(),
+    Value<String?> contactPerson = const Value.absent(),
+  }) => CachedBranch(
+    id: id ?? this.id,
+    customerId: customerId ?? this.customerId,
+    name: name ?? this.name,
+    location: location.present ? location.value : this.location,
+    address: address.present ? address.value : this.address,
+    phone: phone.present ? phone.value : this.phone,
+    contactPerson: contactPerson.present
+        ? contactPerson.value
+        : this.contactPerson,
+  );
+  CachedBranch copyWithCompanion(BranchesCompanion data) {
+    return CachedBranch(
+      id: data.id.present ? data.id.value : this.id,
+      customerId: data.customerId.present
+          ? data.customerId.value
+          : this.customerId,
+      name: data.name.present ? data.name.value : this.name,
+      location: data.location.present ? data.location.value : this.location,
+      address: data.address.present ? data.address.value : this.address,
+      phone: data.phone.present ? data.phone.value : this.phone,
+      contactPerson: data.contactPerson.present
+          ? data.contactPerson.value
+          : this.contactPerson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedBranch(')
+          ..write('id: $id, ')
+          ..write('customerId: $customerId, ')
+          ..write('name: $name, ')
+          ..write('location: $location, ')
+          ..write('address: $address, ')
+          ..write('phone: $phone, ')
+          ..write('contactPerson: $contactPerson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    customerId,
+    name,
+    location,
+    address,
+    phone,
+    contactPerson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedBranch &&
+          other.id == this.id &&
+          other.customerId == this.customerId &&
+          other.name == this.name &&
+          other.location == this.location &&
+          other.address == this.address &&
+          other.phone == this.phone &&
+          other.contactPerson == this.contactPerson);
+}
+
+class BranchesCompanion extends UpdateCompanion<CachedBranch> {
+  final Value<String> id;
+  final Value<String> customerId;
+  final Value<String> name;
+  final Value<String?> location;
+  final Value<String?> address;
+  final Value<String?> phone;
+  final Value<String?> contactPerson;
+  final Value<int> rowid;
+  const BranchesCompanion({
+    this.id = const Value.absent(),
+    this.customerId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.location = const Value.absent(),
+    this.address = const Value.absent(),
+    this.phone = const Value.absent(),
+    this.contactPerson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BranchesCompanion.insert({
+    required String id,
+    required String customerId,
+    required String name,
+    this.location = const Value.absent(),
+    this.address = const Value.absent(),
+    this.phone = const Value.absent(),
+    this.contactPerson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       customerId = Value(customerId),
+       name = Value(name);
+  static Insertable<CachedBranch> custom({
+    Expression<String>? id,
+    Expression<String>? customerId,
+    Expression<String>? name,
+    Expression<String>? location,
+    Expression<String>? address,
+    Expression<String>? phone,
+    Expression<String>? contactPerson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (customerId != null) 'customer_id': customerId,
+      if (name != null) 'name': name,
+      if (location != null) 'location': location,
+      if (address != null) 'address': address,
+      if (phone != null) 'phone': phone,
+      if (contactPerson != null) 'contact_person': contactPerson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BranchesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? customerId,
+    Value<String>? name,
+    Value<String?>? location,
+    Value<String?>? address,
+    Value<String?>? phone,
+    Value<String?>? contactPerson,
+    Value<int>? rowid,
+  }) {
+    return BranchesCompanion(
+      id: id ?? this.id,
+      customerId: customerId ?? this.customerId,
+      name: name ?? this.name,
+      location: location ?? this.location,
+      address: address ?? this.address,
+      phone: phone ?? this.phone,
+      contactPerson: contactPerson ?? this.contactPerson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (customerId.present) {
+      map['customer_id'] = Variable<String>(customerId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (location.present) {
+      map['location'] = Variable<String>(location.value);
+    }
+    if (address.present) {
+      map['address'] = Variable<String>(address.value);
+    }
+    if (phone.present) {
+      map['phone'] = Variable<String>(phone.value);
+    }
+    if (contactPerson.present) {
+      map['contact_person'] = Variable<String>(contactPerson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BranchesCompanion(')
+          ..write('id: $id, ')
+          ..write('customerId: $customerId, ')
+          ..write('name: $name, ')
+          ..write('location: $location, ')
+          ..write('address: $address, ')
+          ..write('phone: $phone, ')
+          ..write('contactPerson: $contactPerson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $MetaTable extends Meta with TableInfo<$MetaTable, MetaData> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -2445,6 +2983,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ProductsTable products = $ProductsTable(this);
   late final $CustomerPricesTable customerPrices = $CustomerPricesTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
+  late final $BranchesTable branches = $BranchesTable(this);
   late final $MetaTable meta = $MetaTable(this);
   late final $OutboxEntriesTable outboxEntries = $OutboxEntriesTable(this);
   @override
@@ -2456,6 +2995,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     products,
     customerPrices,
     payments,
+    branches,
     meta,
     outboxEntries,
   ];
@@ -2468,6 +3008,7 @@ typedef $$CustomersTableCreateCompanionBuilder = CustomersCompanion Function({
   Value<String?> phone,
   Value<String?> address,
   required double balance,
+  Value<bool> hasMultipleBranches,
   Value<int> rowid,
 });
 typedef $$CustomersTableUpdateCompanionBuilder = CustomersCompanion Function({
@@ -2477,6 +3018,7 @@ typedef $$CustomersTableUpdateCompanionBuilder = CustomersCompanion Function({
   Value<String?> phone,
   Value<String?> address,
   Value<double> balance,
+  Value<bool> hasMultipleBranches,
   Value<int> rowid,
 });
 
@@ -2516,6 +3058,11 @@ class $$CustomersTableFilterComposer
 
   ColumnFilters<double> get balance => $composableBuilder(
     column: $table.balance,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasMultipleBranches => $composableBuilder(
+    column: $table.hasMultipleBranches,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -2558,6 +3105,11 @@ class $$CustomersTableOrderingComposer
     column: $table.balance,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get hasMultipleBranches => $composableBuilder(
+    column: $table.hasMultipleBranches,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CustomersTableAnnotationComposer
@@ -2588,6 +3140,11 @@ class $$CustomersTableAnnotationComposer
 
   GeneratedColumn<double> get balance =>
       $composableBuilder(column: $table.balance, builder: (column) => column);
+
+  GeneratedColumn<bool> get hasMultipleBranches => $composableBuilder(
+    column: $table.hasMultipleBranches,
+    builder: (column) => column,
+  );
 }
 
 class $$CustomersTableTableManager
@@ -2627,6 +3184,7 @@ class $$CustomersTableTableManager
                 Value<String?> phone = const Value.absent(),
                 Value<String?> address = const Value.absent(),
                 Value<double> balance = const Value.absent(),
+                Value<bool> hasMultipleBranches = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CustomersCompanion(
                 id: id,
@@ -2635,6 +3193,7 @@ class $$CustomersTableTableManager
                 phone: phone,
                 address: address,
                 balance: balance,
+                hasMultipleBranches: hasMultipleBranches,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2645,6 +3204,7 @@ class $$CustomersTableTableManager
                 Value<String?> phone = const Value.absent(),
                 Value<String?> address = const Value.absent(),
                 required double balance,
+                Value<bool> hasMultipleBranches = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CustomersCompanion.insert(
                 id: id,
@@ -2653,6 +3213,7 @@ class $$CustomersTableTableManager
                 phone: phone,
                 address: address,
                 balance: balance,
+                hasMultipleBranches: hasMultipleBranches,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -3345,6 +3906,255 @@ typedef $$PaymentsTableProcessedTableManager =
       CachedPayment,
       PrefetchHooks Function()
     >;
+typedef $$BranchesTableCreateCompanionBuilder = BranchesCompanion Function({
+  required String id,
+  required String customerId,
+  required String name,
+  Value<String?> location,
+  Value<String?> address,
+  Value<String?> phone,
+  Value<String?> contactPerson,
+  Value<int> rowid,
+});
+typedef $$BranchesTableUpdateCompanionBuilder = BranchesCompanion Function({
+  Value<String> id,
+  Value<String> customerId,
+  Value<String> name,
+  Value<String?> location,
+  Value<String?> address,
+  Value<String?> phone,
+  Value<String?> contactPerson,
+  Value<int> rowid,
+});
+
+class $$BranchesTableFilterComposer
+    extends Composer<_$AppDatabase, $BranchesTable> {
+  $$BranchesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get phone => $composableBuilder(
+    column: $table.phone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contactPerson => $composableBuilder(
+    column: $table.contactPerson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BranchesTableOrderingComposer
+    extends Composer<_$AppDatabase, $BranchesTable> {
+  $$BranchesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get phone => $composableBuilder(
+    column: $table.phone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contactPerson => $composableBuilder(
+    column: $table.contactPerson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BranchesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BranchesTable> {
+  $$BranchesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get location =>
+      $composableBuilder(column: $table.location, builder: (column) => column);
+
+  GeneratedColumn<String> get address =>
+      $composableBuilder(column: $table.address, builder: (column) => column);
+
+  GeneratedColumn<String> get phone =>
+      $composableBuilder(column: $table.phone, builder: (column) => column);
+
+  GeneratedColumn<String> get contactPerson => $composableBuilder(
+    column: $table.contactPerson,
+    builder: (column) => column,
+  );
+}
+
+class $$BranchesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BranchesTable,
+          CachedBranch,
+          $$BranchesTableFilterComposer,
+          $$BranchesTableOrderingComposer,
+          $$BranchesTableAnnotationComposer,
+          $$BranchesTableCreateCompanionBuilder,
+          $$BranchesTableUpdateCompanionBuilder,
+          (
+            CachedBranch,
+            BaseReferences<_$AppDatabase, $BranchesTable, CachedBranch>,
+          ),
+          CachedBranch,
+          PrefetchHooks Function()
+        > {
+  $$BranchesTableTableManager(_$AppDatabase db, $BranchesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BranchesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BranchesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BranchesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> customerId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> location = const Value.absent(),
+                Value<String?> address = const Value.absent(),
+                Value<String?> phone = const Value.absent(),
+                Value<String?> contactPerson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BranchesCompanion(
+                id: id,
+                customerId: customerId,
+                name: name,
+                location: location,
+                address: address,
+                phone: phone,
+                contactPerson: contactPerson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String customerId,
+                required String name,
+                Value<String?> location = const Value.absent(),
+                Value<String?> address = const Value.absent(),
+                Value<String?> phone = const Value.absent(),
+                Value<String?> contactPerson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BranchesCompanion.insert(
+                id: id,
+                customerId: customerId,
+                name: name,
+                location: location,
+                address: address,
+                phone: phone,
+                contactPerson: contactPerson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$BranchesTable, CachedBranch>(table),
+                  BaseReferences<_$AppDatabase, $BranchesTable, CachedBranch>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BranchesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BranchesTable,
+      CachedBranch,
+      $$BranchesTableFilterComposer,
+      $$BranchesTableOrderingComposer,
+      $$BranchesTableAnnotationComposer,
+      $$BranchesTableCreateCompanionBuilder,
+      $$BranchesTableUpdateCompanionBuilder,
+      (
+        CachedBranch,
+        BaseReferences<_$AppDatabase, $BranchesTable, CachedBranch>,
+      ),
+      CachedBranch,
+      PrefetchHooks Function()
+    >;
 typedef $$MetaTableCreateCompanionBuilder = MetaCompanion Function({
   required String key,
   required String value,
@@ -3803,6 +4613,8 @@ class $AppDatabaseManager {
       $$CustomerPricesTableTableManager(_db, _db.customerPrices);
   $$PaymentsTableTableManager get payments =>
       $$PaymentsTableTableManager(_db, _db.payments);
+  $$BranchesTableTableManager get branches =>
+      $$BranchesTableTableManager(_db, _db.branches);
   $$MetaTableTableManager get meta => $$MetaTableTableManager(_db, _db.meta);
   $$OutboxEntriesTableTableManager get outboxEntries =>
       $$OutboxEntriesTableTableManager(_db, _db.outboxEntries);

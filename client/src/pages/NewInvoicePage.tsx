@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { productsApi, stockApi } from '@/api/inventory'
-import { customersApi, invoicesApi } from '@/api/sales'
+import { customerBranchesApi, customersApi, invoicesApi } from '@/api/sales'
 import { PageHeader } from '@/components/PageHeader'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ export function NewInvoicePage() {
   const [searchParams] = useSearchParams()
 
   const [customerId, setCustomerId] = useState(searchParams.get('customerId') ?? '')
+  const [branchId, setBranchId] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(todayInIndia())
   const [discount, setDiscount] = useState('')
   const [notes, setNotes] = useState('')
@@ -35,6 +36,21 @@ export function NewInvoicePage() {
   const customers = useQuery({ queryKey: ['customers', {}], queryFn: () => customersApi.list() })
   const products = useQuery({ queryKey: ['products', {}], queryFn: () => productsApi.list() })
   const stock = useQuery({ queryKey: ['stock', {}], queryFn: () => stockApi.onHand() })
+
+  const customer = customers.data?.find((candidate) => candidate.id === customerId)
+  const needsBranch = customer?.hasMultipleBranches === true
+
+  const branches = useQuery({
+    queryKey: ['customers', customerId, 'branches'],
+    queryFn: () => customerBranchesApi.list(customerId),
+    enabled: needsBranch,
+  })
+
+  function selectCustomer(nextCustomerId: string) {
+    setCustomerId(nextCustomerId)
+    // A branch chosen for one shop must never silently attach to a different one.
+    setBranchId('')
+  }
 
   const priced = lines.map((line) => {
     const product = products.data?.find((candidate) => candidate.id === line.productId)
@@ -47,12 +63,12 @@ export function NewInvoicePage() {
   const subTotal = priced.reduce((sum, row) => sum + row.total, 0)
   const discountValue = discount.trim() === '' ? 0 : Number(discount)
   const total = subTotal - discountValue
-  const customer = customers.data?.find((candidate) => candidate.id === customerId)
 
   const create = useMutation({
     mutationFn: () =>
       invoicesApi.create({
         customerId,
+        branchId: needsBranch ? branchId : undefined,
         invoiceDate,
         discountAmount: discountValue,
         notes: notes.trim() || undefined,
@@ -87,6 +103,11 @@ export function NewInvoicePage() {
       return
     }
 
+    if (needsBranch && branchId === '') {
+      setError('Please select a branch before continuing.')
+      return
+    }
+
     create.mutate()
   }
 
@@ -111,7 +132,7 @@ export function NewInvoicePage() {
                 <Label htmlFor="bill-customer">
                   Customer <span className="text-destructive">*</span>
                 </Label>
-                <Select value={customerId} onValueChange={setCustomerId}>
+                <Select value={customerId} onValueChange={selectCustomer}>
                   <SelectTrigger id="bill-customer" className="w-full">
                     <SelectValue placeholder="Choose a shop" />
                   </SelectTrigger>
@@ -143,6 +164,31 @@ export function NewInvoicePage() {
                   onChange={(event) => setInvoiceDate(event.target.value)}
                 />
               </div>
+
+              {needsBranch && (
+                <div className="grid gap-1.5 sm:col-span-2">
+                  <Label htmlFor="bill-branch">
+                    Branch <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={branchId} onValueChange={setBranchId}>
+                    <SelectTrigger id="bill-branch" className="w-full sm:w-[calc(50%-0.5rem)]">
+                      <SelectValue placeholder="Choose a branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(branches.data ?? []).map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {branches.isSuccess && branches.data.length === 0 && (
+                    <p className="text-xs text-warning">
+                      This customer has no branches yet. Add one from the customer page first.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -315,7 +361,12 @@ export function NewInvoicePage() {
               </Alert>
             )}
 
-            <Button type="submit" size="lg" className="mt-1" disabled={create.isPending || customerId === ''}>
+            <Button
+              type="submit"
+              size="lg"
+              className="mt-1"
+              disabled={create.isPending || customerId === '' || (needsBranch && branchId === '')}
+            >
               {create.isPending && <Loader2 className="size-4 animate-spin" />}
               {create.isPending ? 'Saving…' : 'Create bill'}
             </Button>

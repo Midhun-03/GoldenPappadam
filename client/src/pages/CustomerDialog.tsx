@@ -1,11 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { customersApi } from '@/api/sales'
 import type { Customer, SaveCustomer } from '@/api/types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -25,6 +27,7 @@ const empty = {
   address: '',
   openingBalance: '',
   notes: '',
+  hasMultipleBranches: false,
 }
 
 export function CustomerDialog({
@@ -37,6 +40,7 @@ export function CustomerDialog({
   customer: Customer | null
 }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [form, setForm] = useState(empty)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,6 +57,7 @@ export function CustomerDialog({
             address: customer.address ?? '',
             openingBalance: customer.openingBalance ? String(customer.openingBalance) : '',
             notes: customer.notes ?? '',
+            hasMultipleBranches: customer.hasMultipleBranches,
           }
         : empty,
     )
@@ -66,6 +71,12 @@ export function CustomerDialog({
       await queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success(customer ? `Updated ${saved.name}` : `Added ${saved.name}`)
       onOpenChange(false)
+
+      // A brand-new multi-branch customer has no branches yet: take the admin straight to where
+      // "+ Add Branch" lives, instead of a customer they cannot yet bill.
+      if (!customer && saved.hasMultipleBranches) {
+        navigate(`/customers/${saved.id}`)
+      }
     },
     onError: (caught) => setError(caught instanceof ApiError ? caught.message : 'Could not save the customer.'),
   })
@@ -81,6 +92,7 @@ export function CustomerDialog({
       address: form.address.trim() || null,
       openingBalance: form.openingBalance.trim() === '' ? 0 : Number(form.openingBalance),
       notes: form.notes.trim() || null,
+      hasMultipleBranches: form.hasMultipleBranches,
     })
   }
 
@@ -159,6 +171,25 @@ export function CustomerDialog({
                 value={form.notes}
                 onChange={(event) => setForm({ ...form, notes: event.target.value })}
               />
+            </div>
+          </div>
+
+          <div className="group/field-label flex items-start gap-2.5">
+            <Checkbox
+              id="hasMultipleBranches"
+              checked={form.hasMultipleBranches}
+              onCheckedChange={(checked) => setForm({ ...form, hasMultipleBranches: checked === true })}
+              disabled={Boolean(customer && customer.hasMultipleBranches && customer.activeBranchCount > 0)}
+            />
+            <div className="grid gap-0.5">
+              <Label htmlFor="hasMultipleBranches" className="font-normal">
+                This customer has multiple branches
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {customer && customer.hasMultipleBranches && customer.activeBranchCount > 0
+                  ? 'Deactivate its branches first to turn this off.'
+                  : 'Each shop, like Kundara or Coimbatore, is added as a branch after saving.'}
+              </p>
             </div>
           </div>
 

@@ -15,6 +15,8 @@ class SearchableDropdown<T> extends StatelessWidget {
     this.hintText,
     this.helperText,
     this.searchTextOf,
+    this.leading = const Icon(Icons.search),
+    this.textStyle,
     super.key,
   });
 
@@ -25,6 +27,12 @@ class SearchableDropdown<T> extends StatelessWidget {
   final String? hintText;
   final String? helperText;
   final String Function(T value)? searchTextOf;
+
+  /// What sits at the start of the field. Defaults to a plain search icon; the shop field on the
+  /// bill page swaps in a bigger, coloured square so the row reads as a tappable card.
+  final Widget leading;
+
+  final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) => DropdownMenu<T>(
@@ -38,7 +46,8 @@ class SearchableDropdown<T> extends StatelessWidget {
         menuHeight: 320,
         enableFilter: true,
         requestFocusOnTap: true,
-        leadingIcon: const Icon(Icons.search),
+        leadingIcon: leading,
+        textStyle: textStyle,
         filterCallback: (entries, filter) {
           final needle = filter.trim().toLowerCase();
           if (needle.isEmpty) return entries;

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../core/money.dart';
+import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import '../../data/local/database.dart';
 import '../../data/remote/api_client.dart';
 import '../../data/sales_repository.dart';
@@ -58,14 +59,15 @@ class _VanScreenState extends ConsumerState<VanScreen> {
         .whereType<Map<String, dynamic>>()
         .toList();
 
+    double sum(String key) =>
+        lines.fold(0, (total, line) => total + ((line[key] as num?)?.toDouble() ?? 0));
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Van'),
-        actions: [
-          IconButton(tooltip: 'Refresh', icon: const Icon(Icons.sync), onPressed: _load),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Van Stock'), actions: const [PendingBadge()]),
+      // The four tabs stay mounted at once (IndexedStack), so Van's and Orders' FABs need distinct
+      // hero tags - otherwise Flutter finds two "default" heroes in the tree and asserts.
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'van-fab',
         onPressed: _recordLoad,
         icon: const Icon(Icons.add),
         label: const Text('Took from warehouse'),
@@ -76,9 +78,9 @@ class _VanScreenState extends ConsumerState<VanScreen> {
           if (_error != null)
             Container(
               width: double.infinity,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: AppColors.surfaceAlt,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).hintColor)),
+              child: Text(_error!, style: const TextStyle(color: AppColors.textMuted)),
             ),
           Expanded(
             child: RefreshIndicator(
@@ -87,10 +89,69 @@ class _VanScreenState extends ConsumerState<VanScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : lines.isEmpty
                       ? const _EmptyVan()
-                      : ListView.separated(
-                          itemCount: lines.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
-                          itemBuilder: (context, index) => _VanRow(line: lines[index]),
+                      : FadeIn(
+                          child: ListView(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: StatTile(
+                                        icon: Icons.local_shipping_outlined,
+                                        label: 'Loaded',
+                                        value: quantity(sum('loaded')),
+                                        note: 'units'),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: StatTile(
+                                        icon: Icons.inventory_2_outlined,
+                                        label: 'Sold',
+                                        value: quantity(sum('sold')),
+                                        note: 'today'),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: StatTile(
+                                        icon: Icons.local_shipping,
+                                        label: 'Remaining',
+                                        value: quantity(sum('unaccounted')),
+                                        note: 'units'),
+                                  ),
+                                ],
+                              ),
+                              const SectionHeader('Products on van'),
+                              AppCard(
+                                padding: EdgeInsets.zero,
+                                child: Column(
+                                  children: [
+                                    for (final line in lines) ...[
+                                      _VanRow(line: line),
+                                      if (line != lines.last) const Divider(height: 1),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              if (_error == null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.successSoft,
+                                    borderRadius: BorderRadius.circular(AppRadius.md),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.check_circle_outline, color: AppColors.success),
+                                      SizedBox(width: 10),
+                                      Text('Stock figures are up to date',
+                                          style: TextStyle(
+                                              color: AppColors.success, fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
             ),
           ),
@@ -101,7 +162,7 @@ class _VanScreenState extends ConsumerState<VanScreen> {
 
   Future<void> _recordLoad() async {
     final lines = await Navigator.of(context).push<List<SaleLine>>(
-      MaterialPageRoute(builder: (_) => const _LoadSheetScreen()),
+      appRoute<List<SaleLine>>((_) => const _LoadSheetScreen()),
     );
 
     if (lines == null || lines.isEmpty || !mounted) return;
@@ -128,40 +189,44 @@ class _VanRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loaded = _of('loaded');
     final remaining = _of('unaccounted');
+    final progress = loaded <= 0 ? 0.0 : (remaining / loaded).clamp(0, 1).toDouble();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child: Text(line['productName'] as String? ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w500)),
-              ),
-              Text(
-                quantity(remaining),
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Took ${quantity(_of('loaded'))} · delivered ${quantity(_of('sold'))}'
-                  '${_of('returned') > 0 ? ' · returned ${quantity(_of('returned'))}' : ''}',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(line['productName'] as String? ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(
+                      'Took ${quantity(_of('loaded'))} · delivered ${quantity(_of('sold'))}'
+                      '${_of('returned') > 0 ? ' · returned ${quantity(_of('returned'))}' : ''}',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                    ),
+                  ],
                 ),
               ),
-              Text('left', style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+              Text(quantity(remaining),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
             ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 5,
+              backgroundColor: AppColors.surfaceAlt,
+              valueColor: const AlwaysStoppedAnimation(AppColors.gold),
+            ),
           ),
         ],
       ),
@@ -174,20 +239,13 @@ class _EmptyVan extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-        children: [
+        children: const [
           Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              children: [
-                const Icon(Icons.local_shipping_outlined, size: 40),
-                const SizedBox(height: 12),
-                Text('Nothing on the van', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                const Text(
-                  'Record what you took from the warehouse and it will show here.',
-                  textAlign: TextAlign.center,
-                ),
-              ],
+            padding: EdgeInsets.only(top: 24),
+            child: EmptyState(
+              icon: Icons.local_shipping_outlined,
+              title: 'Nothing on the van',
+              message: 'Record what you took from the warehouse and it will show here.',
             ),
           ),
         ],
@@ -205,6 +263,7 @@ class _LoadSheetScreen extends ConsumerStatefulWidget {
 
 class _LoadSheetScreenState extends ConsumerState<_LoadSheetScreen> {
   final Map<String, double> _quantities = {};
+  final Map<String, TextEditingController> _qtyControllers = {};
   List<CachedProduct> _products = const [];
 
   @override
@@ -214,6 +273,17 @@ class _LoadSheetScreenState extends ConsumerState<_LoadSheetScreen> {
       if (mounted) setState(() => _products = products);
     });
   }
+
+  @override
+  void dispose() {
+    for (final controller in _qtyControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _controllerFor(String productId) =>
+      _qtyControllers.putIfAbsent(productId, TextEditingController.new);
 
   List<SaleLine> get _lines => [
         for (final entry in _quantities.entries)
@@ -242,47 +312,24 @@ class _LoadSheetScreenState extends ConsumerState<_LoadSheetScreen> {
               ),
             ),
       body: ListView.separated(
+        padding: const EdgeInsets.all(12),
         itemCount: _products.length,
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final product = _products[index];
-          final value = _quantities[product.id] ?? 0;
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(product.name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                      Text(product.unitCode.toLowerCase(),
-                          style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  width: 96,
-                  child: TextField(
-                    textAlign: TextAlign.center,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                    decoration: const InputDecoration(isDense: true, hintText: '0'),
-                    onChanged: (text) => setState(() {
-                      final parsed = double.tryParse(text) ?? 0;
-                      if (parsed <= 0) {
-                        _quantities.remove(product.id);
-                      } else {
-                        _quantities[product.id] = parsed;
-                      }
-                    }),
-                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-                  ),
-                ),
-                if (value > 0) const Icon(Icons.check, size: 18),
-              ],
-            ),
+          return ProductQuantityRow(
+            name: product.name,
+            unit: product.unitCode.toLowerCase(),
+            controller: _controllerFor(product.id),
+            onChanged: (text) => setState(() {
+              final parsed = double.tryParse(text) ?? 0;
+              if (parsed <= 0) {
+                _quantities.remove(product.id);
+              } else {
+                _quantities[product.id] = parsed;
+              }
+            }),
           );
         },
       ),

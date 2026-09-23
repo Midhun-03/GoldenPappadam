@@ -23,6 +23,7 @@ public class AuthorizationTests : IAsyncLifetime
         "/api/inventory/products",
         "/api/inventory/stock",
         "/api/sales/customers",
+        "/api/sales/customer-price-changes",
         "/api/sales/invoices",
         "/api/sales/payments",
         "/api/fieldsales/day",
@@ -111,8 +112,12 @@ public class AuthorizationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await theirClient.GetAsync("/api/admin/users")).StatusCode);
     }
 
+    /// <summary>
+    /// Salesmen do set rates (2026-09-23), but only through the sync batch, which records who did it
+    /// and cannot remove a rate. The office's price endpoints stay the office's.
+    /// </summary>
     [Fact]
-    public async Task A_salesperson_can_neither_see_nor_set_a_price()
+    public async Task A_salesperson_cannot_use_the_office_price_endpoints()
     {
         var client = await _api.SignInAsync("van@test.local");
         var customerId = Guid.NewGuid();

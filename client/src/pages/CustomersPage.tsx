@@ -30,10 +30,11 @@ export function CustomersPage() {
   const [search, setSearch] = useState('')
   const [withBalanceOnly, setWithBalanceOnly] = useState(false)
   const [includeInactive, setIncludeInactive] = useState(false)
+  const [addedBySales, setAddedBySales] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  const filters = { search: search || undefined, withBalanceOnly, includeInactive }
+  const filters = { search: search || undefined, withBalanceOnly, includeInactive, addedBySales }
   const customers = useQuery({ queryKey: ['customers', filters], queryFn: () => customersApi.list(filters) })
 
   const setActive = useMutation({
@@ -48,7 +49,7 @@ export function CustomersPage() {
 
   const rows = customers.data ?? []
   const totalOwed = rows.reduce((sum, customer) => sum + Math.max(customer.balance, 0), 0)
-  const isFiltered = search !== '' || withBalanceOnly
+  const isFiltered = search !== '' || withBalanceOnly || addedBySales
 
   function openDialog(customer: Customer | null) {
     setEditing(customer)
@@ -93,6 +94,10 @@ export function CustomersPage() {
 
         <FilterToggle pressed={withBalanceOnly} onPressedChange={setWithBalanceOnly}>
           Owing money only
+        </FilterToggle>
+
+        <FilterToggle pressed={addedBySales} onPressedChange={setAddedBySales}>
+          Added by sales team
         </FilterToggle>
 
         <FilterToggle pressed={includeInactive} onPressedChange={setIncludeInactive}>
@@ -147,6 +152,16 @@ export function CustomersPage() {
                           {customer.name}
                         </Link>
                         {!customer.isActive && <Badge variant="outline">Inactive</Badge>}
+                        {customer.addedBySalesperson && (
+                          <Badge variant="secondary" title={`Added from the phone by ${customer.createdByName ?? 'a salesperson'}`}>
+                            Sales team
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {customer.hasMultipleBranches
+                          ? `Multiple branches · ${customer.activeBranchCount} branch${customer.activeBranchCount === 1 ? '' : 'es'}`
+                          : 'Single location'}
                       </div>
                       {(customer.address || customer.phone) && (
                         <div className="mt-0.5 truncate text-xs text-muted-foreground">

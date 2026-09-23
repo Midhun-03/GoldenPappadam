@@ -1,14 +1,16 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Domain.Sales;
+using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace GoldenPappadam.Api.Features.Sales.CustomerPrices;
 
 /// <summary>
-/// What each shop pays. The one rule worth stating plainly lives in <see cref="ResolveAsync"/>:
+/// What each shop pays. The one rule worth stating plainly lives in <see cref="Resolve"/>:
 /// an explicit price on the bill line wins, then the shop's agreed price, then the product's own
-/// selling price. Only the office can reach the first two.
+/// selling price. The office sets agreed prices here, and so does the phone's sync - both through
+/// <see cref="SetAsync"/>, which is why every change lands in the history exactly once.
 /// </summary>
 public class CustomerPriceService(AppDbContext db)
 {
@@ -87,22 +89,29 @@ public class CustomerPriceService(AppDbContext db)
         var existing = await db.CustomerPrices
             .FirstOrDefaultAsync(cp => cp.CustomerId == customerId && cp.ProductId == productId, ct);
 
-        if (existing is null)
-        {
-            db.CustomerPrices.Add(new CustomerPrice
-            {
-                CustomerId = customerId,
-                ProductId = productId,
-                UnitPrice = unitPrice
-            });
-        }
-        else
-        {
-            existing.UnitPrice = unitPrice;
-            existing.IsActive = true;
-        }
+        var previous = existing is { IsActive: true } ? existing.UnitPrice : (decimal?)null;
 
-        await db.SaveChangesAsync(ct);
+        // Setting the rate it already has is not a change, and must not add noise to the history.
+        if (previous != unitPrice)
+        {
+            if (existing is null)
+            {
+                db.CustomerPrices.Add(new CustomerPrice
+                {
+                    CustomerId = customerId,
+                    ProductId = productId,
+                    UnitPrice = unitPrice
+                });
+            }
+            else
+            {
+                existing.UnitPrice = unitPrice;
+                existing.IsActive = true;
+            }
+
+            RecordChange(customerId, productId, previous, unitPrice);
+            await db.SaveChangesAsync(ct);
+        }
 
         return new CustomerPriceDto(
             product.Id,
@@ -130,8 +139,57 @@ public class CustomerPriceService(AppDbContext db)
         }
 
         price.IsActive = false;
+        RecordChange(customerId, productId, price.UnitPrice, null);
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// Rate changes, newest first - for one customer, or across all of them for the office's review.
+    /// <paramref name="from"/> and <paramref name="to"/> are IST business days.
+    /// </summary>
+    public async Task<IReadOnlyList<CustomerPriceChangeDto>> GetChangesAsync(
+        Guid? customerId,
+        bool salespersonOnly,
+        DateOnly? from,
+        DateOnly? to,
+        int limit,
+        CancellationToken ct)
+    {
+        var fromUtc = from is { } fromDay ? IndiaTime.DayRangeUtc(fromDay).Start : (DateTime?)null;
+        var toUtc = to is { } toDay ? IndiaTime.DayRangeUtc(toDay).End : (DateTime?)null;
+
+        return await db.CustomerPriceChanges
+            .Where(c => customerId == null || c.CustomerId == customerId)
+            .Where(c => fromUtc == null || c.CreatedAt >= fromUtc)
+            .Where(c => toUtc == null || c.CreatedAt < toUtc)
+            .Where(c => !salespersonOnly || db.UserRoles.Any(ur =>
+                ur.UserId == c.CreatedBy && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson)))
+            .OrderByDescending(c => c.CreatedAt)
+            .Take(Math.Clamp(limit, 1, 500))
+            .Select(c => new CustomerPriceChangeDto(
+                c.Id,
+                c.CustomerId,
+                c.Customer!.Name,
+                c.ProductId,
+                c.Product!.Name,
+                c.Product.UnitOfMeasure!.Code,
+                c.PreviousPrice,
+                c.NewPrice,
+                c.CreatedAt,
+                db.Users.Where(u => u.Id == c.CreatedBy).Select(u => u.FullName).FirstOrDefault(),
+                db.UserRoles.Any(ur =>
+                    ur.UserId == c.CreatedBy && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson))))
+            .ToListAsync(ct);
+    }
+
+    private void RecordChange(Guid customerId, Guid productId, decimal? previous, decimal? next) =>
+        db.CustomerPriceChanges.Add(new CustomerPriceChange
+        {
+            CustomerId = customerId,
+            ProductId = productId,
+            PreviousPrice = previous,
+            NewPrice = next
+        });
 
     /// <summary>
     /// The agreed prices for a set of products, for billing. One query rather than one per line.

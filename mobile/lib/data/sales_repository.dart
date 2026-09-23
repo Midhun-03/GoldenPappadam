@@ -46,6 +46,7 @@ class SalesRepository {
     required String paymentMethod,
     String? notes,
     String? pricesAsOf,
+    String? branchId,
   }) async {
     if (lines.isEmpty) {
       throw ArgumentError('A sale needs at least one product.');
@@ -65,6 +66,7 @@ class SalesRepository {
         payload: {
           'sale': {
             'customerId': customerId,
+            if (branchId != null) 'branchId': branchId,
             'lines': [
               for (final line in lines)
                 {
@@ -323,10 +325,26 @@ CustomersCompanion shopRow({
   required String name,
   required double balance,
   String? phone,
+  bool hasMultipleBranches = false,
 }) =>
     CustomersCompanion.insert(
       id: id,
       name: name,
       balance: balance,
       phone: Value(phone),
+      hasMultipleBranches: Value(hasMultipleBranches),
+    );
+
+/// Exposed so the sale screen and the tests agree on what a companion looks like.
+BranchesCompanion branchRow({
+  required String id,
+  required String customerId,
+  required String name,
+  String? location,
+}) =>
+    BranchesCompanion.insert(
+      id: id,
+      customerId: customerId,
+      name: name,
+      location: Value(location),
     );

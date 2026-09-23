@@ -20,7 +20,18 @@ public record SnapshotCustomerDto(
     string? ContactPerson,
     string? Phone,
     string? Address,
-    decimal Balance);
+    decimal Balance,
+    bool HasMultipleBranches);
+
+/// <summary>One physical shop under a multi-branch customer, e.g. Kundara under Danya Supermarket.</summary>
+public record SnapshotBranchDto(
+    Guid Id,
+    Guid CustomerId,
+    string Name,
+    string? Location,
+    string? Address,
+    string? Phone,
+    string? ContactPerson);
 
 public record SnapshotProductDto(
     Guid Id,
@@ -61,7 +72,8 @@ public record SnapshotDto(
     IReadOnlyList<SnapshotProductDto> Products,
     IReadOnlyList<SnapshotPriceDto> Prices,
     IReadOnlyList<SnapshotPaymentDto> Payments,
-    IReadOnlyList<string> PaymentMethods);
+    IReadOnlyList<string> PaymentMethods,
+    IReadOnlyList<SnapshotBranchDto> Branches);
 
 // ---------- what the phone sends back ----------
 
@@ -75,11 +87,16 @@ public record MobileSaleLineRequest(
     [Range(typeof(decimal), "0.001", "79228162514264337593543950335")] decimal Quantity,
     [Range(typeof(decimal), "0", "79228162514264337593543950335")] decimal UnitPrice);
 
+/// <summary>
+/// BranchId names which shop of a multi-branch customer this sale is for. The snapshot tells the
+/// phone which customers need one; a plain customer never carries one, same rule as the admin panel.
+/// </summary>
 public record MobileSaleRequest(
     [Required] Guid CustomerId,
     [Required, MinLength(1)] List<MobileSaleLineRequest> Lines,
     DateTime PricesAsOf,
-    [MaxLength(300)] string? Notes);
+    [MaxLength(300)] string? Notes,
+    Guid? BranchId = null);
 
 public record MobilePaymentRequest(
     [Required] Guid CustomerId,
@@ -128,6 +145,45 @@ public record MobileStockRequestRequest(
     [MaxLength(300)] string? Notes);
 
 /// <summary>
+/// A shop the salesperson found, or new details for one they already have. Id is generated on the
+/// phone and is the customer's id for good, so a sale in the same batch can name the shop before the
+/// server has seen it. Create-or-update by that id.
+///
+/// Deliberately absent: an opening balance (a shop the salesperson found owes nothing yet), an
+/// active flag (only the office deactivates a customer), and notes - the office's own remarks, which
+/// the phone never sees, so an edit from the phone must not be able to overwrite them.
+/// </summary>
+public record MobileCustomerRequest(
+    [Required] Guid Id,
+    [Required, MaxLength(150)] string Name,
+    [MaxLength(100)] string? ContactPerson,
+    [MaxLength(20)] string? Phone,
+    [MaxLength(300)] string? Address,
+    bool HasMultipleBranches);
+
+/// <summary>
+/// A branch under an existing customer, new or edited. Id is the phone's, create-or-update like the
+/// customer. There is no active flag: closing a branch is the office's decision.
+/// </summary>
+public record MobileBranchRequest(
+    [Required] Guid Id,
+    [Required] Guid CustomerId,
+    [Required, MaxLength(150)] string Name,
+    [MaxLength(100)] string? Location,
+    [MaxLength(300)] string? Address,
+    [MaxLength(20)] string? Phone,
+    [MaxLength(100)] string? ContactPerson);
+
+/// <summary>
+/// What a customer pays for a product from now on - at every branch. Recorded in the price history
+/// with the salesperson's name. Removing a rate is not offered: that is the office's call.
+/// </summary>
+public record MobileCustomerPriceRequest(
+    [Required] Guid CustomerId,
+    [Required] Guid ProductId,
+    [Range(typeof(decimal), "0", "79228162514264337593543950335")] decimal UnitPrice);
+
+/// <summary>
 /// One thing the salesperson did. ClientRequestId is generated on the device when they save and is
 /// never regenerated, which is what makes a retry safe.
 /// </summary>
@@ -139,7 +195,10 @@ public record SubmissionItemRequest(
     MobilePaymentRequest? Payment,
     MobileVisitRequest? Visit,
     MobileVanLoadRequest? VanLoad = null,
-    MobileStockRequestRequest? StockRequest = null);
+    MobileStockRequestRequest? StockRequest = null,
+    MobileCustomerRequest? Customer = null,
+    MobileBranchRequest? Branch = null,
+    MobileCustomerPriceRequest? CustomerPrice = null);
 
 public record SubmissionBatchRequest(
     [Required] Guid DeviceId,

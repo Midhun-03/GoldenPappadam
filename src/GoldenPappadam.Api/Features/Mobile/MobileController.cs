@@ -6,9 +6,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace GoldenPappadam.Api.Features.Mobile;
 
 /// <summary>
-/// Everything the salesperson's phone can reach, and nothing else. This is the whole of their
-/// surface: there is no endpoint here that sets a price, moves stock, edits a shop or cancels a
-/// bill, so those things are not hidden from the app - they do not exist for it.
+/// Everything the salesperson's phone can reach, and nothing else. Salesmen acquire shops, so the
+/// sync batch lets them create customers and branches and set customer rates (all audited). What
+/// they cannot do has no route here at all: cancel a bill, deactivate anything, set an opening
+/// balance, move stock other than onto their own van, or touch product master data.
 /// </summary>
 [ApiController]
 [Route("api/mobile")]

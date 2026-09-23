@@ -21,7 +21,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<PackingEntry> PackingEntries => Set<PackingEntry>();
 
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerBranch> CustomerBranches => Set<CustomerBranch>();
     public DbSet<CustomerPrice> CustomerPrices => Set<CustomerPrice>();
+    public DbSet<CustomerPriceChange> CustomerPriceChanges => Set<CustomerPriceChange>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();

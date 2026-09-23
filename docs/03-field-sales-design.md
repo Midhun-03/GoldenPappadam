@@ -219,7 +219,8 @@ Two roles, seeded at start-up: `Admin` and `Salesperson`. A one-time seeder give
 
 - **Default policy = Admin.** Every existing controller becomes admin-only without touching a single controller file.
 - Mobile controllers carry `[Authorize(Roles = Roles.Salesperson + "," + Roles.Admin)]` explicitly, so an admin can always test the mobile endpoints.
-- The salesperson's endpoints are a **separate, small surface** (`/api/mobile/...`). The enforcement is not "hide the button": the salesperson has no endpoint that can set a price, touch stock, edit a customer, or cancel a bill.
+- The salesperson's endpoints are a **separate, small surface** (`/api/mobile/...`). The enforcement is not "hide the button": the salesperson has no endpoint that can touch stock (beyond loading their own van) or cancel a bill.
+- ~~No endpoint that can set a price or edit a customer.~~ **Superseded 2026-09-23 (Part E Q12):** salesmen create customers and branches and set customer rates, through the sync batch. Still no deactivation, no opening balance, no product master data, no office endpoint.
 - The mobile create-sale DTO has **no price field at all**. There is nothing to send, so there is nothing to validate away.
 
 ### B5. APIs
@@ -326,7 +327,7 @@ A new sidebar group **Field sales**, additive only:
 
 - **Today** — total sales, shops visited, transactions, cash collected, credit sales, outstanding generated today; then the table you specified: Time | Shop | Products | Amount | Payment | Salesperson | Sync status. Sync status shows *when the phone recorded it* against *when the server received it*, which is what makes the offline behaviour legible: "recorded 11:20, received 14:05 — the phone was out of signal".
 - **Visits** — including shops visited with no sale, a number that does not exist today.
-- **Customer prices** — a tab on the existing customer page, admin-only, the only place a price can be set.
+- **Customer prices** — a tab on the existing customer page. ~~Admin-only, the only place a price can be set.~~ Since 2026-09-23 the salesperson can set rates too (Q12); this card shows the full history of changes and who made them.
 
 Everything uses the existing `lib/api.ts`, TanStack Query, `PageHeader`, `FilterBar`, `TableSkeleton` and `EmptyState`, and the day screen follows the dashboard's IST business-day convention.
 
@@ -390,6 +391,12 @@ workflow, the customer ledger, the dashboard's meaning.
 | 11 | Load-sheet reconciliation | Show the discrepancy to the admin; never auto-adjust |
 
 Nothing blocks the start of work.
+
+### Answered 2026-09-23
+
+| # | Question | Answer |
+|---|---|---|
+| 12 | Who creates customers and sets their rates? | **Salesmen acquire new shops**, so they create customers and branches and set/change customer-product rates themselves, offline, through the sync batch. They cannot deactivate anything, set an opening balance, remove a rate or touch product master data. The office keeps full control and sees every rate change in `sales.CustomerPriceChanges`. Supersedes the admin-only pricing in B4/B11. Full rule in CLAUDE.md §4 |
 
 ### Still open — can be answered when their milestone arrives
 

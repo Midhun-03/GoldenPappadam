@@ -12,6 +12,8 @@ public record InvoiceLineRequest(
 /// <summary>
 /// LocationId is where the goods came from, and is optional: leaving it out means the main
 /// warehouse, which is what every bill meant before the van carried its own stock.
+/// BranchId names which shop of a multi-branch customer this bill is for: required when that
+/// customer has branches, and rejected otherwise so a bill can never point at the wrong shop.
 /// </summary>
 public record CreateInvoiceRequest(
     [Required] Guid CustomerId,
@@ -19,7 +21,8 @@ public record CreateInvoiceRequest(
     decimal DiscountAmount,
     [MaxLength(300)] string? Notes,
     [Required, MinLength(1)] List<InvoiceLineRequest> Lines,
-    Guid? LocationId = null);
+    Guid? LocationId = null,
+    Guid? BranchId = null);
 
 public record CancelInvoiceRequest([Required, MaxLength(300)] string Reason);
 
@@ -37,6 +40,8 @@ public record InvoiceListItemDto(
     string InvoiceNumber,
     Guid CustomerId,
     string CustomerName,
+    Guid? BranchId,
+    string? BranchName,
     DateOnly InvoiceDate,
     InvoiceStatus Status,
     decimal TotalAmount,
@@ -48,6 +53,8 @@ public record InvoiceDetailDto(
     string InvoiceNumber,
     Guid CustomerId,
     string CustomerName,
+    Guid? BranchId,
+    string? BranchName,
     DateOnly InvoiceDate,
     InvoiceStatus Status,
     decimal SubTotal,

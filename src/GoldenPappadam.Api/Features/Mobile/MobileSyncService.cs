@@ -1,6 +1,7 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.FieldSales.StockRequests;
 using GoldenPappadam.Api.Features.FieldSales.VanLoads;
+using GoldenPappadam.Api.Features.Sales.CustomerBranches;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
@@ -29,7 +30,9 @@ public class MobileSyncService(
     PaymentService payments,
     CustomerPriceService prices,
     VanLoadService vanLoads,
-    StockRequestService stockRequests)
+    StockRequestService stockRequests,
+    CustomerService customers,
+    CustomerBranchService branches)
 {
     private static readonly int[] UniqueViolationErrors = [2601, 2627];
 
@@ -81,7 +84,17 @@ public class MobileSyncService(
     public async Task<SnapshotDto> GetSnapshotAsync(CancellationToken ct)
     {
         var customers = await CustomerQueries.Project(db.Customers.Where(c => c.IsActive).OrderBy(c => c.Name), db)
-            .Select(c => new SnapshotCustomerDto(c.Id, c.Name, c.ContactPerson, c.Phone, c.Address, c.Balance))
+            .Select(c => new SnapshotCustomerDto(
+                c.Id, c.Name, c.ContactPerson, c.Phone, c.Address, c.Balance, c.HasMultipleBranches))
+            .ToListAsync(ct);
+
+        // Only a multi-branch customer's own branches matter to the phone: a plain shop's sale
+        // screen never shows a picker, so there is nothing here for it to look up.
+        var branches = await db.CustomerBranches
+            .Where(b => b.IsActive && b.Customer!.IsActive && b.Customer.HasMultipleBranches)
+            .OrderBy(b => b.Name)
+            .Select(b => new SnapshotBranchDto(
+                b.Id, b.CustomerId, b.Name, b.Location, b.Address, b.Phone, b.ContactPerson))
             .ToListAsync(ct);
 
         var products = await db.Products
@@ -132,7 +145,8 @@ public class MobileSyncService(
             products,
             priceRows,
             recentPayments,
-            Enum.GetNames<PaymentMethod>());
+            Enum.GetNames<PaymentMethod>(),
+            branches);
     }
 
     // ---------- upload ----------
@@ -194,6 +208,9 @@ public class MobileSyncService(
                 SubmissionType.Visit => await AcceptVisitAsync(device, item, ct),
                 SubmissionType.VanLoad => await AcceptVanLoadAsync(device, item, ct),
                 SubmissionType.StockRequest => await AcceptStockRequestAsync(device, item, ct),
+                SubmissionType.Customer => await AcceptCustomerAsync(device, item, ct),
+                SubmissionType.CustomerBranch => await AcceptBranchAsync(device, item, ct),
+                SubmissionType.CustomerPrice => await AcceptCustomerPriceAsync(device, item, ct),
                 _ => Rejected(item, $"{item.Type} is not something this device can send.")
             };
         }
@@ -238,7 +255,8 @@ public class MobileSyncService(
                 0m,
                 sale.Notes,
                 sale.Lines.Select(l => new InvoiceLineRequest(l.ProductId, l.Quantity, l.UnitPrice)).ToList(),
-                vanId),
+                vanId,
+                sale.BranchId),
             ct);
 
         await RecordSubmissionAsync(device, item, created.Invoice.Id, mismatch, ct);
@@ -365,6 +383,131 @@ public class MobileSyncService(
 
         return new SubmissionResultDto(
             item.ClientRequestId, SubmissionOutcome.Accepted, created.Id, null, false, []);
+    }
+
+    /// <summary>
+    /// A shop the salesperson found, or new details for one. Create-or-update by the phone's id, so
+    /// sending it again - or sending an edit later - never makes a second customer.
+    ///
+    /// Same <see cref="CustomerService"/> as the office, so the same rules hold: no duplicate name,
+    /// and multiple branches cannot be switched off while branches are still open. What the phone
+    /// cannot do is decided here: a new shop owes nothing, and an edit keeps the office's opening
+    /// balance and notes.
+    /// </summary>
+    private async Task<SubmissionResultDto> AcceptCustomerAsync(
+        Device device,
+        SubmissionItemRequest item,
+        CancellationToken ct)
+    {
+        var request = item.Customer
+                      ?? throw new DomainException("This submission says it is a customer but carries none.");
+
+        if (request.Id == Guid.Empty)
+        {
+            throw new DomainException("A new shop needs an id from the phone.");
+        }
+
+        var existing = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == request.Id, ct);
+
+        if (existing is null)
+        {
+            await customers.CreateAsync(
+                new SaveCustomerRequest(
+                    request.Name, request.ContactPerson, request.Phone, request.Address,
+                    0m, null, request.HasMultipleBranches),
+                ct,
+                request.Id);
+        }
+        else
+        {
+            if (!existing.IsActive)
+            {
+                throw new DomainException($"Customer '{existing.Name}' was deactivated by the office.");
+            }
+
+            await customers.UpdateAsync(
+                request.Id,
+                new SaveCustomerRequest(
+                    request.Name, request.ContactPerson, request.Phone, request.Address,
+                    existing.OpeningBalance, existing.Notes, request.HasMultipleBranches),
+                ct);
+        }
+
+        await RecordSubmissionAsync(device, item, request.Id, false, ct);
+
+        return new SubmissionResultDto(item.ClientRequestId, SubmissionOutcome.Accepted, request.Id, null, false, []);
+    }
+
+    /// <summary>
+    /// Another shop of a customer the office already knows - "Danya Supermarket - Coimbatore" is a
+    /// branch under Danya Supermarket, never a new customer. Create-or-update by the phone's id.
+    /// Closing a branch is the office's call, so an edit to a closed one is refused.
+    /// </summary>
+    private async Task<SubmissionResultDto> AcceptBranchAsync(
+        Device device,
+        SubmissionItemRequest item,
+        CancellationToken ct)
+    {
+        var request = item.Branch
+                      ?? throw new DomainException("This submission says it is a branch but carries none.");
+
+        if (request.Id == Guid.Empty)
+        {
+            throw new DomainException("A new branch needs an id from the phone.");
+        }
+
+        var details = new SaveCustomerBranchRequest(
+            request.Name, request.Location, request.Address, request.Phone, request.ContactPerson);
+
+        var existing = await db.CustomerBranches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == request.Id, ct);
+
+        if (existing is null)
+        {
+            await branches.CreateAsync(request.CustomerId, details, ct, request.Id);
+        }
+        else
+        {
+            if (existing.CustomerId != request.CustomerId)
+            {
+                throw new DomainException("That branch belongs to a different customer.");
+            }
+
+            if (!existing.IsActive)
+            {
+                throw new DomainException($"Branch '{existing.Name}' was closed by the office.");
+            }
+
+            await branches.UpdateAsync(request.CustomerId, request.Id, details, ct);
+        }
+
+        await RecordSubmissionAsync(device, item, request.Id, false, ct);
+
+        return new SubmissionResultDto(item.ClientRequestId, SubmissionOutcome.Accepted, request.Id, null, false, []);
+    }
+
+    /// <summary>
+    /// A rate the salesperson agreed with a shop. Through the same <see cref="CustomerPriceService"/>
+    /// the office uses, so it lands in the price history with the salesperson's name, and the office
+    /// can see and override it.
+    /// </summary>
+    private async Task<SubmissionResultDto> AcceptCustomerPriceAsync(
+        Device device,
+        SubmissionItemRequest item,
+        CancellationToken ct)
+    {
+        var request = item.CustomerPrice
+                      ?? throw new DomainException("This submission says it is a price but carries none.");
+
+        await prices.SetAsync(request.CustomerId, request.ProductId, request.UnitPrice, ct);
+
+        var priceId = await db.CustomerPrices
+            .Where(cp => cp.CustomerId == request.CustomerId && cp.ProductId == request.ProductId)
+            .Select(cp => cp.Id)
+            .FirstAsync(ct);
+
+        await RecordSubmissionAsync(device, item, priceId, false, ct);
+
+        return new SubmissionResultDto(item.ClientRequestId, SubmissionOutcome.Accepted, priceId, null, false, []);
     }
 
     /// <summary>
