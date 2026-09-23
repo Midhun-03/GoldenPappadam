@@ -432,7 +432,7 @@ public class MobileSyncService(
                 new SaveCustomerRequest(
                     request.Name, request.ContactPerson, request.Phone, request.Address,
                     existing.OpeningBalance, existing.Notes, request.HasMultipleBranches,
-                    existing.Email, existing.Gstin, existing.StateCode),
+                    existing.Email, existing.Gstin, existing.StateCode, existing.Gstin is not null),
                 ct);
         }
 

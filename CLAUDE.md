@@ -157,10 +157,15 @@ Keep payments simple and practical — not a full enterprise accounting system. 
   Offline phones never number anything: the server numbers a sale when it syncs.
 - **The invoice keeps a snapshot** of the supplier, customer, branch, prices and tax as printed, so later
   master-data changes never alter it.
-- **GST is configurable, never hard-coded, and off until the business GSTIN is entered.** Each product
-  carries HSN, treatment (Taxable / Exempt / Nil rated / Non-GST) and rate. Intra-state is CGST + SGST,
-  inter-state IGST, decided by the place of supply - the branch for a branch bill. Once GST is on, a product
-  with no treatment or a taxable sale with no known state is refused rather than guessed.
+- **GST is configurable, never hard-coded.** Each product carries HSN, treatment (Taxable / Exempt / Nil rated
+  / Non-GST) and rate. Intra-state is CGST + SGST, inter-state IGST, decided by the place of supply - the
+  branch for a branch bill. Once the business GSTIN is entered, a product with no treatment or a taxable sale
+  with no known state is refused rather than guessed.
+- **GST bills only for GST customers** (owner, 2026-09-23). Only pappadam is sold, under one HSN code, and it
+  is exempt from GST today. A customer has a "GST registered" tick box that requires its GSTIN; those shops
+  get a GST bill (a Bill of Supply while pappadam is exempt), every other shop a normal bill with no GST
+  details. Tax follows the product, not the customer: if pappadam ever becomes taxable, shops without GST are
+  still charged it.
 - **The PDF is made once, stored, fingerprinted and never regenerated**; printing and email use that same
   file. Storage is behind `IInvoiceDocumentStorage` so it can move to Supabase Storage.
 - **Email failure never affects the invoice.** Every attempt is logged; the office retries.
@@ -586,7 +591,7 @@ Never design around an assumption for these; ask, or keep the design open.
 | ~~1~~ | ~~Do different shops pay different prices?~~ | **Answered 2026-09-15: yes.** See §4 "Confirmed requirements" | sales pricing |
 | 2 | Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded? | TBD — owner to confirm the actual process | inventory + sales |
 | 3 | Are discounts given, and at bill level or item level? | TBD — owner to confirm | invoice totals |
-| 4 | GST: the GSTIN, each product's HSN / treatment / rate, whether agreed rates include GST, rounding to the rupee | **Structure built 2026-09-23, GST off.** Accountant to confirm the values, then enter them in Settings and on each product | invoices |
+| 4 | GST: the exact HSN code, that pappadam is exempt rather than nil-rated, and the "Bill of Supply" heading on GST bills for exempt goods | **Partly answered 2026-09-23:** one HSN, no GST today, GST bills only for GST-registered shops. Accountant to confirm the three details | invoices |
 | 5 | Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now? | TBD — owner / accountant | invoice numbering |
 
 Answered on 2026-09-14 and now part of the design: stock shortfall warns instead of blocking; one loose variety can be packed into many packet sizes; a pack can occasionally be made from another pack.

@@ -80,16 +80,24 @@ Bills made before this change keep their numbers (`INV-2026-00001` ... `00014` b
 
 ## 4. GST
 
-**GST is off until the business GSTIN is entered** in Settings → Invoices and GST. Until then every bill is a
-plain *Invoice* with no tax, exactly as before.
+**The owner's rule (2026-09-23):** Golden Pappadam sells only pappadam, under one HSN code, which is exempt
+from GST today. Shops that are GST registered get a **GST bill**; every other shop gets a **normal bill**.
+A customer is marked with a "GST registered" tick box, which requires its GSTIN. Only the GSTIN is stored:
+having one *is* being registered.
 
-Once it is on:
-
-| Supplier | Lines | Document |
+| Customer | Tax charged? | Document |
 |---|---|---|
-| No GSTIN | any | Invoice |
-| GSTIN | at least one taxable line | Tax Invoice |
-| GSTIN | only exempt / nil-rated / non-GST | Bill of Supply |
+| GST registered | no - pappadam is exempt | **GST bill: Bill of Supply** - both GSTINs, HSN, place of supply, "Exempt" |
+| GST registered | yes (if a product is ever taxable) | **GST bill: Tax Invoice** - as above plus CGST/SGST or IGST |
+| Not registered | no | **Normal bill** - no GST details at all |
+| Not registered | yes (future) | Tax Invoice, without a customer GSTIN - tax follows the product, never the customer |
+
+- The business GSTIN (Settings) must be entered before a GST customer can be billed.
+- GST cannot be switched on while any active product has no treatment, and once it is on a product cannot be
+  saved without one - otherwise every bill for that product, the phone's included, would stop.
+- **Why "Bill of Supply" and not "Tax Invoice" for exempt pappadam:** GST rules have a registered supplier
+  of exempt goods issue a bill of supply. It is still the GST document the shop asked for. If the accountant
+  wants a different heading, it is one line in `InvoiceService.DocumentTypeFor`.
 
 - Each product carries **HSN**, **treatment** (Taxable, Exempt, Nil rated, Non-GST) and, if taxable, its
   **GST rate**. A product with no treatment **cannot be billed** once GST is on - the app does not guess.
@@ -108,8 +116,8 @@ Once it is on:
   client sends no totals; the server works out everything.
 - Cess has columns everywhere and is always zero today.
 
-**To confirm with the accountant before switching GST on:** the GSTIN, each product's HSN / treatment /
-rate, whether agreed rates include GST, and rounding. See §10 of `CLAUDE.md`.
+**To confirm with the accountant:** the exact HSN code, that pappadam is exempt (not nil-rated), and the
+"Bill of Supply" heading. See §10 of `CLAUDE.md`.
 
 ## 5. PDF, storage and printing
 

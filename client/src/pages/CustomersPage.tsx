@@ -152,6 +152,11 @@ export function CustomersPage() {
                           {customer.name}
                         </Link>
                         {!customer.isActive && <Badge variant="outline">Inactive</Badge>}
+                        {customer.isGstRegistered && (
+                          <Badge variant="outline" title={`GSTIN ${customer.gstin}`}>
+                            GST
+                          </Badge>
+                        )}
                         {customer.addedBySalesperson && (
                           <Badge variant="secondary" title={`Added from the phone by ${customer.createdByName ?? 'a salesperson'}`}>
                             Sales team

@@ -160,6 +160,16 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
                 "or non-GST, as the accountant advises) before billing it.");
         }
 
+        // A GST bill needs the business's own GSTIN on it as well as the customer's.
+        var customerRegistered = customer.Gstin is not null;
+
+        if (customerRegistered && !supplierRegistered)
+        {
+            throw new DomainException(
+                $"{customer.Name} is a GST customer, so its bills are GST bills. Enter Golden Pappadam's GSTIN " +
+                "in Settings first.");
+        }
+
         var chargesTax = supplierRegistered && products.Values.Any(p => p.TaxTreatment == TaxTreatment.Taxable);
         var placeOfSupply = PlaceOfSupply(customer, branch);
 
@@ -194,9 +204,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             InvoiceNumber = string.Empty,
             SeriesCode = string.Empty,
             FinancialYear = string.Empty,
-            DocumentType = !supplierRegistered ? InvoiceDocumentType.Invoice
-                : chargesTax ? InvoiceDocumentType.TaxInvoice
-                : InvoiceDocumentType.BillOfSupply,
+            DocumentType = DocumentTypeFor(chargesTax, customerRegistered),
             CustomerId = customer.Id,
             BranchId = branch?.Id,
             InvoiceDate = request.InvoiceDate ?? IndiaTime.Today(),
@@ -264,6 +272,17 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
 
         return (invoice, settings.SeriesCode);
     }
+
+    /// <summary>
+    /// A GST customer gets a GST bill; every other shop a normal bill. What the GST bill is called is
+    /// GST law's decision: a Tax Invoice when tax is charged, a Bill of Supply when every line is
+    /// exempt - which is pappadam today. Tax itself follows the product, never the customer, so if
+    /// pappadam ever becomes taxable a shop without GST is still charged it, on a Tax Invoice.
+    /// </summary>
+    private static InvoiceDocumentType DocumentTypeFor(bool chargesTax, bool customerRegistered) =>
+        chargesTax ? InvoiceDocumentType.TaxInvoice
+        : customerRegistered ? InvoiceDocumentType.BillOfSupply
+        : InvoiceDocumentType.Invoice;
 
     /// <summary>
     /// Where the goods were delivered. A branch bill looks only at the branch - falling back to the

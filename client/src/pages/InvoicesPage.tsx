@@ -226,6 +226,11 @@ export function InvoicesPage() {
                         >
                           {invoice.invoiceNumber}
                         </Link>
+                        {invoice.documentType !== 'Invoice' && (
+                          <Badge variant="outline" className="ml-1.5 align-middle">
+                            GST
+                          </Badge>
+                        )}
                         <div className="mt-0.5 text-xs text-muted-foreground">{formatDay(invoice.invoiceDate)}</div>
                       </TableCell>
 

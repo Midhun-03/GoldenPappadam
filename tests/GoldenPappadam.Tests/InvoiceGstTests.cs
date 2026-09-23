@@ -149,17 +149,69 @@ public class InvoiceGstTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_bill_of_only_exempt_goods_is_a_bill_of_supply_with_no_tax()
+    public async Task A_shop_without_gst_gets_a_normal_bill_even_though_the_business_has_a_gstin()
+    {
+        // Pappadam today: one HSN code, exempt from GST.
+        await _database.ConfigureGstAsync();
+        await _database.SetTaxAsync(_packet.Id, TaxTreatment.Exempt);
+        var customer = await _database.SeedCustomerAsync();
+
+        var invoice = await CreateAsync(customer.Id, quantity: 10m);
+
+        Assert.Equal(InvoiceDocumentType.Invoice, invoice.DocumentType);
+        Assert.Equal(1000m, invoice.TotalAmount);
+        Assert.Null(invoice.Customer.Gstin);
+    }
+
+    [Fact]
+    public async Task A_gst_customer_gets_a_gst_bill_of_supply_for_exempt_pappadam_with_both_gstins()
     {
         await _database.ConfigureGstAsync();
         await _database.SetTaxAsync(_packet.Id, TaxTreatment.Exempt);
-        var customer = await _database.SeedCustomerAsync();   // no state needed: nothing is taxed
+        var customer = await _database.SeedCustomerAsync("Danya Supermarket");
+        customer.Gstin = "32PQRSX9876K1Z3";
+        await _database.Db.SaveChangesAsync();
 
         var invoice = await CreateAsync(customer.Id, quantity: 10m);
 
         Assert.Equal(InvoiceDocumentType.BillOfSupply, invoice.DocumentType);
+        Assert.Equal("32AAAAA1234A1Z5", invoice.Supplier.Gstin);
+        Assert.Equal("32PQRSX9876K1Z3", invoice.Customer.Gstin);
+        Assert.Equal("32", invoice.PlaceOfSupplyStateCode);
         Assert.Equal(1000m, invoice.TotalAmount);
-        Assert.Equal(TaxTreatment.Exempt, Assert.Single(invoice.Lines).TaxTreatment);
+        Assert.Equal(0m, invoice.CgstAmount + invoice.SgstAmount + invoice.IgstAmount);
+
+        var line = Assert.Single(invoice.Lines);
+        Assert.Equal(TaxTreatment.Exempt, line.TaxTreatment);
+        Assert.Equal("19059040", line.HsnCode);
+    }
+
+    [Fact]
+    public async Task A_gst_customer_cannot_be_billed_until_the_business_gstin_is_entered()
+    {
+        var customer = await _database.SeedCustomerAsync("Danya Supermarket");
+        customer.Gstin = "32PQRSX9876K1Z3";
+        await _database.Db.SaveChangesAsync();
+
+        var refused = await Assert.ThrowsAsync<DomainException>(() => CreateAsync(customer.Id));
+
+        Assert.Contains("GST customer", refused.Message);
+        Assert.Empty(await _database.Db.Invoices.ToListAsync());
+    }
+
+    [Fact]
+    public async Task If_pappadam_ever_becomes_taxable_a_shop_without_gst_is_still_charged_it()
+    {
+        // Tax follows the product, not the customer: a normal shop never escapes a tax that applies.
+        await _database.ConfigureGstAsync();
+        await _database.SetTaxAsync(_packet.Id, TaxTreatment.Taxable, 5m);
+        var customer = await StateCustomerAsync("32");
+
+        var invoice = await CreateAsync(customer.Id, quantity: 10m);
+
+        Assert.Equal(InvoiceDocumentType.TaxInvoice, invoice.DocumentType);
+        Assert.Equal(50m, invoice.CgstAmount + invoice.SgstAmount);
+        Assert.Null(invoice.Customer.Gstin);
     }
 
     [Fact]

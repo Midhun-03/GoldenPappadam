@@ -88,6 +88,12 @@ public static class InvoicePdfRenderer
                 ModifiedDate = invoice.FinalizedAt
             });
 
+    /// <summary>
+    /// A GST bill - Tax Invoice or Bill of Supply - carries both GSTINs, HSN codes and the place of
+    /// supply. A normal bill, for a shop without GST, carries none of it.
+    /// </summary>
+    private static bool IsGstBill(InvoiceDetailDto invoice) => invoice.DocumentType != InvoiceDocumentType.Invoice;
+
     public static string Title(InvoiceDocumentType type) => type switch
     {
         InvoiceDocumentType.TaxInvoice => "Tax Invoice",
@@ -125,7 +131,7 @@ public static class InvoicePdfRenderer
 
                     supplier.Item().Text(text =>
                     {
-                        if (invoice.Supplier.Gstin is not null)
+                        if (IsGstBill(invoice) && invoice.Supplier.Gstin is not null)
                         {
                             text.Span("GSTIN ").FontColor(Muted);
                             text.Span(invoice.Supplier.Gstin).SemiBold();
@@ -189,6 +195,12 @@ public static class InvoicePdfRenderer
                     if (chargesTax)
                     {
                         left.Item().Element(c => TaxSummary(c, invoice));
+                    }
+
+                    if (invoice.DocumentType == InvoiceDocumentType.BillOfSupply)
+                    {
+                        left.Item().Text("Goods exempt from GST: no tax is charged on this bill.")
+                            .FontSize(7.5f).FontColor(Muted);
                     }
 
                     if (chargesTax && invoice.PricesIncludeTax)
@@ -290,12 +302,12 @@ public static class InvoicePdfRenderer
             Line("Invoice no.", invoice.InvoiceNumber, strong: true);
             Line("Invoice date", invoice.InvoiceDate.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture));
 
-            if (invoice.PlaceOfSupplyStateCode is not null)
+            if (IsGstBill(invoice) && invoice.PlaceOfSupplyStateCode is not null)
             {
                 Line("Place of supply", IndianStates.Describe(invoice.PlaceOfSupplyStateCode) ?? invoice.PlaceOfSupplyStateCode);
             }
 
-            if (invoice.Supplier.Gstin is not null)
+            if (IsGstBill(invoice))
             {
                 Line("Reverse charge", invoice.ReverseCharge ? "Yes" : "No");
             }
@@ -310,7 +322,7 @@ public static class InvoicePdfRenderer
     private static void Items(IContainer container, InvoiceDetailDto invoice, bool chargesTax)
     {
         var showDiscount = invoice.Lines.Any(l => l.DiscountAmount != 0m);
-        var showHsn = invoice.Lines.Any(l => l.HsnCode is not null);
+        var showHsn = IsGstBill(invoice) && invoice.Lines.Any(l => l.HsnCode is not null);
         var showCess = invoice.CessAmount != 0m;
         var stateTaxLabel = IndianStates.Find(invoice.Supplier.StateCode)?.IsUnionTerritoryWithoutLegislature == true
             ? "UTGST"
@@ -393,7 +405,7 @@ public static class InvoicePdfRenderer
                     description.Item().Text(line.Description).SemiBold();
 
                     // Say why a line carries no tax, so an exempt product never looks like a mistake.
-                    if (line.TaxTreatment is { } treatment && treatment != TaxTreatment.Taxable)
+                    if (IsGstBill(invoice) && line.TaxTreatment is { } treatment && treatment != TaxTreatment.Taxable)
                     {
                         description.Item().Text(Treatment(treatment)).FontSize(7).FontColor(Muted);
                     }

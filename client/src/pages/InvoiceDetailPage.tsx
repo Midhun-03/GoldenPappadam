@@ -543,15 +543,18 @@ function PartiesCard({ invoice }: { invoice: InvoiceDetail }) {
         <div className="grid content-start gap-0.5 text-sm">
           <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Tax</div>
           <div>
-            {invoice.supplier.gstin ? (
-              <>
-                Supplier GSTIN <span className="font-mono text-xs">{invoice.supplier.gstin}</span>
-              </>
+            {invoice.documentType === 'Invoice' ? (
+              'Normal bill: no GST details'
             ) : (
-              'No GSTIN on file: no GST charged'
+              <>
+                Our GSTIN <span className="font-mono text-xs">{invoice.supplier.gstin}</span>
+              </>
             )}
           </div>
-          {invoice.placeOfSupplyStateCode && (
+          {invoice.documentType === 'BillOfSupply' && (
+            <div className="text-muted-foreground">Exempt goods: no GST charged</div>
+          )}
+          {invoice.documentType !== 'Invoice' && invoice.placeOfSupplyStateCode && (
             <div className="text-muted-foreground">Place of supply {stateName(invoice.placeOfSupplyStateCode)}</div>
           )}
           {invoice.documentType === 'TaxInvoice' && (

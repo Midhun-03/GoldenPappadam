@@ -180,6 +180,11 @@ export function NewInvoicePage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {customer && (
+                  <p className="text-xs text-muted-foreground">
+                    {customer.isGstRegistered ? `GST bill · GSTIN ${customer.gstin}` : 'Normal bill'}
+                  </p>
+                )}
                 {customer && customer.balance > 0 && (
                   <p className="text-xs text-warning">
                     This shop already owes {formatMoney(customer.balance)}.

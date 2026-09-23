@@ -179,6 +179,8 @@ export type Customer = {
   gstin: string | null
   /** GST state code, "32" for Kerala. */
   stateCode: string | null
+  /** A GST customer gets GST bills; every other shop gets a normal bill. True exactly when it has a GSTIN. */
+  isGstRegistered: boolean
 }
 
 /**
@@ -210,6 +212,8 @@ export type SaveCustomer = {
   email: string | null
   gstin: string | null
   stateCode: string | null
+  /** Ticked: the GSTIN is required. Unticked: the shop gets normal bills and has no GSTIN. */
+  isGstRegistered: boolean
 }
 
 /** One physical shop under a multi-branch customer, e.g. "Kundara" under Danya Supermarket. */

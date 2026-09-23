@@ -30,6 +30,7 @@ const empty = {
   notes: '',
   hasMultipleBranches: false,
   email: '',
+  isGstRegistered: false,
   gstin: '',
   stateCode: '',
 }
@@ -63,6 +64,7 @@ export function CustomerDialog({
             notes: customer.notes ?? '',
             hasMultipleBranches: customer.hasMultipleBranches,
             email: customer.email ?? '',
+            isGstRegistered: customer.isGstRegistered,
             gstin: customer.gstin ?? '',
             stateCode: customer.stateCode ?? '',
           }
@@ -101,7 +103,8 @@ export function CustomerDialog({
       notes: form.notes.trim() || null,
       hasMultipleBranches: form.hasMultipleBranches,
       email: form.email.trim() || null,
-      gstin: form.gstin.trim().toUpperCase() || null,
+      isGstRegistered: form.isGstRegistered,
+      gstin: form.isGstRegistered ? form.gstin.trim().toUpperCase() || null : null,
       stateCode: form.stateCode || null,
     })
   }
@@ -172,33 +175,61 @@ export function CustomerDialog({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor="gstin">GSTIN</Label>
-              <Input
-                id="gstin"
-                maxLength={15}
-                className="font-mono uppercase placeholder:font-sans placeholder:normal-case"
-                placeholder="If the shop is registered"
-                value={form.gstin}
-                onChange={(event) => setForm({ ...form, gstin: event.target.value })}
+          <div className="grid gap-3 rounded-lg border bg-muted/40 p-3">
+            <div className="flex items-start gap-2.5">
+              <Checkbox
+                id="isGstRegistered"
+                checked={form.isGstRegistered}
+                onCheckedChange={(checked) => setForm({ ...form, isGstRegistered: checked === true })}
               />
+              <div className="grid gap-0.5">
+                <Label htmlFor="isGstRegistered" className="font-normal">
+                  GST registered
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {form.isGstRegistered
+                    ? 'This shop gets GST bills, showing its GSTIN and ours.'
+                    : 'This shop gets normal bills. Tick this if it has a GSTIN and needs GST bills.'}
+                </p>
+              </div>
             </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="stateCode">State</Label>
-              <StateSelect
-                id="stateCode"
-                allowNone
-                value={form.stateCode}
-                onChange={(stateCode) => setForm({ ...form, stateCode })}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              {form.isGstRegistered && (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="gstin">
+                    GSTIN <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="gstin"
+                    required
+                    minLength={15}
+                    maxLength={15}
+                    className="font-mono uppercase placeholder:font-sans placeholder:normal-case"
+                    placeholder="32ABCDE1234F1Z5"
+                    value={form.gstin}
+                    onChange={(event) => setForm({ ...form, gstin: event.target.value })}
+                  />
+                </div>
+              )}
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="stateCode">State</Label>
+                <StateSelect
+                  id="stateCode"
+                  allowNone
+                  value={form.stateCode}
+                  onChange={(stateCode) => setForm({ ...form, stateCode })}
+                />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {form.isGstRegistered
+                ? 'Leave the state as "Not set" to take it from the GSTIN.'
+                : 'Optional. Only needed if a product ever becomes taxable.'}
+              {form.hasMultipleBranches && ' A branch in another state sets its own.'}
+            </p>
           </div>
-          <p className="-mt-2 text-xs text-muted-foreground">
-            The state is the place of supply on this shop's invoices: Kerala means CGST + SGST, any other state IGST.
-            {form.hasMultipleBranches && ' Each branch sets its own.'}
-          </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">

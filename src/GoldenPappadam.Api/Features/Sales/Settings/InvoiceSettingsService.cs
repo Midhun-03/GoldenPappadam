@@ -44,6 +44,24 @@ public partial class InvoiceSettingsService(AppDbContext db)
 
         EnsureGstinMatchesState(gstin, stateCode, "the business");
 
+        // Switching GST on with a product still undecided would stop every bill for it, the phone's
+        // included. Ask for the treatments first, while nothing depends on them yet.
+        if (gstin is not null)
+        {
+            var undecided = await db.Products
+                .Where(p => p.IsActive && p.TaxTreatment == null)
+                .OrderBy(p => p.Name)
+                .Select(p => p.Name)
+                .ToListAsync(ct);
+
+            if (undecided.Count > 0)
+            {
+                throw new DomainException(
+                    "Set the HSN code and GST treatment on every product before entering the GSTIN. Still to do: " +
+                    string.Join(", ", undecided) + ".");
+            }
+        }
+
         var settings = await db.InvoiceSettings.SingleAsync(s => s.Id == InvoiceSettings.SingletonId, ct);
 
         settings.LegalName = request.LegalName.Trim();

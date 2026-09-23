@@ -209,9 +209,9 @@ export function InvoiceSettingsCard() {
               </div>
 
               <p className="text-xs text-muted-foreground md:col-span-3">
-                Entering the GSTIN switches GST on: every product then needs its GST treatment, and a taxed sale needs
-                the shop's state. Leave it empty until the accountant confirms the registration and the rates. Numbers
-                restart at 1 each financial year on their own; changing the prefix starts a new series.
+                GST bills go only to shops marked GST registered on the customer; every other shop gets a normal bill.
+                Enter the GSTIN before billing a GST customer - set the HSN code and GST treatment on every product
+                first. Numbers restart at 1 each financial year on their own; changing the prefix starts a new series.
               </p>
             </div>
 

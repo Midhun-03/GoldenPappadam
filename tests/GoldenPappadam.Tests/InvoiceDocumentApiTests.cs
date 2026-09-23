@@ -188,6 +188,19 @@ public class InvoiceDocumentApiTests : IAsyncLifetime
         var longPrefix = await _office.PutAsJsonAsync("/api/sales/invoice-settings", Settings(null, "GPSX"));
         Assert.Equal(HttpStatusCode.BadRequest, longPrefix.StatusCode);
 
+        // GST cannot go on while a product's treatment is undecided: every bill for it would stop.
+        var undecided = await _office.PutAsJsonAsync("/api/sales/invoice-settings", Settings("32AAAAA1234A1Z5", "GP"));
+        Assert.Equal(HttpStatusCode.BadRequest, undecided.StatusCode);
+        Assert.Contains("Pappadam 200 g", await undecided.Content.ReadAsStringAsync());
+
+        await WithDbAsync(async db =>
+        {
+            var product = await db.Products.SingleAsync();
+            product.HsnCode = "19059040";
+            product.TaxTreatment = TaxTreatment.Exempt;
+            await db.SaveChangesAsync();
+        });
+
         var saved = await _office.PutAsJsonAsync("/api/sales/invoice-settings", Settings("32aaaaa1234a1z5", "GP"));
         saved.EnsureSuccessStatusCode();
         var body = await saved.Content.ReadFromJsonAsync<JsonElement>();

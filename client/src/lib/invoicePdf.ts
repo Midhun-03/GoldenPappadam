@@ -107,5 +107,6 @@ export function useInvoicePdf() {
   }
 }
 
+/** A GST bill is a tax invoice, or a bill of supply when every item is exempt; anything else is a normal bill. */
 export const documentTitle = (type: InvoiceDocumentType) =>
-  type === 'TaxInvoice' ? 'Tax invoice' : type === 'BillOfSupply' ? 'Bill of supply' : 'Invoice'
+  type === 'TaxInvoice' ? 'GST bill (tax invoice)' : type === 'BillOfSupply' ? 'GST bill (bill of supply)' : 'Normal bill'

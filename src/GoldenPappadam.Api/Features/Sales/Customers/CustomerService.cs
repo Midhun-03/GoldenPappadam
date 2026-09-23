@@ -192,6 +192,8 @@ public class CustomerService(AppDbContext db)
     }
 
     /// <summary>
+    /// A GST customer must give its GSTIN, and a normal customer must not have one: the tick box and
+    /// the number have to agree, because the GSTIN is what decides whether the shop gets GST bills.
     /// A GSTIN carries its state in its first two digits, so a registered shop with no state picked
     /// gets it from the GSTIN, and one whose picked state disagrees is refused.
     /// </summary>
@@ -199,6 +201,18 @@ public class CustomerService(AppDbContext db)
     {
         var gstin = Gstin.Normalise(request.Gstin);
         var stateCode = Clean(request.StateCode);
+
+        if (request.IsGstRegistered && gstin is null)
+        {
+            throw new DomainException(
+                $"Enter the GSTIN for {request.Name.Trim()}, or untick GST registered to give it normal bills.");
+        }
+
+        if (!request.IsGstRegistered && gstin is not null)
+        {
+            throw new DomainException(
+                $"Tick GST registered to save a GSTIN for {request.Name.Trim()}. Only GST customers get GST bills.");
+        }
 
         if (stateCode is not null && !IndianStates.IsValid(stateCode))
         {

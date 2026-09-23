@@ -23,6 +23,7 @@ public class ProductService(AppDbContext db)
         // A brand new product cannot be part of a cycle, because nothing can point at it yet.
         var (sourceProductId, sourceQuantityPerPack) = await ResolveSourceAsync(Guid.Empty, request, ct);
         var tax = ResolveTax(request);
+        await EnsureTreatmentWhileGstIsOnAsync(tax.Treatment, ct);
 
         var product = new Product
         {
@@ -72,6 +73,7 @@ public class ProductService(AppDbContext db)
         var (sourceProductId, sourceQuantityPerPack) = await ResolveSourceAsync(product.Id, request, ct);
         await EnsureNoCycleAsync(product.Id, sourceProductId, ct);
         var tax = ResolveTax(request);
+        await EnsureTreatmentWhileGstIsOnAsync(tax.Treatment, ct);
 
         product.ProductCode = request.ProductCode.Trim();
         product.Name = request.Name.Trim();
@@ -132,6 +134,19 @@ public class ProductService(AppDbContext db)
         }
 
         return (hsn, TaxTreatment.Taxable, request.GstRate);
+    }
+
+    /// <summary>
+    /// Once the business has a GSTIN, every bill needs to know how its products are taxed, so a
+    /// product cannot be left - or put back - as "not decided".
+    /// </summary>
+    private async Task EnsureTreatmentWhileGstIsOnAsync(TaxTreatment? treatment, CancellationToken ct)
+    {
+        if (treatment is null && await db.InvoiceSettings.AnyAsync(s => s.Gstin != null, ct))
+        {
+            throw new DomainException(
+                "Choose the GST treatment for this product. The business has a GSTIN, so every product needs one.");
+        }
     }
 
     /// <summary>Works out the source fields for a request without touching the entity.</summary>

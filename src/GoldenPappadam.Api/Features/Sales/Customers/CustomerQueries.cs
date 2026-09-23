@@ -35,5 +35,6 @@ public static class CustomerQueries
                 ur.UserId == c.CreatedBy && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson)),
             c.Email,
             c.Gstin,
-            c.StateCode));
+            c.StateCode,
+            c.Gstin != null));
 }

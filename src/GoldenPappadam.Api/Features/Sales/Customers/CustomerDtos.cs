@@ -18,8 +18,14 @@ public record CustomerDto(
     bool AddedBySalesperson,
     string? Email,
     string? Gstin,
-    string? StateCode);
+    string? StateCode,
+    bool IsGstRegistered);
 
+/// <summary>
+/// IsGstRegistered is the "GST customer" tick box: set, the GSTIN is required and the shop gets GST
+/// bills; clear, it gets normal bills and must have no GSTIN. Only the GSTIN is stored - having one is
+/// what being registered means, so the two can never disagree.
+/// </summary>
 public record SaveCustomerRequest(
     [Required, MaxLength(150)] string Name,
     [MaxLength(100)] string? ContactPerson,
@@ -30,7 +36,8 @@ public record SaveCustomerRequest(
     bool HasMultipleBranches,
     [MaxLength(256), EmailAddress] string? Email = null,
     [MaxLength(15)] string? Gstin = null,
-    [StringLength(2, MinimumLength = 2)] string? StateCode = null);
+    [StringLength(2, MinimumLength = 2)] string? StateCode = null,
+    bool IsGstRegistered = false);
 
 /// <summary>One row of the customer's account: what was billed, what was paid, what is left.</summary>
 public record LedgerEntryDto(
