@@ -326,6 +326,7 @@ CustomersCompanion shopRow({
   required double balance,
   String? phone,
   bool hasMultipleBranches = false,
+  String? gstin,
 }) =>
     CustomersCompanion.insert(
       id: id,
@@ -333,6 +334,7 @@ CustomersCompanion shopRow({
       balance: balance,
       phone: Value(phone),
       hasMultipleBranches: Value(hasMultipleBranches),
+      gstin: Value(gstin),
     );
 
 /// Exposed so the sale screen and the tests agree on what a companion looks like.

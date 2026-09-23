@@ -503,3 +503,16 @@ class FadeIn extends StatelessWidget {
         child: child,
       );
 }
+
+/// "GST bill" for a GST-registered shop, "Normal bill" for any other. The server decides what the bill
+/// actually is when it finalizes the sale; this only tells the salesman what the shop will get.
+class BillKindPill extends StatelessWidget {
+  const BillKindPill({required this.gstin, super.key});
+
+  final String? gstin;
+
+  @override
+  Widget build(BuildContext context) => gstin == null
+      ? const StatusPill('Normal bill', icon: Icons.receipt_outlined)
+      : StatusPill('GST bill · $gstin', tone: Tone.primary, icon: Icons.verified_outlined);
+}

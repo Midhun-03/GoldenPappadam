@@ -83,6 +83,15 @@ class $CustomersTable extends Customers
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _gstinMeta = const VerificationMeta('gstin');
+  @override
+  late final GeneratedColumn<String> gstin = GeneratedColumn<String>(
+    'gstin',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -92,6 +101,7 @@ class $CustomersTable extends Customers
     address,
     balance,
     hasMultipleBranches,
+    gstin,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -156,6 +166,12 @@ class $CustomersTable extends Customers
         ),
       );
     }
+    if (data.containsKey('gstin')) {
+      context.handle(
+        _gstinMeta,
+        gstin.isAcceptableOrUnknown(data['gstin']!, _gstinMeta),
+      );
+    }
     return context;
   }
 
@@ -193,6 +209,10 @@ class $CustomersTable extends Customers
         DriftSqlType.bool,
         data['${effectivePrefix}has_multiple_branches'],
       )!,
+      gstin: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}gstin'],
+      ),
     );
   }
 
@@ -215,6 +235,10 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
   /// True for a parent company with several physical shops, e.g. Danya Supermarket. The sale
   /// screen shows a branch picker only when this is set - same rule as the admin panel.
   final bool hasMultipleBranches;
+
+  /// Set for a GST-registered shop, which gets a GST bill; null for every other shop, which gets a
+  /// normal bill. The office decides; the phone only shows it.
+  final String? gstin;
   const CachedCustomer({
     required this.id,
     required this.name,
@@ -223,6 +247,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
     this.address,
     required this.balance,
     required this.hasMultipleBranches,
+    this.gstin,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -240,6 +265,9 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
     }
     map['balance'] = Variable<double>(balance);
     map['has_multiple_branches'] = Variable<bool>(hasMultipleBranches);
+    if (!nullToAbsent || gstin != null) {
+      map['gstin'] = Variable<String>(gstin);
+    }
     return map;
   }
 
@@ -258,6 +286,9 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
           : Value(address),
       balance: Value(balance),
       hasMultipleBranches: Value(hasMultipleBranches),
+      gstin: gstin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(gstin),
     );
   }
 
@@ -276,6 +307,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
       hasMultipleBranches: serializer.fromJson<bool>(
         json['hasMultipleBranches'],
       ),
+      gstin: serializer.fromJson<String?>(json['gstin']),
     );
   }
   @override
@@ -289,6 +321,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
       'address': serializer.toJson<String?>(address),
       'balance': serializer.toJson<double>(balance),
       'hasMultipleBranches': serializer.toJson<bool>(hasMultipleBranches),
+      'gstin': serializer.toJson<String?>(gstin),
     };
   }
 
@@ -300,6 +333,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
     Value<String?> address = const Value.absent(),
     double? balance,
     bool? hasMultipleBranches,
+    Value<String?> gstin = const Value.absent(),
   }) => CachedCustomer(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -310,6 +344,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
     address: address.present ? address.value : this.address,
     balance: balance ?? this.balance,
     hasMultipleBranches: hasMultipleBranches ?? this.hasMultipleBranches,
+    gstin: gstin.present ? gstin.value : this.gstin,
   );
   CachedCustomer copyWithCompanion(CustomersCompanion data) {
     return CachedCustomer(
@@ -324,6 +359,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
       hasMultipleBranches: data.hasMultipleBranches.present
           ? data.hasMultipleBranches.value
           : this.hasMultipleBranches,
+      gstin: data.gstin.present ? data.gstin.value : this.gstin,
     );
   }
 
@@ -336,7 +372,8 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
           ..write('phone: $phone, ')
           ..write('address: $address, ')
           ..write('balance: $balance, ')
-          ..write('hasMultipleBranches: $hasMultipleBranches')
+          ..write('hasMultipleBranches: $hasMultipleBranches, ')
+          ..write('gstin: $gstin')
           ..write(')'))
         .toString();
   }
@@ -350,6 +387,7 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
     address,
     balance,
     hasMultipleBranches,
+    gstin,
   );
   @override
   bool operator ==(Object other) =>
@@ -361,7 +399,8 @@ class CachedCustomer extends DataClass implements Insertable<CachedCustomer> {
           other.phone == this.phone &&
           other.address == this.address &&
           other.balance == this.balance &&
-          other.hasMultipleBranches == this.hasMultipleBranches);
+          other.hasMultipleBranches == this.hasMultipleBranches &&
+          other.gstin == this.gstin);
 }
 
 class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
@@ -372,6 +411,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
   final Value<String?> address;
   final Value<double> balance;
   final Value<bool> hasMultipleBranches;
+  final Value<String?> gstin;
   final Value<int> rowid;
   const CustomersCompanion({
     this.id = const Value.absent(),
@@ -381,6 +421,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     this.address = const Value.absent(),
     this.balance = const Value.absent(),
     this.hasMultipleBranches = const Value.absent(),
+    this.gstin = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CustomersCompanion.insert({
@@ -391,6 +432,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     this.address = const Value.absent(),
     required double balance,
     this.hasMultipleBranches = const Value.absent(),
+    this.gstin = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -403,6 +445,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     Expression<String>? address,
     Expression<double>? balance,
     Expression<bool>? hasMultipleBranches,
+    Expression<String>? gstin,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -414,6 +457,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
       if (balance != null) 'balance': balance,
       if (hasMultipleBranches != null)
         'has_multiple_branches': hasMultipleBranches,
+      if (gstin != null) 'gstin': gstin,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -426,6 +470,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     Value<String?>? address,
     Value<double>? balance,
     Value<bool>? hasMultipleBranches,
+    Value<String?>? gstin,
     Value<int>? rowid,
   }) {
     return CustomersCompanion(
@@ -436,6 +481,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
       address: address ?? this.address,
       balance: balance ?? this.balance,
       hasMultipleBranches: hasMultipleBranches ?? this.hasMultipleBranches,
+      gstin: gstin ?? this.gstin,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -464,6 +510,9 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
     if (hasMultipleBranches.present) {
       map['has_multiple_branches'] = Variable<bool>(hasMultipleBranches.value);
     }
+    if (gstin.present) {
+      map['gstin'] = Variable<String>(gstin.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -480,6 +529,7 @@ class CustomersCompanion extends UpdateCompanion<CachedCustomer> {
           ..write('address: $address, ')
           ..write('balance: $balance, ')
           ..write('hasMultipleBranches: $hasMultipleBranches, ')
+          ..write('gstin: $gstin, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2432,6 +2482,17 @@ class $OutboxEntriesTable extends OutboxEntries
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _documentNumberMeta = const VerificationMeta(
+    'documentNumber',
+  );
+  @override
+  late final GeneratedColumn<String> documentNumber = GeneratedColumn<String>(
+    'document_number',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _summaryMeta = const VerificationMeta(
     'summary',
   );
@@ -2454,6 +2515,7 @@ class $OutboxEntriesTable extends OutboxEntries
     nextAttemptAt,
     lastError,
     serverRecordId,
+    documentNumber,
     summary,
   ];
   @override
@@ -2542,6 +2604,15 @@ class $OutboxEntriesTable extends OutboxEntries
         ),
       );
     }
+    if (data.containsKey('document_number')) {
+      context.handle(
+        _documentNumberMeta,
+        documentNumber.isAcceptableOrUnknown(
+          data['document_number']!,
+          _documentNumberMeta,
+        ),
+      );
+    }
     if (data.containsKey('summary')) {
       context.handle(
         _summaryMeta,
@@ -2595,6 +2666,10 @@ class $OutboxEntriesTable extends OutboxEntries
         DriftSqlType.string,
         data['${effectivePrefix}server_record_id'],
       ),
+      documentNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}document_number'],
+      ),
       summary: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}summary'],
@@ -2630,6 +2705,10 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
   final String? lastError;
   final String? serverRecordId;
 
+  /// The official invoice number the server gave a synced sale, "GP/26-27/000125". The phone never
+  /// makes one up: until the sale has synced there is no number, only "waiting to sync".
+  final String? documentNumber;
+
   /// A line to show in the list: "Kumar Stores - 450".
   final String summary;
   const OutboxEntry({
@@ -2642,6 +2721,7 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
     this.nextAttemptAt,
     this.lastError,
     this.serverRecordId,
+    this.documentNumber,
     required this.summary,
   });
   @override
@@ -2661,6 +2741,9 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
     }
     if (!nullToAbsent || serverRecordId != null) {
       map['server_record_id'] = Variable<String>(serverRecordId);
+    }
+    if (!nullToAbsent || documentNumber != null) {
+      map['document_number'] = Variable<String>(documentNumber);
     }
     map['summary'] = Variable<String>(summary);
     return map;
@@ -2683,6 +2766,9 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       serverRecordId: serverRecordId == null && nullToAbsent
           ? const Value.absent()
           : Value(serverRecordId),
+      documentNumber: documentNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(documentNumber),
       summary: Value(summary),
     );
   }
@@ -2702,6 +2788,7 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       nextAttemptAt: serializer.fromJson<DateTime?>(json['nextAttemptAt']),
       lastError: serializer.fromJson<String?>(json['lastError']),
       serverRecordId: serializer.fromJson<String?>(json['serverRecordId']),
+      documentNumber: serializer.fromJson<String?>(json['documentNumber']),
       summary: serializer.fromJson<String>(json['summary']),
     );
   }
@@ -2718,6 +2805,7 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       'nextAttemptAt': serializer.toJson<DateTime?>(nextAttemptAt),
       'lastError': serializer.toJson<String?>(lastError),
       'serverRecordId': serializer.toJson<String?>(serverRecordId),
+      'documentNumber': serializer.toJson<String?>(documentNumber),
       'summary': serializer.toJson<String>(summary),
     };
   }
@@ -2732,6 +2820,7 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
     Value<DateTime?> nextAttemptAt = const Value.absent(),
     Value<String?> lastError = const Value.absent(),
     Value<String?> serverRecordId = const Value.absent(),
+    Value<String?> documentNumber = const Value.absent(),
     String? summary,
   }) => OutboxEntry(
     clientRequestId: clientRequestId ?? this.clientRequestId,
@@ -2747,6 +2836,9 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
     serverRecordId: serverRecordId.present
         ? serverRecordId.value
         : this.serverRecordId,
+    documentNumber: documentNumber.present
+        ? documentNumber.value
+        : this.documentNumber,
     summary: summary ?? this.summary,
   );
   OutboxEntry copyWithCompanion(OutboxEntriesCompanion data) {
@@ -2770,6 +2862,9 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
       serverRecordId: data.serverRecordId.present
           ? data.serverRecordId.value
           : this.serverRecordId,
+      documentNumber: data.documentNumber.present
+          ? data.documentNumber.value
+          : this.documentNumber,
       summary: data.summary.present ? data.summary.value : this.summary,
     );
   }
@@ -2786,6 +2881,7 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('lastError: $lastError, ')
           ..write('serverRecordId: $serverRecordId, ')
+          ..write('documentNumber: $documentNumber, ')
           ..write('summary: $summary')
           ..write(')'))
         .toString();
@@ -2802,6 +2898,7 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
     nextAttemptAt,
     lastError,
     serverRecordId,
+    documentNumber,
     summary,
   );
   @override
@@ -2817,6 +2914,7 @@ class OutboxEntry extends DataClass implements Insertable<OutboxEntry> {
           other.nextAttemptAt == this.nextAttemptAt &&
           other.lastError == this.lastError &&
           other.serverRecordId == this.serverRecordId &&
+          other.documentNumber == this.documentNumber &&
           other.summary == this.summary);
 }
 
@@ -2830,6 +2928,7 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
   final Value<DateTime?> nextAttemptAt;
   final Value<String?> lastError;
   final Value<String?> serverRecordId;
+  final Value<String?> documentNumber;
   final Value<String> summary;
   final Value<int> rowid;
   const OutboxEntriesCompanion({
@@ -2842,6 +2941,7 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     this.nextAttemptAt = const Value.absent(),
     this.lastError = const Value.absent(),
     this.serverRecordId = const Value.absent(),
+    this.documentNumber = const Value.absent(),
     this.summary = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -2855,6 +2955,7 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     this.nextAttemptAt = const Value.absent(),
     this.lastError = const Value.absent(),
     this.serverRecordId = const Value.absent(),
+    this.documentNumber = const Value.absent(),
     required String summary,
     this.rowid = const Value.absent(),
   }) : clientRequestId = Value(clientRequestId),
@@ -2872,6 +2973,7 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     Expression<DateTime>? nextAttemptAt,
     Expression<String>? lastError,
     Expression<String>? serverRecordId,
+    Expression<String>? documentNumber,
     Expression<String>? summary,
     Expression<int>? rowid,
   }) {
@@ -2885,6 +2987,7 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
       if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
       if (lastError != null) 'last_error': lastError,
       if (serverRecordId != null) 'server_record_id': serverRecordId,
+      if (documentNumber != null) 'document_number': documentNumber,
       if (summary != null) 'summary': summary,
       if (rowid != null) 'rowid': rowid,
     });
@@ -2900,6 +3003,7 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     Value<DateTime?>? nextAttemptAt,
     Value<String?>? lastError,
     Value<String?>? serverRecordId,
+    Value<String?>? documentNumber,
     Value<String>? summary,
     Value<int>? rowid,
   }) {
@@ -2913,6 +3017,7 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
       nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
       lastError: lastError ?? this.lastError,
       serverRecordId: serverRecordId ?? this.serverRecordId,
+      documentNumber: documentNumber ?? this.documentNumber,
       summary: summary ?? this.summary,
       rowid: rowid ?? this.rowid,
     );
@@ -2948,6 +3053,9 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
     if (serverRecordId.present) {
       map['server_record_id'] = Variable<String>(serverRecordId.value);
     }
+    if (documentNumber.present) {
+      map['document_number'] = Variable<String>(documentNumber.value);
+    }
     if (summary.present) {
       map['summary'] = Variable<String>(summary.value);
     }
@@ -2969,6 +3077,7 @@ class OutboxEntriesCompanion extends UpdateCompanion<OutboxEntry> {
           ..write('nextAttemptAt: $nextAttemptAt, ')
           ..write('lastError: $lastError, ')
           ..write('serverRecordId: $serverRecordId, ')
+          ..write('documentNumber: $documentNumber, ')
           ..write('summary: $summary, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -3009,6 +3118,7 @@ typedef $$CustomersTableCreateCompanionBuilder = CustomersCompanion Function({
   Value<String?> address,
   required double balance,
   Value<bool> hasMultipleBranches,
+  Value<String?> gstin,
   Value<int> rowid,
 });
 typedef $$CustomersTableUpdateCompanionBuilder = CustomersCompanion Function({
@@ -3019,6 +3129,7 @@ typedef $$CustomersTableUpdateCompanionBuilder = CustomersCompanion Function({
   Value<String?> address,
   Value<double> balance,
   Value<bool> hasMultipleBranches,
+  Value<String?> gstin,
   Value<int> rowid,
 });
 
@@ -3063,6 +3174,11 @@ class $$CustomersTableFilterComposer
 
   ColumnFilters<bool> get hasMultipleBranches => $composableBuilder(
     column: $table.hasMultipleBranches,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get gstin => $composableBuilder(
+    column: $table.gstin,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -3110,6 +3226,11 @@ class $$CustomersTableOrderingComposer
     column: $table.hasMultipleBranches,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get gstin => $composableBuilder(
+    column: $table.gstin,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CustomersTableAnnotationComposer
@@ -3145,6 +3266,9 @@ class $$CustomersTableAnnotationComposer
     column: $table.hasMultipleBranches,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get gstin =>
+      $composableBuilder(column: $table.gstin, builder: (column) => column);
 }
 
 class $$CustomersTableTableManager
@@ -3185,6 +3309,7 @@ class $$CustomersTableTableManager
                 Value<String?> address = const Value.absent(),
                 Value<double> balance = const Value.absent(),
                 Value<bool> hasMultipleBranches = const Value.absent(),
+                Value<String?> gstin = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CustomersCompanion(
                 id: id,
@@ -3194,6 +3319,7 @@ class $$CustomersTableTableManager
                 address: address,
                 balance: balance,
                 hasMultipleBranches: hasMultipleBranches,
+                gstin: gstin,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -3205,6 +3331,7 @@ class $$CustomersTableTableManager
                 Value<String?> address = const Value.absent(),
                 required double balance,
                 Value<bool> hasMultipleBranches = const Value.absent(),
+                Value<String?> gstin = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CustomersCompanion.insert(
                 id: id,
@@ -3214,6 +3341,7 @@ class $$CustomersTableTableManager
                 address: address,
                 balance: balance,
                 hasMultipleBranches: hasMultipleBranches,
+                gstin: gstin,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -4298,6 +4426,7 @@ typedef $$OutboxEntriesTableCreateCompanionBuilder =
       Value<DateTime?> nextAttemptAt,
       Value<String?> lastError,
       Value<String?> serverRecordId,
+      Value<String?> documentNumber,
       required String summary,
       Value<int> rowid,
     });
@@ -4312,6 +4441,7 @@ typedef $$OutboxEntriesTableUpdateCompanionBuilder =
       Value<DateTime?> nextAttemptAt,
       Value<String?> lastError,
       Value<String?> serverRecordId,
+      Value<String?> documentNumber,
       Value<String> summary,
       Value<int> rowid,
     });
@@ -4367,6 +4497,11 @@ class $$OutboxEntriesTableFilterComposer
 
   ColumnFilters<String> get serverRecordId => $composableBuilder(
     column: $table.serverRecordId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get documentNumber => $composableBuilder(
+    column: $table.documentNumber,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4430,6 +4565,11 @@ class $$OutboxEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get documentNumber => $composableBuilder(
+    column: $table.documentNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get summary => $composableBuilder(
     column: $table.summary,
     builder: (column) => ColumnOrderings(column),
@@ -4482,6 +4622,11 @@ class $$OutboxEntriesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get documentNumber => $composableBuilder(
+    column: $table.documentNumber,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get summary =>
       $composableBuilder(column: $table.summary, builder: (column) => column);
 }
@@ -4526,6 +4671,7 @@ class $$OutboxEntriesTableTableManager
                 Value<DateTime?> nextAttemptAt = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
                 Value<String?> serverRecordId = const Value.absent(),
+                Value<String?> documentNumber = const Value.absent(),
                 Value<String> summary = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => OutboxEntriesCompanion(
@@ -4538,6 +4684,7 @@ class $$OutboxEntriesTableTableManager
                 nextAttemptAt: nextAttemptAt,
                 lastError: lastError,
                 serverRecordId: serverRecordId,
+                documentNumber: documentNumber,
                 summary: summary,
                 rowid: rowid,
               ),
@@ -4552,6 +4699,7 @@ class $$OutboxEntriesTableTableManager
                 Value<DateTime?> nextAttemptAt = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
                 Value<String?> serverRecordId = const Value.absent(),
+                Value<String?> documentNumber = const Value.absent(),
                 required String summary,
                 Value<int> rowid = const Value.absent(),
               }) => OutboxEntriesCompanion.insert(
@@ -4564,6 +4712,7 @@ class $$OutboxEntriesTableTableManager
                 nextAttemptAt: nextAttemptAt,
                 lastError: lastError,
                 serverRecordId: serverRecordId,
+                documentNumber: documentNumber,
                 summary: summary,
                 rowid: rowid,
               ),

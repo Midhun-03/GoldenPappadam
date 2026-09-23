@@ -205,6 +205,57 @@ void main() {
     expect(api.submissions, hasLength(1));
   });
 
+  test('a synced sale keeps the official number the office gave it', () async {
+    await enqueueSale('sale-1');
+
+    api.handler = (path, body) => path.endsWith('/sync/submissions')
+        ? {
+            'results': [
+              {
+                'clientRequestId': 'sale-1',
+                'outcome': 'Accepted',
+                'recordId': 'server-sale-1',
+                'documentNumber': 'GP/26-27/000125'
+              }
+            ]
+          }
+        : emptySnapshot();
+
+    await engine.syncNow();
+
+    final synced = await db.entriesWithStatus(OutboxStatus.synced);
+    expect(synced.single.documentNumber, 'GP/26-27/000125');
+  });
+
+  test('a sale whose first answer was lost still ends up with its number from the retry', () async {
+    await enqueueSale('sale-1');
+
+    api.handler = (path, body) => path.endsWith('/sync/submissions')
+        ? {
+            'results': [
+              {
+                'clientRequestId': 'sale-1',
+                'outcome': 'AlreadyAccepted',
+                'recordId': 'the-original-bill',
+                'documentNumber': 'GP/26-27/000125'
+              }
+            ]
+          }
+        : emptySnapshot();
+
+    await engine.syncNow();
+
+    final synced = await db.entriesWithStatus(OutboxStatus.synced);
+    expect(synced.single.documentNumber, 'GP/26-27/000125');
+  });
+
+  test('a sale that has not synced has no number - the phone never makes one up', () async {
+    await enqueueSale('sale-1');
+
+    final pending = await db.entriesWithStatus(OutboxStatus.pending);
+    expect(pending.single.documentNumber, isNull);
+  });
+
   test('a refused sale is kept and explained, not discarded', () async {
     await enqueueSale('sale-1');
 
@@ -338,6 +389,32 @@ void main() {
     final branches = await db.branchesFor('danya');
     expect(branches.map((b) => b.name), containsAll(['Kundara', 'Coimbatore']));
     expect(branches.firstWhere((b) => b.name == 'Kundara').location, 'Kollam');
+  });
+
+  test('the snapshot says which shops get GST bills', () async {
+    api.handler = (path, body) => path.endsWith('/sync/submissions')
+        ? {'results': <dynamic>[]}
+        : {
+            'serverTime': DateTime.now().toUtc().toIso8601String(),
+            'customers': [
+              {
+                'id': 'danya',
+                'name': 'Danya Supermarket',
+                'balance': 0.0,
+                'hasMultipleBranches': false,
+                'gstin': '32PQRSX9876K1Z3',
+                'isGstRegistered': true,
+              },
+              {'id': 'kumar', 'name': 'Kumar Stores', 'balance': 0.0, 'gstin': null, 'isGstRegistered': false},
+            ],
+            'products': <dynamic>[],
+            'prices': <dynamic>[],
+          };
+
+    await engine.syncNow();
+
+    expect((await db.findCustomer('danya'))!.gstin, '32PQRSX9876K1Z3');
+    expect((await db.findCustomer('kumar'))!.gstin, isNull);
   });
 
   test('a shop with an agreed price pays it, and everything else falls back', () async {

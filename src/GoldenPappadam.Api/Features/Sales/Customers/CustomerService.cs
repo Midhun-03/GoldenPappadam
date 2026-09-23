@@ -17,6 +17,7 @@ public class CustomerService(AppDbContext db)
     {
         await EnsureNameIsFreeAsync(request.Name, null, ct);
         var (gstin, stateCode) = ResolveTaxIdentity(request);
+        await EnsureBusinessCanIssueGstBillsAsync(request, wasGstRegistered: false, ct);
 
         var customer = new Customer
         {
@@ -46,6 +47,7 @@ public class CustomerService(AppDbContext db)
 
         await EnsureNameIsFreeAsync(request.Name, id, ct);
         var (gstin, stateCode) = ResolveTaxIdentity(request);
+        await EnsureBusinessCanIssueGstBillsAsync(request, wasGstRegistered: customer.Gstin is not null, ct);
 
         if (customer.OpeningBalance != request.OpeningBalance &&
             await db.Invoices.AnyAsync(i => i.CustomerId == id, ct))
@@ -188,6 +190,25 @@ public class CustomerService(AppDbContext db)
         if (taken)
         {
             throw new DomainException($"A customer named '{trimmed}' already exists.");
+        }
+    }
+
+    /// <summary>
+    /// A GST customer's bills carry Golden Pappadam's GSTIN too, so a shop cannot be made a GST
+    /// customer before that is entered - otherwise the salesman's next sale there would be saved on
+    /// the phone and then refused at sync. A shop that is already one keeps working either way.
+    /// </summary>
+    private async Task EnsureBusinessCanIssueGstBillsAsync(
+        SaveCustomerRequest request,
+        bool wasGstRegistered,
+        CancellationToken ct)
+    {
+        if (request.IsGstRegistered && !wasGstRegistered &&
+            !await db.InvoiceSettings.AnyAsync(s => s.Gstin != null, ct))
+        {
+            throw new DomainException(
+                "Enter Golden Pappadam's GSTIN in Settings before marking shops GST registered: a GST bill " +
+                "carries both GSTINs.");
         }
     }
 

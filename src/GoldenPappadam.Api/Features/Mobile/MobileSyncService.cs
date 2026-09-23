@@ -85,7 +85,8 @@ public class MobileSyncService(
     {
         var customers = await CustomerQueries.Project(db.Customers.Where(c => c.IsActive).OrderBy(c => c.Name), db)
             .Select(c => new SnapshotCustomerDto(
-                c.Id, c.Name, c.ContactPerson, c.Phone, c.Address, c.Balance, c.HasMultipleBranches))
+                c.Id, c.Name, c.ContactPerson, c.Phone, c.Address, c.Balance, c.HasMultipleBranches,
+                c.Gstin, c.IsGstRegistered))
             .ToListAsync(ct);
 
         // Only a multi-branch customer's own branches matter to the phone: a plain shop's sale
@@ -196,7 +197,7 @@ public class MobileSyncService(
         {
             return new SubmissionResultDto(
                 item.ClientRequestId, SubmissionOutcome.AlreadyAccepted, existing.CreatedRecordId,
-                null, existing.PriceMismatch, []);
+                null, existing.PriceMismatch, [], await DocumentNumberAsync(existing, ct));
         }
 
         try
@@ -228,9 +229,21 @@ public class MobileSyncService(
 
             return new SubmissionResultDto(
                 item.ClientRequestId, SubmissionOutcome.AlreadyAccepted, winner?.CreatedRecordId,
-                null, winner?.PriceMismatch ?? false, []);
+                null, winner?.PriceMismatch ?? false, [], await DocumentNumberAsync(winner, ct));
         }
     }
+
+    /// <summary>
+    /// A retried sale answers with the number the first attempt was given, so a phone that lost
+    /// the first answer still ends up showing the right invoice number.
+    /// </summary>
+    private async Task<string?> DocumentNumberAsync(SyncSubmission? submission, CancellationToken ct) =>
+        submission?.SubmissionType == SubmissionType.Invoice
+            ? await db.Invoices
+                .Where(i => i.Id == submission.CreatedRecordId)
+                .Select(i => i.InvoiceNumber)
+                .FirstOrDefaultAsync(ct)
+            : null;
 
     private async Task<SubmissionResultDto> AcceptSaleAsync(
         Device device,
@@ -261,8 +274,10 @@ public class MobileSyncService(
 
         await RecordSubmissionAsync(device, item, created.Invoice.Id, mismatch, ct);
 
+        // The number is the server's, handed out when the sale is finalized here - never the phone's.
         return new SubmissionResultDto(
-            item.ClientRequestId, SubmissionOutcome.Accepted, created.Invoice.Id, null, mismatch, created.Warnings);
+            item.ClientRequestId, SubmissionOutcome.Accepted, created.Invoice.Id, null, mismatch, created.Warnings,
+            created.Invoice.InvoiceNumber);
     }
 
     private async Task<SubmissionResultDto> AcceptPaymentAsync(

@@ -405,6 +405,13 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   computers plus a phone racing through real HTTP, new-year counter race, counter repair, immutability,
   snapshots, PDF storage, email failure and retry, authorization. The phone app is unchanged; its sales
   get their PDF the first time the office opens them.
+- **Phone shows bill numbers and GST vs normal bill (2026-09-23).** The sync result carries
+  `documentNumber` for a sale (the same number again on a retry); the phone stores it on the outbox row
+  and Home lists "Today's bills" as "waiting to sync" until synced, then with the official number. The
+  snapshot carries each shop's `gstin`/`isGstRegistered`; the sale screen and shop page say "GST bill" or
+  "Normal bill". Drift schema v4 (`Customers.gstin`, `OutboxEntries.documentNumber`). A shop can no longer
+  be marked GST registered before the business GSTIN is in Settings, so the phone never saves a sale the
+  server would refuse for that reason. Still not on the phone: adding shops, sharing the PDF.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:

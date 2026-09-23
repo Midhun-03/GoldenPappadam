@@ -192,9 +192,11 @@ class SyncEngine {
       switch (outcome) {
         // Accepted and AlreadyAccepted mean the same thing to the phone: the office has it.
         // Treating a repeat as success is the entire point of the client request id.
+        // A sale comes back with the number the server gave it; a retry with the same number.
         case 'Accepted':
         case 'AlreadyAccepted':
-          await _db.markSynced(clientRequestId, recordId);
+          await _db.markSynced(clientRequestId, recordId,
+              documentNumber: result['documentNumber'] as String?);
         case 'Rejected':
           await _db.markFailed(
               clientRequestId, result['error'] as String? ?? 'The office refused this.');
@@ -228,6 +230,7 @@ class SyncEngine {
               address: Value(c['address'] as String?),
               balance: (c['balance'] as num).toDouble(),
               hasMultipleBranches: Value(c['hasMultipleBranches'] as bool? ?? false),
+              gstin: Value(c['gstin'] as String?),
             ))
         .toList();
 

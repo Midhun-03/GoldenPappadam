@@ -27,6 +27,10 @@ class Customers extends Table {
   /// screen shows a branch picker only when this is set - same rule as the admin panel.
   BoolColumn get hasMultipleBranches => boolean().withDefault(const Constant(false))();
 
+  /// Set for a GST-registered shop, which gets a GST bill; null for every other shop, which gets a
+  /// normal bill. The office decides; the phone only shows it.
+  TextColumn get gstin => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -133,6 +137,10 @@ class OutboxEntries extends Table {
 
   TextColumn get serverRecordId => text().nullable()();
 
+  /// The official invoice number the server gave a synced sale, "GP/26-27/000125". The phone never
+  /// makes one up: until the sale has synced there is no number, only "waiting to sync".
+  TextColumn get documentNumber => text().nullable()();
+
   /// A line to show in the list: "Kumar Stores - 450".
   TextColumn get summary => text()();
 
@@ -157,7 +165,7 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'golden_pappadam'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -174,6 +182,14 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.createTable(branches);
             await m.addColumn(customers, customers.hasMultipleBranches);
+          }
+
+          // 4: which shops get GST bills (a cache column, refilled by the next snapshot), and the
+          // official number of each synced sale. Sales synced before this have no number stored,
+          // which the screens show as synced without one.
+          if (from < 4) {
+            await m.addColumn(customers, customers.gstin);
+            await m.addColumn(outboxEntries, outboxEntries.documentNumber);
           }
         },
       );
@@ -335,11 +351,12 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<int> watchPendingCount() => watchUnfinished().map((rows) => rows.length);
 
-  Future<void> markSynced(String clientRequestId, String? serverRecordId) =>
+  Future<void> markSynced(String clientRequestId, String? serverRecordId, {String? documentNumber}) =>
       (update(outboxEntries)..where((e) => e.clientRequestId.equals(clientRequestId))).write(
         OutboxEntriesCompanion(
           status: Value(OutboxStatus.synced.stored),
           serverRecordId: Value(serverRecordId),
+          documentNumber: Value(documentNumber),
           lastError: const Value(null),
           nextAttemptAt: const Value(null),
         ),

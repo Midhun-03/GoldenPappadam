@@ -40,6 +40,10 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
             children: [
               _BalanceCard(shop: shop),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+                child: Align(alignment: Alignment.centerLeft, child: BillKindPill(gstin: shop.gstin)),
+              ),
               if ((shop.phone ?? '').isNotEmpty || (shop.address ?? '').isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),

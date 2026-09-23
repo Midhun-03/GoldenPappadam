@@ -244,6 +244,10 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
               ),
           ],
         ),
+        if (shop != null) ...[
+          const SizedBox(height: 10),
+          Align(alignment: Alignment.centerLeft, child: BillKindPill(gstin: shop.gstin)),
+        ],
         if (shop != null && shop.balance > 0) ...[
           const SizedBox(height: 10),
           Row(

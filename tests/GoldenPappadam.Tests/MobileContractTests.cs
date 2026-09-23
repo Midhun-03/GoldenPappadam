@@ -294,7 +294,7 @@ public class MobileContractTests : IAsyncLifetime
 
         var customer = snapshot.GetProperty("customers")[0];
         foreach (var field in new[]
-                 { "id", "name", "contactPerson", "phone", "address", "balance", "hasMultipleBranches" })
+                 { "id", "name", "contactPerson", "phone", "address", "balance", "hasMultipleBranches", "gstin", "isGstRegistered" })
         {
             Assert.True(customer.TryGetProperty(field, out _), $"customer.{field} is missing");
         }
@@ -660,10 +660,65 @@ public class MobileContractTests : IAsyncLifetime
 
         var result = response.GetProperty("results")[0];
 
-        foreach (var field in new[] { "clientRequestId", "outcome", "recordId", "error", "priceMismatch" })
+        foreach (var field in new[] { "clientRequestId", "outcome", "recordId", "error", "priceMismatch", "documentNumber" })
         {
             Assert.True(result.TryGetProperty(field, out _), $"result.{field} is missing");
         }
+    }
+
+    [Fact]
+    public async Task A_synced_sale_comes_back_with_its_official_number_and_a_retry_with_the_same_one()
+    {
+        var saleId = Guid.NewGuid();
+        var body = $$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{saleId}}",
+                  "type": "Invoice",
+                  "recordedAt": "2026-09-23T06:30:00.000Z",
+                  "sale": {
+                    "customerId": "{{_customerId}}",
+                    "lines": [ { "productId": "{{_productId}}", "quantity": 10.0, "unitPrice": 35.0 } ],
+                    "pricesAsOf": "2026-09-23T05:00:00.000Z",
+                    "notes": null
+                  }
+                }
+              ]
+            }
+            """;
+
+        var first = (await SubmitAsync(body)).GetProperty("results")[0];
+
+        // Numbered by the server when it finalized the sale - the phone never makes one up.
+        Assert.Equal("Accepted", first.GetProperty("outcome").GetString());
+        Assert.Equal("GP/26-27/000001", first.GetProperty("documentNumber").GetString());
+
+        // The phone lost that answer and sends again: same bill, same number, nothing new.
+        var retry = (await SubmitAsync(body)).GetProperty("results")[0];
+
+        Assert.Equal("AlreadyAccepted", retry.GetProperty("outcome").GetString());
+        Assert.Equal("GP/26-27/000001", retry.GetProperty("documentNumber").GetString());
+    }
+
+    [Fact]
+    public async Task A_gst_customer_is_marked_in_the_snapshot_with_its_gstin()
+    {
+        using (var scope = _api.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var customer = await db.Customers.SingleAsync(c => c.Id == _customerId);
+            customer.Gstin = "32PQRSX9876K1Z3";
+            await db.SaveChangesAsync();
+        }
+
+        var snapshot = await _phone.GetFromJsonAsync<JsonElement>("/api/mobile/sync/snapshot");
+        var shop = snapshot.GetProperty("customers").EnumerateArray()
+            .Single(c => c.GetProperty("id").GetGuid() == _customerId);
+
+        Assert.True(shop.GetProperty("isGstRegistered").GetBoolean());
+        Assert.Equal("32PQRSX9876K1Z3", shop.GetProperty("gstin").GetString());
     }
 
     [Fact]

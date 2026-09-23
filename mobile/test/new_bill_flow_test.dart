@@ -23,7 +23,7 @@ void main() {
     await db.replaceSnapshot(
       customers: [
         shopRow(id: 'shop-1', name: 'Kumar Stores', balance: 10000, phone: '9847012345'),
-        shopRow(id: 'shop-2', name: 'Anand Bakery', balance: 0),
+        shopRow(id: 'shop-2', name: 'Anand Bakery', balance: 0, gstin: '32PQRSX9876K1Z3'),
         shopRow(id: 'shop-3', name: 'Danya Supermarket', balance: 0, hasMultipleBranches: true),
       ],
       branches: [
@@ -262,6 +262,17 @@ void main() {
   });
 
   Finder branchDropdown() => find.byType(DropdownMenu<CachedBranch>);
+
+  testWidgets('a GST shop is told it gets a GST bill, and any other shop a normal bill', (tester) async {
+    await openBill(tester);
+
+    await chooseShop(tester);
+    expect(find.text('Normal bill'), findsOneWidget);
+
+    await chooseShop(tester, typed: 'ana', entry: 'Anand Bakery');
+    expect(find.text('GST bill · 32PQRSX9876K1Z3'), findsOneWidget);
+    expect(find.text('Normal bill'), findsNothing);
+  });
 
   testWidgets('a plain shop never shows a branch picker', (tester) async {
     await openBill(tester);

@@ -28,6 +28,7 @@ public class GstCustomerTests : IAsyncLifetime
     [Fact]
     public async Task A_gst_customer_is_saved_with_its_gstin_and_its_state_comes_from_the_gstin()
     {
+        await _database.ConfigureGstAsync();
         var customer = await _customers.CreateAsync(Request("Danya Supermarket", isGstRegistered: true, gstin: "32pqrsx9876k1z3"), default);
 
         Assert.Equal("32PQRSX9876K1Z3", customer.Gstin);
@@ -66,11 +67,35 @@ public class GstCustomerTests : IAsyncLifetime
     [Fact]
     public async Task Unticking_gst_registered_turns_a_gst_customer_back_into_a_normal_one()
     {
+        await _database.ConfigureGstAsync();
         var customer = await _customers.CreateAsync(Request("Danya Supermarket", isGstRegistered: true, gstin: "32PQRSX9876K1Z3"), default);
 
         var updated = await _customers.UpdateAsync(customer.Id, Request("Danya Supermarket"), default);
 
         Assert.Null(updated.Gstin);
+    }
+
+    [Fact]
+    public async Task A_shop_cannot_be_marked_gst_registered_before_the_business_gstin_is_entered()
+    {
+        // Otherwise the salesman's next sale there would be saved on the phone and refused at sync.
+        var refused = await Assert.ThrowsAsync<DomainException>(() =>
+            _customers.CreateAsync(Request("Danya Supermarket", isGstRegistered: true, gstin: "32PQRSX9876K1Z3"), default));
+
+        Assert.Contains("Settings", refused.Message);
+    }
+
+    [Fact]
+    public async Task A_gst_customer_can_still_be_edited_if_the_business_gstin_is_later_removed()
+    {
+        await _database.ConfigureGstAsync();
+        var customer = await _customers.CreateAsync(Request("Danya Supermarket", isGstRegistered: true, gstin: "32PQRSX9876K1Z3"), default);
+        await _database.ConfigureGstAsync(gstin: null);
+
+        var renamed = await _customers.UpdateAsync(
+            customer.Id, Request("Danya Hypermarket", isGstRegistered: true, gstin: "32PQRSX9876K1Z3"), default);
+
+        Assert.Equal("Danya Hypermarket", renamed.Name);
     }
 
     [Fact]

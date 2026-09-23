@@ -202,6 +202,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 ],
                               ),
                             ],
+                            const TodaysBills(),
                             const _VanSummaryCard(),
                             const SizedBox(height: 10),
                             _PendingTile(pending: ref.watch(pendingCountProvider).value ?? 0),
@@ -563,4 +564,70 @@ class _NothingYet extends StatelessWidget {
           message: 'Sync once with a connection and the day so far will be here.',
         ),
       );
+}
+
+/// Every bill written on this phone today. Until the office has it a bill has no number - the phone
+/// never invents one - so it reads "waiting to sync"; once synced it shows the official number the
+/// server gave it, the one printed on the invoice.
+class TodaysBills extends ConsumerWidget {
+  const TodaysBills({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+
+    return StreamBuilder<List<OutboxEntry>>(
+      stream: ref.watch(databaseProvider).watchOutboxOfType('Invoice'),
+      builder: (context, snapshot) {
+        final today = (snapshot.data ?? const <OutboxEntry>[])
+            .where((entry) => !entry.recordedAt.toLocal().isBefore(startOfDay))
+            .toList();
+
+        if (today.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader("Today's bills"),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (final entry in today) _BillRow(entry: entry),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BillRow extends StatelessWidget {
+  const _BillRow({required this.entry});
+
+  final OutboxEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final time = timeOfDay(entry.recordedAt);
+    final (icon, colour, detail) = switch (entry.status) {
+      'Synced' => (
+          Icons.check_circle_outline,
+          AppColors.success,
+          entry.documentNumber == null ? 'With the office · $time' : '${entry.documentNumber} · $time',
+        ),
+      'Failed' => (Icons.error_outline, AppColors.danger, entry.lastError ?? 'The office refused this.'),
+      _ => (Icons.schedule, AppColors.textMuted, 'Waiting to sync · $time'),
+    };
+
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, color: colour),
+      title: Text(entry.summary, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(detail),
+    );
+  }
 }

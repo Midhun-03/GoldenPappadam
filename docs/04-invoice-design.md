@@ -73,7 +73,9 @@ does not exist yet, so the first two bills of a new year cannot both create a co
 - **Why not `MAX()+1`:** two readers see the same maximum. **Why not a `SEQUENCE`:** not transactional
   (gaps) and needs one object per year.
 - **Offline phones never number anything.** The phone sends its own client id; the server finalizes and
-  numbers the sale when it syncs.
+  numbers the sale when it syncs, and answers with the number (`documentNumber` in the sync result - a
+  retry answers with the same one). The phone keeps it on the outbox row and Home's "Today's bills" shows
+  it; until then the bill reads "waiting to sync".
 
 Bills made before this change keep their numbers (`INV-2026-00001` ... `00014` became series `INV`,
 2026-27, numbers 1-14). The `GP` series started at 1.
@@ -92,7 +94,11 @@ having one *is* being registered.
 | Not registered | no | **Normal bill** - no GST details at all |
 | Not registered | yes (future) | Tax Invoice, without a customer GSTIN - tax follows the product, never the customer |
 
-- The business GSTIN (Settings) must be entered before a GST customer can be billed.
+- The business GSTIN (Settings) must be entered before a shop can be marked GST registered, and before a
+  GST customer can be billed. The first rule keeps a phone from saving a sale offline that the server would
+  then refuse; the second covers a GSTIN removed later.
+- The phone's snapshot carries each shop's GSTIN, and its sale screen and shop page say "GST bill" or
+  "Normal bill". The server still decides what the bill is when it finalizes the sale.
 - GST cannot be switched on while any active product has no treatment, and once it is on a product cannot be
   saved without one - otherwise every bill for that product, the phone's included, would stop.
 - **Why "Bill of Supply" and not "Tax Invoice" for exempt pappadam:** GST rules have a registered supplier
@@ -153,4 +159,5 @@ having one *is* being registered.
 ## 7. Not built (deliberately)
 
 Saved drafts, credit notes, e-invoice (IRN) and e-way bill APIs, multiple active series, cess rates,
-UQC codes per unit, phone-side invoice screens, Supabase. None of them needs a change to what is here.
+UQC codes per unit, opening or sharing the PDF from the phone, adding shops (with the GST tick box) from
+the phone, Supabase. None of them needs a change to what is here.

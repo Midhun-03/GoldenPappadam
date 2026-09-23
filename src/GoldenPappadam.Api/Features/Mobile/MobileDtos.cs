@@ -21,7 +21,9 @@ public record SnapshotCustomerDto(
     string? Phone,
     string? Address,
     decimal Balance,
-    bool HasMultipleBranches);
+    bool HasMultipleBranches,
+    string? Gstin = null,
+    bool IsGstRegistered = false);
 
 /// <summary>One physical shop under a multi-branch customer, e.g. Kundara under Danya Supermarket.</summary>
 public record SnapshotBranchDto(
@@ -216,13 +218,18 @@ public enum SubmissionOutcome
     Rejected
 }
 
+/// <summary>
+/// DocumentNumber is the official invoice number the server gave a sale ("GP/26-27/000125"), so the
+/// phone can show it in place of "waiting to sync". Null for anything that is not a sale.
+/// </summary>
 public record SubmissionResultDto(
     Guid ClientRequestId,
     SubmissionOutcome Outcome,
     Guid? RecordId,
     string? Error,
     bool PriceMismatch,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    string? DocumentNumber = null);
 
 public record SubmissionBatchResponse(DateTime ServerTime, IReadOnlyList<SubmissionResultDto> Results);
 
