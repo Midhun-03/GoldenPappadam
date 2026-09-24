@@ -28,7 +28,7 @@ public record SaveInvoiceSettingsRequest(
     [MaxLength(300)] string? Address,
     [MaxLength(20)] string? Phone,
     [MaxLength(256), EmailAddress] string? Email,
-    [MaxLength(15)] string? Gstin,
+    [MaxLength(30)] string? Gstin,
     [Required, StringLength(2, MinimumLength = 2)] string StateCode,
     [Required, StringLength(3, MinimumLength = 1)] string SeriesCode,
     bool PricesIncludeTax,

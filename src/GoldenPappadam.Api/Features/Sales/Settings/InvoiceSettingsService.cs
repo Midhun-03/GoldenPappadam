@@ -93,10 +93,9 @@ public partial class InvoiceSettingsService(AppDbContext db)
             return;
         }
 
-        if (!Gstin.IsValid(gstin))
+        if (Gstin.Problem(gstin) is { } problem)
         {
-            throw new DomainException(
-                $"'{gstin}' is not a valid GSTIN for {whose}. It is 15 characters, like 32ABCDE1234F1Z5.");
+            throw new DomainException($"The GSTIN '{gstin}' for {whose} is not right: {problem}");
         }
 
         if (stateCode is not null && Gstin.StateCodeOf(gstin) != stateCode)

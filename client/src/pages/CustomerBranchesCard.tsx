@@ -305,7 +305,7 @@ function BranchDialog({
                 <Label htmlFor="branch-gstin">GSTIN</Label>
                 <Input
                   id="branch-gstin"
-                  maxLength={15}
+                  maxLength={30}
                   className="font-mono uppercase placeholder:font-sans placeholder:normal-case"
                   placeholder="If registered separately"
                   value={form.gstin}

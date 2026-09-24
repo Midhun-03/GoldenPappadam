@@ -121,6 +121,34 @@ public class GstCustomerTests : IAsyncLifetime
         Assert.Equal(TaxTreatment.Exempt, saved.TaxTreatment);
     }
 
+    [Theory]
+    [InlineData("32 PQRSX 9876K1Z3")]          // typed with spaces
+    [InlineData("32PQRSX9876K1Z3 ")]      // a non-breaking space pasted from WhatsApp
+    [InlineData("​32PQRSX9876K1Z3")]      // an invisible zero-width space
+    public async Task A_gstin_pasted_with_spaces_or_invisible_characters_is_cleaned_and_accepted(string typed)
+    {
+        await _database.ConfigureGstAsync();
+
+        var customer = await _customers.CreateAsync(Request("Danya Supermarket", isGstRegistered: true, gstin: typed), default);
+
+        Assert.Equal("32PQRSX9876K1Z3", customer.Gstin);
+    }
+
+    [Theory]
+    [InlineData("32PQRSX98O6K1Z3", "letter O")]        // letter O among the PAN's digits
+    [InlineData("32PQRSX9876K1Z", "has 14 characters")]
+    [InlineData("32PQRSX9876K1X3", "always Z")]
+    [InlineData("3APQRSX9876K1Z3", "state code")]
+    public async Task A_wrong_gstin_is_refused_saying_which_character_is_wrong(string typed, string expected)
+    {
+        await _database.ConfigureGstAsync();
+
+        var refused = await Assert.ThrowsAsync<DomainException>(() =>
+            _customers.CreateAsync(Request("Danya Supermarket", isGstRegistered: true, gstin: typed), default));
+
+        Assert.Contains(expected, refused.Message);
+    }
+
     private static SaveCustomerRequest Request(string name, bool isGstRegistered = false, string? gstin = null) =>
         new(name, null, null, null, 0m, null, false, Gstin: gstin, IsGstRegistered: isGstRegistered);
 }

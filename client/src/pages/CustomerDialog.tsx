@@ -203,8 +203,7 @@ export function CustomerDialog({
                   <Input
                     id="gstin"
                     required
-                    minLength={15}
-                    maxLength={15}
+                    maxLength={30}
                     className="font-mono uppercase placeholder:font-sans placeholder:normal-case"
                     placeholder="32ABCDE1234F1Z5"
                     value={form.gstin}

@@ -186,7 +186,7 @@ export function InvoiceSettingsCard() {
                 <Label htmlFor="business-gstin">GSTIN</Label>
                 <Input
                   id="business-gstin"
-                  maxLength={15}
+                  maxLength={30}
                   className="font-mono uppercase placeholder:font-sans placeholder:normal-case"
                   placeholder="Not registered"
                   value={form.gstin}

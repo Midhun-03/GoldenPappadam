@@ -20,5 +20,5 @@ public record SaveCustomerBranchRequest(
     [MaxLength(300)] string? Address,
     [MaxLength(20)] string? Phone,
     [MaxLength(100)] string? ContactPerson,
-    [MaxLength(15)] string? Gstin = null,
+    [MaxLength(30)] string? Gstin = null,
     [StringLength(2, MinimumLength = 2)] string? StateCode = null);

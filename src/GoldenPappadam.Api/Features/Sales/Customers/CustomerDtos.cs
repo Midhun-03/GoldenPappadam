@@ -35,7 +35,7 @@ public record SaveCustomerRequest(
     [MaxLength(300)] string? Notes,
     bool HasMultipleBranches,
     [MaxLength(256), EmailAddress] string? Email = null,
-    [MaxLength(15)] string? Gstin = null,
+    [MaxLength(30)] string? Gstin = null,
     [StringLength(2, MinimumLength = 2)] string? StateCode = null,
     bool IsGstRegistered = false);
 
