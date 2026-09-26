@@ -97,7 +97,10 @@ public class ReportApiTests : IAsyncLifetime
                      "/api/reports/sales", "/api/reports/collections", "/api/reports/outstanding",
                      "/api/reports/stock", "/api/reports/stock-age", "/api/inventory/stock/age",
                      "/api/inventory/repacking",
-                     $"/api/reports/statement/{_customerId}?from=2026-09-01&to=2026-09-30"
+                     $"/api/reports/statement/{_customerId}?from=2026-09-01&to=2026-09-30",
+                     "/api/reports/returns?from=2026-09-01&to=2026-09-30&format=pdf",
+                     "/api/reports/returns?format=xlsx",
+                     "/api/sales/returns"
                  })
         {
             var response = await _office.GetAsync(path);
@@ -114,6 +117,15 @@ public class ReportApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await phone.GetAsync("/api/inventory/stock/age")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await phone.PostAsJsonAsync("/api/inventory/repacking", new { fromProductId = Guid.NewGuid(), fromQuantity = 1, toProductId = Guid.NewGuid() })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await phone.GetAsync("/api/reports/returns")).StatusCode);
+
+        // Settling a return - above all granting a credit - is the office's decision.
+        Assert.Equal(HttpStatusCode.Forbidden, (await phone.GetAsync("/api/sales/returns")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await phone.PostAsJsonAsync("/api/sales/returns", new { customerId = _customerId, lines = new[] { new { productId = Guid.NewGuid(), quantity = 1, reason = "Expired" } }, settlement = "Credit" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await phone.PostAsJsonAsync($"/api/sales/returns/{Guid.NewGuid()}/settle", new { settlement = "Credit" })).StatusCode);
 
         using var stranger = _api.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await stranger.GetAsync("/api/reports/collections")).StatusCode);

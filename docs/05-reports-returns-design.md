@@ -75,7 +75,43 @@ damaged, adjusted, closing - minus figures for movements out, so each row adds u
 PDF/Excel; and the dashboard's stock card says how many products are expired, expiring within 3 days or
 worth repacking.
 
-## 3. Returns in the office — next
+## 3. Returns in the office (built 2026-09-26)
+
+The owner's rules (2026-09-25): shops only return **expired or damaged** packets, returned packets are
+**never resold**, and what the shop gets **depends on the shop**, decided by the office.
+
+**The record.** `sales.ReturnNotes` + `sales.ReturnNoteLines`, numbered `RN/26-27/000001` through the same
+locked counter as invoices (series `RN`, which the invoice prefix may not take). A note snapshots the
+customer and branch names, and each line fixes its rate when recorded: the shop's agreed rate through
+`CustomerPriceService.Resolve`, else the product price, overridable by the office. The branch follows the
+bill rule (`BranchRule`): a multi-branch customer must name one. Like an invoice, a note is never edited;
+`AppDbContext` allows only the settlement and cancellation fields to change.
+
+**A return never adds to stock.** The packets were sold and are now waste; the note lines are the record.
+
+| Settlement | What it does |
+|---|---|
+| Office to decide (`Pending`) | Only the record, until the office decides - once. |
+| Replaced free | `Replacement` movements take the same products and quantities out of the warehouse or a van. The bill is untouched. |
+| Credit | A `Payment` with method `ReturnCredit`, referencing the note. It settles the oldest bills first exactly as money would, so balances, ledgers and the outstanding report need no new logic. Defaults to the packets' value; the office may credit a different amount. |
+| Nothing given | Only the record. |
+
+**A credit is not money.** `ReturnCredit` cannot be entered on the payments screen, is never offered to
+the phone, is left out of the collections report and shows as "Return credit" in the ledger and statement.
+The dashboard and the phone's day figures count only phone payments or allocations to bills, so they were
+already right.
+
+**Cancelling.** A replacement's movements are mirrored back into the same place. A **credited** return
+cannot be cancelled, for the same reason a bill with money on it cannot: payments are never reversed in
+this system. If one is ever needed, it is a new design, not a delete.
+
+**Stock age.** A replacement takes the oldest layers, as a sale does; a cancelled replacement puts the same
+layers back with their packing date. The stock report has a "Replaced free" column.
+
+**Screens and reports.** Sales > Returns (list with "only those to decide"), New return, and the return
+page with Decide, Print (A4 PDF from the report renderer) and Cancel. Reports > Returns and expiry: notes,
+by product and reason, by shop, and expired stock written off from the Stock age screen.
+
 ## 4. Returns on the phone — next
 ## 5. The owner's daily summary — next
 

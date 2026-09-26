@@ -22,6 +22,12 @@ public class PaymentService(AppDbContext db)
             throw new DomainException("A payment must be greater than zero.");
         }
 
+        if (request.Method == PaymentMethod.ReturnCredit)
+        {
+            throw new DomainException(
+                "A return credit is not money received. Record the return instead, and choose credit there.");
+        }
+
         var payment = new Payment
         {
             CustomerId = customer.Id,
@@ -130,6 +136,34 @@ public class PaymentService(AppDbContext db)
         }
 
         return allocations;
+    }
+
+    /// <summary>
+    /// The credit for a return, as a payment of method <see cref="PaymentMethod.ReturnCredit"/>: it
+    /// settles the oldest unpaid bills first, exactly as money would, and whatever is left stays on
+    /// account. Added to the context but not saved, so it commits in the return's own transaction.
+    /// </summary>
+    public async Task<Payment> AddReturnCreditAsync(
+        Guid customerId,
+        DateOnly date,
+        decimal amount,
+        string returnNumber,
+        CancellationToken ct)
+    {
+        var payment = new Payment
+        {
+            CustomerId = customerId,
+            PaymentDate = date,
+            Amount = amount,
+            Method = PaymentMethod.ReturnCredit,
+            Reference = returnNumber,
+            Notes = $"Credit for returned packets, {returnNumber}",
+            Allocations = await BuildOldestFirstAllocationsAsync(customerId, amount, ct)
+        };
+
+        db.Payments.Add(payment);
+
+        return payment;
     }
 
     /// <summary>Applies the money to the oldest unpaid bills until it runs out.</summary>

@@ -84,7 +84,7 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 - **Units:** products may use different units (kg, pieces, packets). Never assume one unit for all products. Each variety/size/type of pappadam has its own stock.
 - **Packing is in phase 1.** Loose stock down, packed stock up, recorded as a packing transaction with history. Actual quantities may differ from the theoretical ones because of packing loss, so the recorded quantity is what was actually used.
 - **Pricing:** every product has a default selling price, overridable on a sale line. Customer-specific pricing must be addable later without redesign. Never hard-code one unchangeable price.
-- **Returns:** the design must stay return-ready (extensible movement types + the reference pattern). Do not build a returns workflow in phase 1.
+- **Returns:** the design must stay return-ready (extensible movement types + the reference pattern). Do not build a returns workflow in phase 1. _Superseded 2026-09-25: returns were answered (§10 Q2) and built in the office on 2026-09-26 - see `docs/05-reports-returns-design.md` §3._
 - **Discounts:** a simple bill-level discount field is enough for now; item-level discounts must remain addable later. No promotion/discount engine.
 - **Tax/GST:** the invoice structure must allow tax fields (GSTIN, HSN/SAC, tax %, tax amount, CGST/SGST/IGST) to be added later without restructuring sales. Do **not** assume sales are GST-exempt. _Superseded 2026-09-23: the owner asked for configurable GST to be built - see "Invoices and GST" below. The rates and treatments themselves are still the accountant's to confirm._
 
@@ -422,8 +422,14 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   keeping packing dates; `inventory.RepackEntries` + movement type `Repacking` (exact conversion via the
   loose root product, left-over back to loose, fresh date); expired stock written off only on the office's
   say-so. Inventory gets **Stock age** and **Repacking**, Reports gets **Stock movement**, and the dashboard
-  counts expired / expiring / worth-repacking products. Next in the plan: returns (office, then phone), a
-  daily summary.
+  counts expired / expiring / worth-repacking products.
+- **Returns in the office done (2026-09-26)**, same document §3. `sales.ReturnNotes` (+ lines), numbered
+  `RN/26-27/000001` by the invoice counter, immutable except settlement and cancellation. Returned packets
+  never re-enter stock. Settled once, now or later: **replaced free** (`Replacement` movements from the
+  warehouse or a van), **credit** (a `Payment` of method `ReturnCredit` that settles the oldest bills, never
+  counted as money collected and refused on the payments endpoint), or **nothing**. A credited return cannot
+  be cancelled, like a bill with money on it. Admin-only; Sales > **Returns**, Reports > **Returns and
+  expiry**, a printable return note. Next in the plan: returns on the phone, then the owner's daily summary.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
@@ -608,7 +614,7 @@ Never design around an assumption for these; ask, or keep the design open.
 | # | Question | Status | Affects |
 |---|---|---|---|
 | ~~1~~ | ~~Do different shops pay different prices?~~ | **Answered 2026-09-15: yes.** See §4 "Confirmed requirements" | sales pricing |
-| ~~2~~ | ~~Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded?~~ | **Answered 2026-09-25:** only expired or damaged packets come back, never resold; replacement, credit or nothing, decided by the office per shop. Pappadam lasts 20 days from packing; unsold packets are repacked (any size, no loss, fresh 20 days) when the office decides. Being built - `docs/05-reports-returns-design.md` | inventory + sales |
+| ~~2~~ | ~~Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded?~~ | **Answered 2026-09-25:** only expired or damaged packets come back, never resold; replacement, credit or nothing, decided by the office per shop. Pappadam lasts 20 days from packing; unsold packets are repacked (any size, no loss, fresh 20 days) when the office decides. Built in the office 2026-09-26; phone next - `docs/05-reports-returns-design.md` | inventory + sales |
 | 3 | Are discounts given, and at bill level or item level? | TBD — owner to confirm | invoice totals |
 | 4 | GST: the exact HSN code, that pappadam is exempt rather than nil-rated, and the "Bill of Supply" heading on GST bills for exempt goods | **Partly answered 2026-09-23:** one HSN, no GST today, GST bills only for GST-registered shops. Accountant to confirm the three details | invoices |
 | 5 | Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now? | TBD — owner / accountant | invoice numbering |

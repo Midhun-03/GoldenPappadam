@@ -37,5 +37,11 @@ public enum StockMovementType
     /// packets made (and on the loose stock for any pieces left over). The new packets start a fresh
     /// shelf life. See <see cref="RepackEntry"/>.
     /// </summary>
-    Repacking
+    Repacking,
+
+    /// <summary>
+    /// Fresh packets given free in place of expired or damaged ones a shop returned. Negative; a
+    /// cancelled return puts them back. See <see cref="Sales.ReturnNote"/>.
+    /// </summary>
+    Replacement
 }

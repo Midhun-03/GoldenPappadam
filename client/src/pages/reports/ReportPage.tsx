@@ -161,3 +161,12 @@ export const StockReportPage = () => (
     mode="range"
   />
 )
+
+export const ReturnsReportPage = () => (
+  <ReportPage
+    path="returns"
+    title="Returns and expiry"
+    description="Packets shops gave back, what they got for them, and our own stock written off as expired."
+    mode="range"
+  />
+)

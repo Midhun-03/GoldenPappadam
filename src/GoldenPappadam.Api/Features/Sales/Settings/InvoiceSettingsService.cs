@@ -14,6 +14,9 @@ namespace GoldenPappadam.Api.Features.Sales.Settings;
 /// </summary>
 public partial class InvoiceSettingsService(AppDbContext db)
 {
+    /// <summary>The numbering series of return notes, which invoices must never share.</summary>
+    public const string ReturnSeries = "RN";
+
     [GeneratedRegex("^[A-Z0-9]{1,3}$")]
     private static partial Regex SeriesShape();
 
@@ -43,6 +46,11 @@ public partial class InvoiceSettingsService(AppDbContext db)
         }
 
         EnsureGstinMatchesState(gstin, stateCode, "the business");
+
+        if (seriesCode == ReturnSeries)
+        {
+            throw new DomainException($"'{ReturnSeries}' numbers return notes. Choose another prefix for invoices.");
+        }
 
         // Switching GST on with a product still undecided would stop every bill for it, the phone's
         // included. Ask for the treatments first, while nothing depends on them yet.

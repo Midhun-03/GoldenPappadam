@@ -9,6 +9,9 @@ import { InvoiceDetailPage } from './pages/InvoiceDetailPage'
 import { InvoicesPage } from './pages/InvoicesPage'
 import { LoginPage } from './pages/LoginPage'
 import { NewInvoicePage } from './pages/NewInvoicePage'
+import { NewReturnPage } from './pages/NewReturnPage'
+import { ReturnDetailPage } from './pages/ReturnDetailPage'
+import { ReturnsPage } from './pages/ReturnsPage'
 import { PackingPage } from './pages/PackingPage'
 import { RepackingPage } from './pages/RepackingPage'
 import { StockAgePage } from './pages/StockAgePage'
@@ -23,6 +26,7 @@ import { VanPage } from './pages/VanPage'
 import {
   CollectionsReportPage,
   OutstandingReportPage,
+  ReturnsReportPage,
   SalesReportPage,
   StockReportPage,
 } from './pages/reports/ReportPage'
@@ -73,10 +77,14 @@ export function App() {
           <Route path="/invoices/new" element={<NewInvoicePage />} />
           <Route path="/invoices/:invoiceId" element={<InvoiceDetailPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
+          <Route path="/returns" element={<ReturnsPage />} />
+          <Route path="/returns/new" element={<NewReturnPage />} />
+          <Route path="/returns/:returnId" element={<ReturnDetailPage />} />
           <Route path="/reports/sales" element={<SalesReportPage />} />
           <Route path="/reports/collections" element={<CollectionsReportPage />} />
           <Route path="/reports/outstanding" element={<OutstandingReportPage />} />
           <Route path="/reports/stock" element={<StockReportPage />} />
+          <Route path="/reports/returns" element={<ReturnsReportPage />} />
 
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

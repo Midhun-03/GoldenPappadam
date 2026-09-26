@@ -159,7 +159,8 @@ export type PackingResponse = {
 
 export type InvoiceStatus = 'Issued' | 'Cancelled'
 
-export type PaymentMethod = 'Cash' | 'UPI' | 'BankTransfer' | 'Cheque' | 'Other'
+/** ReturnCredit is never chosen: only a return note creates one. */
+export type PaymentMethod = 'Cash' | 'UPI' | 'BankTransfer' | 'Cheque' | 'Other' | 'ReturnCredit'
 
 export type Customer = {
   id: string
@@ -246,7 +247,7 @@ export type SaveCustomerBranch = {
 export type LedgerEntry = {
   /** A plain date, "2026-09-14". */
   date: string
-  entryType: 'Opening' | 'Invoice' | 'Payment'
+  entryType: 'Opening' | 'Invoice' | 'Payment' | 'Return credit'
   reference: string
   description: string | null
   billed: number

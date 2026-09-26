@@ -117,7 +117,8 @@ public class CustomerService(AppDbContext db)
                 p.CreatedAt,
                 Entry: new LedgerEntryDto(
                     p.PaymentDate,
-                    "Payment",
+                    // Settles bills like a payment, but the shop paid nothing: it gave packets back.
+                    p.Method == PaymentMethod.ReturnCredit ? "Return credit" : "Payment",
                     p.Reference ?? p.Method.ToString(),
                     p.Method.ToString(),
                     0m,

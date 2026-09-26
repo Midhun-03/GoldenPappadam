@@ -67,6 +67,7 @@ public static class StockAgeCalculator
                         Remember(moved, (m.ReferenceId, m.ProductId), taken);
                         break;
                     case StockMovementType.Sale:
+                    case StockMovementType.Replacement:
                         Remember(sold, (m.ReferenceId, m.ProductId), taken);
                         break;
                     case StockMovementType.Repacking when m.ReferenceId is { } entry && taken.Count > 0:
@@ -84,7 +85,9 @@ public static class StockAgeCalculator
                     Carry(key, m, moved);
                     break;
 
+                // A cancelled bill or a cancelled replacement puts back the very packets it took.
                 case StockMovementType.SaleReversal:
+                case StockMovementType.Replacement:
                     Carry(key, m, sold);
                     break;
 

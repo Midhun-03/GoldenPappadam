@@ -14,6 +14,8 @@ public class CollectionsReport(AppDbContext db)
     {
         var payments = await db.Payments
             .Where(p => p.PaymentDate >= from && p.PaymentDate <= to)
+            // A credit for returned packets is not money received; the returns report lists it.
+            .Where(p => p.Method != Domain.Sales.PaymentMethod.ReturnCredit)
             .OrderBy(p => p.PaymentDate)
             .ThenBy(p => p.CreatedAt)
             .Select(p => new

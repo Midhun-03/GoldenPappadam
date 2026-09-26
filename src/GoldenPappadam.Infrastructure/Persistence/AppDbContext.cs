@@ -32,6 +32,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<InvoiceNumberSequence> InvoiceNumberSequences => Set<InvoiceNumberSequence>();
     public DbSet<InvoiceDocument> InvoiceDocuments => Set<InvoiceDocument>();
     public DbSet<InvoiceEmailLog> InvoiceEmailLogs => Set<InvoiceEmailLog>();
+    public DbSet<ReturnNote> ReturnNotes => Set<ReturnNote>();
+    public DbSet<ReturnNoteLine> ReturnNoteLines => Set<ReturnNoteLine>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
 
@@ -111,7 +113,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
 
                     if (entry.Entity is Invoice)
                     {
-                        EnsureOnlyCancellationChanged(entry);
+                        EnsureOnlyAllowedChanges(entry, Invoice.PropertiesEditableAfterFinalization, "finalized invoice");
+                    }
+                    else if (entry.Entity is ReturnNote)
+                    {
+                        EnsureOnlyAllowedChanges(entry, ReturnNote.PropertiesEditableAfterRecording, "recorded return");
                     }
 
                     auditable.UpdatedAt = now;
@@ -134,22 +140,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     }
 
     /// <summary>
-    /// A finalized invoice is an accounting document. The only change it may ever receive is being
-    /// cancelled; anything else - an amount, a customer, a date - is refused here, whichever code
-    /// path tried it, rather than trusting every service to remember.
+    /// Invoices and return notes are documents. The only changes they may ever receive are the ones
+    /// their type allows - being cancelled, or a pending return being settled; anything else, an
+    /// amount, a customer, a date, is refused here, whichever code path tried it, rather than
+    /// trusting every service to remember.
     /// </summary>
-    private static void EnsureOnlyCancellationChanged(EntityEntry entry)
+    private static void EnsureOnlyAllowedChanges(EntityEntry entry, IReadOnlySet<string> allowed, string what)
     {
         var changed = entry.Properties
-            .Where(p => p.IsModified && !Invoice.PropertiesEditableAfterFinalization.Contains(p.Metadata.Name))
+            .Where(p => p.IsModified && !allowed.Contains(p.Metadata.Name))
             .Select(p => p.Metadata.Name)
             .ToList();
 
         if (changed.Count > 0)
         {
             throw new InvalidOperationException(
-                $"A finalized invoice cannot be changed ({string.Join(", ", changed)}). " +
-                "Cancel it and issue a new one instead.");
+                $"A {what} cannot be changed ({string.Join(", ", changed)}). Cancel it and record a new one instead.");
         }
     }
 }

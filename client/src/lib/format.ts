@@ -38,8 +38,10 @@ export const formatMoney = (value: number | null) => (value === null ? '—' : m
 
 export const formatDateTime = (iso: string) => dateTimeFormat.format(new Date(iso))
 
+const paymentMethodNames: Record<string, string> = { BankTransfer: 'Bank transfer', ReturnCredit: 'Return credit' }
+
 /** "BankTransfer" is a stored enum value; people read "Bank transfer". */
-export const formatPaymentMethod = (method: string) => (method === 'BankTransfer' ? 'Bank transfer' : method)
+export const formatPaymentMethod = (method: string) => paymentMethodNames[method] ?? method
 
 /** Short label for a chart axis, e.g. "14 Sep". */
 const dayShortFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })

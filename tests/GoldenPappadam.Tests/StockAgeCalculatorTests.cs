@@ -49,6 +49,25 @@ public class StockAgeCalculatorTests
     }
 
     [Fact]
+    public void A_free_replacement_takes_the_oldest_and_a_cancelled_one_puts_the_same_packets_back()
+    {
+        var note = Guid.NewGuid();
+        var movements = new List<Movement>
+        {
+            M(Packet, Warehouse, StockMovementType.Packing, 10m, 0),
+            M(Packet, Warehouse, StockMovementType.Packing, 10m, 4),
+            M(Packet, Warehouse, StockMovementType.Replacement, -6m, 5, note)
+        };
+
+        Assert.Equal([(Day1, 4m), (Day1.AddDays(4), 10m)], Held(movements, Packet, Warehouse).Select(l => (l.Day, l.Quantity)));
+
+        movements.Add(M(Packet, Warehouse, StockMovementType.Replacement, 6m, 7, note));
+
+        // Back with the day they were packed, not as stock made on the day of the cancellation.
+        Assert.Equal([(Day1, 10m), (Day1.AddDays(4), 10m)], Held(movements, Packet, Warehouse).Select(l => (l.Day, l.Quantity)));
+    }
+
+    [Fact]
     public void A_packet_keeps_its_packing_date_on_the_van_and_back()
     {
         var load = Guid.NewGuid();

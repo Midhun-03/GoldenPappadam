@@ -1,5 +1,6 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.Sales.CustomerBranches;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
@@ -149,7 +150,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
         }
 
         var settings = await db.InvoiceSettings.AsNoTracking().SingleAsync(s => s.Id == InvoiceSettings.SingletonId, ct);
-        var branch = await ResolveBranchAsync(customer, request.BranchId, ct);
+        var branch = await BranchRule.ResolveAsync(db, customer, request.BranchId, ct);
         var products = await LoadProductsAsync(customer.Id, request.Lines, ct);
         var supplierRegistered = settings.Gstin is not null;
 
@@ -355,36 +356,6 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
                 await InvoiceNumbering.RepairAsync(db, number.SeriesCode, number.FinancialYear, ct);
             }
         }
-    }
-
-    /// <summary>
-    /// A multi-branch customer must name the shop the goods are for; a plain customer must not,
-    /// since it has no branch to point at. This is what keeps a bill from ever landing on the
-    /// wrong Danya Supermarket branch, or on a branch that belongs to a different shop entirely.
-    /// </summary>
-    private async Task<CustomerBranch?> ResolveBranchAsync(Customer customer, Guid? requestedBranchId, CancellationToken ct)
-    {
-        if (!customer.HasMultipleBranches)
-        {
-            return null;
-        }
-
-        if (requestedBranchId is null)
-        {
-            throw new DomainException("Please select a branch before continuing.");
-        }
-
-        var branch = await db.CustomerBranches
-                         .AsNoTracking()
-                         .FirstOrDefaultAsync(b => b.Id == requestedBranchId && b.CustomerId == customer.Id, ct)
-                     ?? throw new NotFoundException("Branch");
-
-        if (!branch.IsActive)
-        {
-            throw new DomainException($"Branch '{branch.Name}' is not active.");
-        }
-
-        return branch;
     }
 
     private sealed record ProductForBill(

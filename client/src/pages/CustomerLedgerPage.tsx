@@ -177,7 +177,7 @@ export function CustomerLedgerPage() {
                   {ledger.data.map((entry, index) => (
                     <TableRow key={`${entry.entryType}-${entry.reference}-${index}`}>
                       <TableCell className="max-w-[7.5rem] sm:max-w-[12rem]">
-                        <Badge variant={entry.entryType === 'Payment' ? 'success' : 'outline'}>
+                        <Badge variant={entry.entryType === 'Invoice' || entry.entryType === 'Opening' ? 'outline' : 'success'}>
                           {entry.entryType}
                         </Badge>
                         <div className="mt-0.5 truncate text-xs text-muted-foreground">

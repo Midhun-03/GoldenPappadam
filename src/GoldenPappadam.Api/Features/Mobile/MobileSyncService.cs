@@ -146,7 +146,7 @@ public class MobileSyncService(
             products,
             priceRows,
             recentPayments,
-            Enum.GetNames<PaymentMethod>(),
+            Enum.GetValues<PaymentMethod>().Where(m => m != PaymentMethod.ReturnCredit).Select(m => m.ToString()).ToArray(),
             branches);
     }
 

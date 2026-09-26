@@ -16,6 +16,7 @@ using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Invoices.Documents;
 using GoldenPappadam.Api.Features.Sales.Payments;
+using GoldenPappadam.Api.Features.Sales.Returns;
 using GoldenPappadam.Api.Features.Sales.Settings;
 using GoldenPappadam.Infrastructure.Documents;
 using GoldenPappadam.Infrastructure.Email;
@@ -107,6 +108,7 @@ builder.Services.AddScoped<CustomerBranchService>();
 builder.Services.AddScoped<CustomerPriceService>();
 builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<PaymentService>();
+builder.Services.AddScoped<ReturnService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<VanLoadService>();
 builder.Services.AddScoped<MobileSyncService>();
@@ -121,6 +123,7 @@ builder.Services.AddScoped<OutstandingReport>();
 builder.Services.AddScoped<StatementReport>();
 builder.Services.AddScoped<StockMovementReport>();
 builder.Services.AddScoped<StockAgeReport>();
+builder.Services.AddScoped<ReturnsReport>();
 
 // Invoice PDFs go through an abstraction, so moving them to Supabase Storage (or any object store)
 // later is one registration here. Relative paths resolve against the app, never a fixed drive.

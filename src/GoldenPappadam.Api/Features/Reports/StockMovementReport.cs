@@ -21,6 +21,7 @@ public class StockMovementReport(AppDbContext db)
         ("movedIn", "Moved in", t => t == StockMovementType.Transfer, 1),
         ("movedOut", "Moved out", t => t == StockMovementType.Transfer, -1),
         ("sold", "Sold", t => t is StockMovementType.Sale or StockMovementType.SaleReversal, 0),
+        ("replaced", "Replaced free", t => t == StockMovementType.Replacement, 0),
         ("damaged", "Damaged / expired", t => t == StockMovementType.Damage, 0),
         ("adjusted", "Counted / adjusted", t => t == StockMovementType.Adjustment, 0)
     ];

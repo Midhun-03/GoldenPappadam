@@ -6,6 +6,7 @@ import {
   FileText,
   HandCoins,
   Hourglass,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -16,6 +17,7 @@ import {
   Settings,
   Store,
   Truck,
+  Undo2,
   Wallet,
   Warehouse,
   type LucideIcon,
@@ -34,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { ChangePasswordDialog } from './ChangePasswordDialog'
 
 type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean }
 type NavGroup = { label: string | null; items: NavItem[] }
@@ -49,6 +52,7 @@ const navigation: NavGroup[] = [
     items: [
       { to: '/invoices', label: 'Bills', icon: FileText },
       { to: '/payments', label: 'Payments', icon: Wallet },
+      { to: '/returns', label: 'Returns', icon: Undo2 },
       { to: '/customers', label: 'Customers', icon: Store },
     ],
   },
@@ -77,6 +81,7 @@ const navigation: NavGroup[] = [
       { to: '/reports/collections', label: 'Collections', icon: HandCoins },
       { to: '/reports/outstanding', label: 'Outstanding', icon: Hourglass },
       { to: '/reports/stock', label: 'Stock movement', icon: Warehouse },
+      { to: '/reports/returns', label: 'Returns and expiry', icon: Undo2 },
     ],
   },
   {
@@ -154,6 +159,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 function AccountMenu({ align = 'end' }: { align?: 'start' | 'end' }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false)
 
   const initials = (user?.fullName ?? user?.email ?? '?')
     .split(' ')
@@ -163,29 +169,36 @@ function AccountMenu({ align = 'end' }: { align?: 'start' | 'end' }) {
     .toUpperCase()
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-auto w-full justify-start gap-2.5 px-2 py-1.5">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium">
-            {initials}
-          </span>
-          <span className="min-w-0 truncate text-sm font-medium">{user?.fullName ?? 'Account'}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className="w-56">
-        <DropdownMenuLabel className="font-normal text-muted-foreground">{user?.email}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={async () => {
-            await logout()
-            navigate('/login', { replace: true })
-          }}
-        >
-          <LogOut className="size-4" />
-          Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-auto w-full justify-start gap-2.5 px-2 py-1.5">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium">
+              {initials}
+            </span>
+            <span className="min-w-0 truncate text-sm font-medium">{user?.fullName ?? 'Account'}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={align} className="w-56">
+          <DropdownMenuLabel className="font-normal text-muted-foreground">{user?.email}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setIsPasswordOpen(true)}>
+            <KeyRound className="size-4" />
+            Change password
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={async () => {
+              await logout()
+              navigate('/login', { replace: true })
+            }}
+          >
+            <LogOut className="size-4" />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ChangePasswordDialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen} />
+    </>
   )
 }
 

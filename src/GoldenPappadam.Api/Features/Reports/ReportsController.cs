@@ -27,7 +27,8 @@ public class ReportsController(
     OutstandingReport outstanding,
     StatementReport statement,
     StockMovementReport stock,
-    StockAgeReport stockAge) : ControllerBase
+    StockAgeReport stockAge,
+    ReturnsReport returns) : ControllerBase
 {
     [HttpGet("sales")]
     public async Task<IActionResult> Sales(DateOnly? from, DateOnly? to, ReportFormat format = ReportFormat.Json, CancellationToken ct = default)
@@ -57,6 +58,13 @@ public class ReportsController(
     [HttpGet("stock-age")]
     public async Task<IActionResult> StockAge(DateOnly? asOf, ReportFormat format = ReportFormat.Json, CancellationToken ct = default) =>
         await RespondAsync(await stockAge.BuildAsync(asOf ?? IndiaTime.Today(), ct), format, ct);
+
+    [HttpGet("returns")]
+    public async Task<IActionResult> Returns(DateOnly? from, DateOnly? to, ReportFormat format = ReportFormat.Json, CancellationToken ct = default)
+    {
+        var (start, end) = ReportPeriod.Resolve(from, to);
+        return await RespondAsync(await returns.BuildAsync(start, end, ct), format, ct);
+    }
 
     [HttpGet("statement/{customerId:guid}")]
     public async Task<IActionResult> Statement(
