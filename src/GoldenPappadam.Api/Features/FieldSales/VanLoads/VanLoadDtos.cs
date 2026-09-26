@@ -51,7 +51,8 @@ public record VanReconciliationLineDto(
     decimal Sold,
     decimal Returned,
     decimal Other,
-    decimal Unaccounted);
+    decimal Unaccounted,
+    decimal Replaced = 0m);
 
 public record VanReconciliationDto(
     Guid VanLocationId,

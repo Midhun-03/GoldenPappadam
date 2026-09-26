@@ -531,6 +531,8 @@ export type VanReconciliationLine = {
   returned: number
   other: number
   unaccounted: number
+  /** Fresh packets handed to shops in place of expired or damaged ones. */
+  replaced: number
 }
 
 export type VanReconciliation = {

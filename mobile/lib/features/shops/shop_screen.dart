@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/local/database.dart';
 import '../payment/payment_screen.dart';
+import '../returns/return_screen.dart';
 import '../sale/sale_screen.dart';
 
 /// One shop, with the three things the salesperson needs before deciding anything: who it is,
@@ -73,6 +74,12 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.assignment_return_outlined, size: 18),
+                label: const Text('Expired or damaged packets'),
+                onPressed: () => _open(ReturnScreen(shop: shop)),
               ),
               const SizedBox(height: 4),
               TextButton(
@@ -228,7 +235,7 @@ class _PaymentHistory extends ConsumerWidget {
       builder: (context, outbox) {
         final unsent = (outbox.data ?? const <OutboxEntry>[])
             .where((entry) =>
-                entry.summary.startsWith('\$shopName ·') && entry.status != 'Synced')
+                entry.summary.startsWith('$shopName ·') && entry.status != 'Synced')
             .toList();
 
         return FutureBuilder<List<CachedPayment>>(
@@ -256,7 +263,7 @@ class _PaymentHistory extends ConsumerWidget {
                           title: Text(entry.summary.split('·').last.trim()),
                           subtitle: Text(entry.status == 'Failed'
                               ? entry.lastError ?? 'The office refused this.'
-                              : 'Waiting to go up · \${timeOfDay(entry.recordedAt)}'),
+                              : 'Waiting to go up · ${timeOfDay(entry.recordedAt)}'),
                         ),
                       for (final payment in settled)
                         ListTile(

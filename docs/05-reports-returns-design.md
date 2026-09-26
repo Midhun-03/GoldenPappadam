@@ -112,7 +112,32 @@ layers back with their packing date. The stock report has a "Replaced free" colu
 page with Decide, Print (A4 PDF from the report renderer) and Cancel. Reports > Returns and expiry: notes,
 by product and reason, by shop, and expired stock written off from the Stock age screen.
 
-## 4. Returns on the phone — next
+## 4. Returns on the phone (built 2026-09-26)
+
+The salesman is the one at the shop, so the phone records the pickup: a shop page button, **Expired or
+damaged packets**, opens a screen with the products (what the shop buys first), a quantity and an
+Expired / Damaged choice per product, and one question - **were fresh packets given from the van?**
+
+- **Yes:** a replacement. The server takes the same products and quantities off **this phone's own van**,
+  chosen from the device exactly as for a van load; the phone never names a location. A phone with no van
+  is not offered the choice, and the server refuses it anyway ("No van, no bill" applies to free packets
+  too).
+- **No:** saved as **office to decide**. The office then chooses credit, replacement or nothing from the
+  Returns list, which can show only those.
+
+**The phone never handles money here.** The request has no rate and no settlement beyond those two
+answers; the server values the packets at the shop's rate. Collecting needs no van, because returned
+packets are never put back into stock.
+
+It is one more sync submission type, `Return`, through the same outbox and client request id as a sale:
+a retry records it once and answers with the same `RN/...` number, which the phone stores like a bill
+number. The van reconciliation gained a **Replaced** figure, so free packets are not mistaken for a
+correction: opening + loaded − sold − returned − replaced + other = what should still be on the van.
+
+Tests: `SalespersonVanAndOrdersTests` (pending pickup at the shop's rate, replacement off the van and the
+van count, no van, retry), `MobileContractTests` (the exact JSON for both answers, the van screen's
+`replaced` field, the office's returns endpoints closed to the phone), `return_flow_test.dart` and
+`shop_screen_test.dart` on the phone.
 ## 5. The owner's daily summary — next
 
 See the approved plan for the design of 3–5; this document is filled in as each is built.

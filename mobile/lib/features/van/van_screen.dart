@@ -208,7 +208,8 @@ class _VanRow extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     Text(
                       'Took ${quantity(_of('loaded'))} · delivered ${quantity(_of('sold'))}'
-                      '${_of('returned') > 0 ? ' · returned ${quantity(_of('returned'))}' : ''}',
+                      '${_of('returned') > 0 ? ' · returned ${quantity(_of('returned'))}' : ''}'
+                      '${_of('replaced') > 0 ? ' · replaced free ${quantity(_of('replaced'))}' : ''}',
                       style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                     ),
                   ],

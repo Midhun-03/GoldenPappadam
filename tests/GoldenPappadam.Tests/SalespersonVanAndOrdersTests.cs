@@ -8,6 +8,7 @@ using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Payments;
+using GoldenPappadam.Api.Features.Sales.Returns;
 using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
@@ -52,7 +53,8 @@ public class SalespersonVanAndOrdersTests : IAsyncLifetime
             _vanLoads,
             _requests,
             new CustomerService(_database.Db),
-            new CustomerBranchService(_database.Db));
+            new CustomerBranchService(_database.Db),
+            new ReturnService(_database.Db, _stock, new CustomerPriceService(_database.Db), new PaymentService(_database.Db)));
 
         var (_, packet) = await _database.SeedProductsAsync();
         packet.SellingPrice = 45m;
@@ -356,12 +358,85 @@ public class SalespersonVanAndOrdersTests : IAsyncLifetime
 
     // ---------- helpers ----------
 
+    // ---------- returns collected on the road ----------
+
+    [Fact]
+    public async Task Packets_collected_with_nothing_given_wait_for_the_office()
+    {
+        var result = await SubmitAsync(ReturnItem(Guid.NewGuid(), 4m, replacedFromVan: false));
+
+        Assert.Equal(SubmissionOutcome.Accepted, result.Outcome);
+        Assert.StartsWith("RN/", result.DocumentNumber);
+
+        var note = await _database.Db.ReturnNotes.Include(r => r.Lines).SingleAsync();
+        Assert.Equal(ReturnSettlement.Pending, note.Settlement);
+        Assert.Equal(0m, note.CreditAmount);
+
+        // Valued at what the shop pays, decided by the server: the phone sent no rate at all.
+        Assert.Equal(45m, Assert.Single(note.Lines).UnitRate);
+
+        // Nothing went back into stock: returned packets are never resold.
+        Assert.Equal(500m, await _stock.GetQuantityOnHandAsync(_packet.Id, Warehouse, default));
+    }
+
+    [Fact]
+    public async Task Fresh_packets_handed_over_come_off_this_phones_van()
+    {
+        await SubmitAsync(VanLoadItem(Guid.NewGuid(), 100m));
+
+        var result = await SubmitAsync(ReturnItem(Guid.NewGuid(), 6m, replacedFromVan: true));
+
+        Assert.Equal(SubmissionOutcome.Accepted, result.Outcome);
+        Assert.Equal(94m, await _stock.GetQuantityOnHandAsync(_packet.Id, Van, default));
+        Assert.Equal(400m, await _stock.GetQuantityOnHandAsync(_packet.Id, Warehouse, default));
+        Assert.Equal(ReturnSettlement.Replacement, (await _database.Db.ReturnNotes.SingleAsync()).Settlement);
+
+        // The evening count names them, so the van still reconciles without calling it a correction.
+        var line = Assert.Single((await _sync.GetVanStockAsync(IndiaTime.Today(), default)).Lines);
+        Assert.Equal(6m, line.Replaced);
+        Assert.Equal(0m, line.Other);
+        Assert.Equal(94m, line.Unaccounted);
+    }
+
+    [Fact]
+    public async Task A_phone_with_no_van_can_collect_but_cannot_replace()
+    {
+        _device.LocationId = null;
+        await _database.Db.SaveChangesAsync();
+
+        var collected = await SubmitAsync(ReturnItem(Guid.NewGuid(), 2m, replacedFromVan: false));
+        var replaced = await SubmitAsync(ReturnItem(Guid.NewGuid(), 2m, replacedFromVan: true));
+
+        Assert.Equal(SubmissionOutcome.Accepted, collected.Outcome);
+        Assert.Equal(SubmissionOutcome.Rejected, replaced.Outcome);
+        Assert.Contains("not assigned to a van", replaced.Error!);
+        Assert.Equal(1, await _database.Db.ReturnNotes.CountAsync());
+    }
+
+    [Fact]
+    public async Task Sending_the_same_return_twice_records_it_once_with_the_same_number()
+    {
+        var clientRequestId = Guid.NewGuid();
+
+        var first = await SubmitAsync(ReturnItem(clientRequestId, 3m, replacedFromVan: false));
+        var second = await SubmitAsync(ReturnItem(clientRequestId, 3m, replacedFromVan: false));
+
+        Assert.Equal(SubmissionOutcome.AlreadyAccepted, second.Outcome);
+        Assert.Equal(first.DocumentNumber, second.DocumentNumber);
+        Assert.Equal(1, await _database.Db.ReturnNotes.CountAsync());
+    }
+
     private async Task<SubmissionResultDto> SubmitAsync(SubmissionItemRequest item)
     {
         var batch = await _sync.SubmitAsync(new SubmissionBatchRequest(_device.Id, [item]), default);
 
         return batch.Results[0];
     }
+
+    private SubmissionItemRequest ReturnItem(Guid clientRequestId, decimal quantity, bool replacedFromVan) =>
+        new(clientRequestId, SubmissionType.Return, DateTime.UtcNow, null, null, null,
+            Return: new MobileReturnRequest(
+                _shop.Id, [new MobileReturnLineRequest(_packet.Id, quantity, ReturnReason.Expired)], replacedFromVan, null));
 
     private SubmissionItemRequest VanLoadItem(Guid clientRequestId, decimal quantity) =>
         new(clientRequestId, SubmissionType.VanLoad, DateTime.UtcNow, null, null, null,

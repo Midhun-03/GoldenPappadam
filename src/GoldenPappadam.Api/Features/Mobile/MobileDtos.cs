@@ -185,6 +185,26 @@ public record MobileCustomerPriceRequest(
     [Required] Guid ProductId,
     [Range(typeof(decimal), "0", "79228162514264337593543950335")] decimal UnitPrice);
 
+public record MobileReturnLineRequest(
+    [Required] Guid ProductId,
+    [Range(typeof(decimal), "0.001", "79228162514264337593543950335")] decimal Quantity,
+    ReturnReason Reason);
+
+/// <summary>
+/// Packets the salesperson collected from a shop. ReplacedFromVan says fresh packets of the same
+/// products went to the shop there and then, from this phone's own van - the server decides which
+/// van, as for a van load. Otherwise the office decides what the shop gets.
+///
+/// Deliberately absent: a rate, a credit and any other settlement. What a return is worth, and
+/// whether the shop is credited for it, is the office's call, never the phone's.
+/// </summary>
+public record MobileReturnRequest(
+    [Required] Guid CustomerId,
+    [Required, MinLength(1)] List<MobileReturnLineRequest> Lines,
+    bool ReplacedFromVan,
+    [MaxLength(300)] string? Notes,
+    Guid? BranchId = null);
+
 /// <summary>
 /// One thing the salesperson did. ClientRequestId is generated on the device when they save and is
 /// never regenerated, which is what makes a retry safe.
@@ -200,7 +220,8 @@ public record SubmissionItemRequest(
     MobileStockRequestRequest? StockRequest = null,
     MobileCustomerRequest? Customer = null,
     MobileBranchRequest? Branch = null,
-    MobileCustomerPriceRequest? CustomerPrice = null);
+    MobileCustomerPriceRequest? CustomerPrice = null,
+    MobileReturnRequest? Return = null);
 
 public record SubmissionBatchRequest(
     [Required] Guid DeviceId,
@@ -219,8 +240,8 @@ public enum SubmissionOutcome
 }
 
 /// <summary>
-/// DocumentNumber is the official invoice number the server gave a sale ("GP/26-27/000125"), so the
-/// phone can show it in place of "waiting to sync". Null for anything that is not a sale.
+/// DocumentNumber is the official number the server gave a sale ("GP/26-27/000125") or a return
+/// ("RN/26-27/000004"), so the phone can show it in place of "waiting to sync". Null for anything else.
 /// </summary>
 public record SubmissionResultDto(
     Guid ClientRequestId,

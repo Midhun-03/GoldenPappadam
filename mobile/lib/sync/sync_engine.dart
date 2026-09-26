@@ -108,6 +108,9 @@ class SyncEngine {
 
   Future<String?> get deviceId => _db.readMeta(_deviceIdKey);
 
+  /// The van the office assigned this phone to, or null. Without one nothing can come off a van.
+  Future<String?> get vanLocationId => _db.readMeta(_vanLocationKey);
+
   /// The whole cycle. Safe to call at any time and from anywhere; it simply returns if a run is
   /// already in progress.
   ///

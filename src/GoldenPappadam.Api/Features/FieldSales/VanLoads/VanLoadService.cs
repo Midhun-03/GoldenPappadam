@@ -136,8 +136,12 @@ public class VanLoadService(AppDbContext db, StockService stock)
                     .Sum(m => m.Quantity);
                 var sold = -today.Where(m => m.MovementType is StockMovementType.Sale or StockMovementType.SaleReversal)
                     .Sum(m => m.Quantity);
+                // Fresh packets handed to a shop in place of expired ones: gone like a sale, but free.
+                var replaced = -today.Where(m => m.MovementType == StockMovementType.Replacement)
+                    .Sum(m => m.Quantity);
                 var other = today.Where(m => m.MovementType is not (StockMovementType.Transfer
-                                or StockMovementType.Sale or StockMovementType.SaleReversal))
+                                or StockMovementType.Sale or StockMovementType.SaleReversal
+                                or StockMovementType.Replacement))
                     .Sum(m => m.Quantity);
 
                 return new VanReconciliationLineDto(
@@ -149,10 +153,11 @@ public class VanLoadService(AppDbContext db, StockService stock)
                     sold,
                     returned,
                     other,
-                    before + loaded - sold - returned + other);
+                    before + loaded - sold - returned - replaced + other,
+                    replaced);
             })
             .Where(line => line.Loaded != 0m || line.Sold != 0m || line.Returned != 0m ||
-                           line.Opening != 0m || line.Other != 0m)
+                           line.Opening != 0m || line.Other != 0m || line.Replaced != 0m)
             .OrderBy(line => line.ProductName)
             .ToList();
 

@@ -22,6 +22,23 @@ class SaleLine {
   double get lineTotal => quantity * unitPrice;
 }
 
+/// Packets a shop gave back. Only expired or damaged ones come back, and they are never resold.
+class ReturnLine {
+  const ReturnLine({
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+    required this.reason,
+  });
+
+  final String productId;
+  final String productName;
+  final double quantity;
+
+  /// 'Expired' or 'Damaged', as the server names them.
+  final String reason;
+}
+
 const _uuid = Uuid();
 
 /// Writes down what happened at a shop.
@@ -233,6 +250,50 @@ class SalesRepository {
             for (final line in lines)
               {'productId': line.productId, 'quantity': line.quantity}
           ],
+          'notes': notes,
+        }
+      },
+    );
+
+    return id;
+  }
+
+  /// Expired or damaged packets collected from a shop.
+  ///
+  /// [replacedFromVan] says fresh packets of the same products went to the shop there and then;
+  /// the server takes them off this phone's own van. Otherwise the office decides what the shop
+  /// gets. There is no rate and no credit here on purpose: what a return is worth, and whether the
+  /// shop is credited, is the office's decision.
+  Future<String> recordReturn({
+    required String customerId,
+    required String customerName,
+    required List<ReturnLine> lines,
+    required bool replacedFromVan,
+    String? branchId,
+    String? notes,
+  }) async {
+    if (lines.isEmpty) {
+      throw ArgumentError('A return needs at least one product.');
+    }
+
+    final id = _uuid.v4();
+    final total = lines.fold<double>(0, (sum, line) => sum + line.quantity);
+
+    await _db.enqueue(
+      clientRequestId: id,
+      type: 'Return',
+      recordedAt: DateTime.now().toUtc(),
+      summary: '$customerName · ${quantityLabel(total)} returned'
+          '${replacedFromVan ? ', replaced' : ''}',
+      payload: {
+        'return': {
+          'customerId': customerId,
+          if (branchId != null) 'branchId': branchId,
+          'lines': [
+            for (final line in lines)
+              {'productId': line.productId, 'quantity': line.quantity, 'reason': line.reason}
+          ],
+          'replacedFromVan': replacedFromVan,
           'notes': notes,
         }
       },

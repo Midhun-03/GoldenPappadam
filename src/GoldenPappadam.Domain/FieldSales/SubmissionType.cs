@@ -19,5 +19,8 @@ public enum SubmissionType
     CustomerBranch,
 
     /// <summary>What a customer pays for a product, set or changed by the salesperson.</summary>
-    CustomerPrice
+    CustomerPrice,
+
+    /// <summary>Expired or damaged packets collected from a shop, and any fresh ones handed over.</summary>
+    Return
 }

@@ -252,6 +252,83 @@ public class MobileContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_body_the_app_sends_for_packets_collected_and_replaced_from_the_van_is_accepted()
+    {
+        // Exactly what SalesRepository.recordReturn writes: what came back and whether fresh packets
+        // went from the van - no rate, no credit and no location.
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "Return",
+                  "recordedAt": "2026-09-26T05:00:00.000Z",
+                  "return": {
+                    "customerId": "{{_customerId}}",
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 4.0, "reason": "Expired" },
+                      { "productId": "{{_productId}}", "quantity": 1.0, "reason": "Damaged" }
+                    ],
+                    "replacedFromVan": true,
+                    "notes": "Behind the counter"
+                  }
+                }
+              ]
+            }
+            """);
+
+        var result = response.GetProperty("results")[0];
+        Assert.Equal("Accepted", result.GetProperty("outcome").GetString());
+        Assert.StartsWith("RN/", result.GetProperty("documentNumber").GetString());
+
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var note = await db.ReturnNotes.Include(r => r.Lines).SingleAsync();
+
+        Assert.Equal(ReturnSettlement.Replacement, note.Settlement);
+        Assert.Equal(175m, note.Value); // 5 packets at the shop's 35, not the phone's say-so
+    }
+
+    [Fact]
+    public async Task The_body_the_app_sends_for_packets_left_for_the_office_is_accepted()
+    {
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "Return",
+                  "recordedAt": "2026-09-26T05:00:00.000Z",
+                  "return": {
+                    "customerId": "{{_customerId}}",
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 3.0, "reason": "Expired" }
+                    ],
+                    "replacedFromVan": false,
+                    "notes": null
+                  }
+                }
+              ]
+            }
+            """);
+
+        Assert.Equal("Accepted", response.GetProperty("results")[0].GetProperty("outcome").GetString());
+
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(ReturnSettlement.Pending, (await db.ReturnNotes.SingleAsync()).Settlement);
+    }
+
+    [Fact]
+    public async Task The_office_returns_screens_are_closed_to_the_phone()
+    {
+        // The phone reaches returns only through its own sync endpoint, which cannot credit.
+        Assert.Equal(HttpStatusCode.Forbidden, (await _phone.GetAsync("/api/sales/returns")).StatusCode);
+    }
+
+    [Fact]
     public async Task The_van_screen_has_every_field_the_app_reads_out_of_it()
     {
         var van = await _phone.GetFromJsonAsync<JsonElement>("/api/mobile/van-stock");
@@ -260,7 +337,7 @@ public class MobileContractTests : IAsyncLifetime
         Assert.True(van.TryGetProperty("isSettled", out _));
 
         // The van has opening stock from the seed, so there is a line to check the shape of.
-        foreach (var field in new[] { "productName", "loaded", "sold", "returned", "unaccounted" })
+        foreach (var field in new[] { "productName", "loaded", "sold", "returned", "replaced", "unaccounted" })
         {
             Assert.True(lines[0].TryGetProperty(field, out _), $"line.{field} is missing");
         }

@@ -180,6 +180,11 @@ export function VanPage() {
                           {formatQuantity(line.opening)} carried over
                         </div>
                       )}
+                      {line.replaced !== 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          {formatQuantity(line.replaced)} replaced free
+                        </div>
+                      )}
                       {line.other !== 0 && (
                         <div className="text-xs text-muted-foreground">
                           {formatQuantity(line.other)} adjusted or damaged

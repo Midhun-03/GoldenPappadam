@@ -6,6 +6,7 @@ using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Payments;
+using GoldenPappadam.Api.Features.Sales.Returns;
 using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
@@ -32,7 +33,8 @@ public class MobileSyncService(
     VanLoadService vanLoads,
     StockRequestService stockRequests,
     CustomerService customers,
-    CustomerBranchService branches)
+    CustomerBranchService branches,
+    ReturnService returns)
 {
     private static readonly int[] UniqueViolationErrors = [2601, 2627];
 
@@ -212,6 +214,7 @@ public class MobileSyncService(
                 SubmissionType.Customer => await AcceptCustomerAsync(device, item, ct),
                 SubmissionType.CustomerBranch => await AcceptBranchAsync(device, item, ct),
                 SubmissionType.CustomerPrice => await AcceptCustomerPriceAsync(device, item, ct),
+                SubmissionType.Return => await AcceptReturnAsync(device, item, ct),
                 _ => Rejected(item, $"{item.Type} is not something this device can send.")
             };
         }
@@ -234,16 +237,22 @@ public class MobileSyncService(
     }
 
     /// <summary>
-    /// A retried sale answers with the number the first attempt was given, so a phone that lost
-    /// the first answer still ends up showing the right invoice number.
+    /// A retried sale or return answers with the number the first attempt was given, so a phone
+    /// that lost the first answer still ends up showing the right number.
     /// </summary>
     private async Task<string?> DocumentNumberAsync(SyncSubmission? submission, CancellationToken ct) =>
-        submission?.SubmissionType == SubmissionType.Invoice
-            ? await db.Invoices
+        submission?.SubmissionType switch
+        {
+            SubmissionType.Invoice => await db.Invoices
                 .Where(i => i.Id == submission.CreatedRecordId)
                 .Select(i => i.InvoiceNumber)
-                .FirstOrDefaultAsync(ct)
-            : null;
+                .FirstOrDefaultAsync(ct),
+            SubmissionType.Return => await db.ReturnNotes
+                .Where(r => r.Id == submission.CreatedRecordId)
+                .Select(r => r.ReturnNumber)
+                .FirstOrDefaultAsync(ct),
+            _ => null
+        };
 
     private async Task<SubmissionResultDto> AcceptSaleAsync(
         Device device,
@@ -535,6 +544,44 @@ public class MobileSyncService(
     /// decision, deliberately: the server reads it from the device rather than trusting anything the
     /// phone sends, so a phone the office has not placed cannot touch stock at all.
     /// </summary>
+    /// <summary>
+    /// Packets collected from a shop, through the same <see cref="ReturnService"/> as the office.
+    ///
+    /// The phone can say only two things about what the shop got: fresh packets from the van, or
+    /// nothing yet. A replacement comes off this phone's own van, decided here from the device; a
+    /// phone with no van cannot have handed anything over. Anything else - a credit, or nothing at
+    /// all - waits for the office, and the packets are valued at the shop's rate, not the phone's.
+    /// Collecting needs no van, because it moves no stock: returned packets never go back on sale.
+    /// </summary>
+    private async Task<SubmissionResultDto> AcceptReturnAsync(
+        Device device,
+        SubmissionItemRequest item,
+        CancellationToken ct)
+    {
+        var request = item.Return
+                      ?? throw new DomainException("This submission says it is a return but carries none.");
+
+        Guid? vanId = request.ReplacedFromVan ? RequireVan(device) : null;
+
+        var created = await returns.CreateAsync(
+            new CreateReturnRequest(
+                request.CustomerId,
+                request.BranchId,
+                IndiaTime.ToIndiaDate(item.RecordedAt),
+                request.Lines.Select(l => new ReturnLineRequest(l.ProductId, l.Quantity, l.Reason, null)).ToList(),
+                request.ReplacedFromVan ? ReturnSettlement.Replacement : ReturnSettlement.Pending,
+                null,
+                vanId,
+                request.Notes),
+            ct);
+
+        await RecordSubmissionAsync(device, item, created.Return.Id, false, ct);
+
+        return new SubmissionResultDto(
+            item.ClientRequestId, SubmissionOutcome.Accepted, created.Return.Id, null, false, created.Warnings,
+            created.Return.ReturnNumber);
+    }
+
     private static Guid RequireVan(Device device) =>
         device.LocationId
         ?? throw new DomainException("This phone is not assigned to a van yet. Ask the office to set that up.");

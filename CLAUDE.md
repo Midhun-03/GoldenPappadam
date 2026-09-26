@@ -429,7 +429,14 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   warehouse or a van), **credit** (a `Payment` of method `ReturnCredit` that settles the oldest bills, never
   counted as money collected and refused on the payments endpoint), or **nothing**. A credited return cannot
   be cancelled, like a bill with money on it. Admin-only; Sales > **Returns**, Reports > **Returns and
-  expiry**, a printable return note. Next in the plan: returns on the phone, then the owner's daily summary.
+  expiry**, a printable return note.
+- **Returns on the phone done (2026-09-26)**, same document §4. Sync submission type `Return`: the
+  salesman records packets collected (product, quantity, Expired / Damaged) from the shop page and says
+  whether fresh packets went from **his own van** (server picks the van from the device; no van, no
+  replacement) - otherwise it waits for the office. No rate or credit ever comes from the phone. The
+  sync answer carries the `RN/...` number. The van reconciliation has a **Replaced** figure (admin Van
+  screen and the phone's van tab). Also fixed: the shop page's payment history escaped its `$` and never
+  showed a payment still waiting to sync. Next in the plan: the owner's daily summary.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
