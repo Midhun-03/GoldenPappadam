@@ -48,6 +48,11 @@ void main() {
   Future<CachedCustomer> shop(String id) async => (await db.findCustomer(id))!;
 
   Future<void> openReturn(WidgetTester tester, CachedCustomer shop) async {
+    // A phone-sized screen, as on the bill page, so a few lines fit without scrolling away.
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(wrap(
       Builder(
         builder: (context) => Scaffold(
@@ -67,11 +72,29 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> tapPlus(WidgetTester tester, String productId, {int times = 1}) async {
-    final button = find.descendant(
-      of: find.byKey(ValueKey('return-row-$productId')),
-      matching: find.byIcon(Icons.add),
-    );
+  Finder line(int index) => find.byKey(ValueKey('return-line-$index'));
+
+  Finder productField(int index) => find.descendant(
+        of: find.descendant(of: line(index), matching: find.byType(DropdownMenu<CachedProduct>)),
+        matching: find.byType(TextField),
+      );
+
+  Future<void> chooseProduct(WidgetTester tester, String name, {int index = 0}) async {
+    await tester.ensureVisible(productField(index));
+    await tester.tap(productField(index));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(name).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> addItem(WidgetTester tester) async {
+    await tester.ensureVisible(find.byKey(const ValueKey('return-add-item')));
+    await tester.tap(find.byKey(const ValueKey('return-add-item')));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> tapPlus(WidgetTester tester, {int index = 0, int times = 1}) async {
+    final button = find.descendant(of: line(index), matching: find.byIcon(Icons.add));
 
     for (var i = 0; i < times; i++) {
       await tester.tap(button);
@@ -100,8 +123,12 @@ void main() {
   testWidgets('what the shop buys is listed first, and nothing on the screen is money', (tester) async {
     await openReturn(tester, await shop('shop-1'));
 
-    final first = tester.getTopLeft(find.text('20 piece packet'));
-    final second = tester.getTopLeft(find.text('6 piece packet'));
+    await tester.tap(productField(0));
+    await tester.pumpAndSettle();
+
+    final menu = find.byType(MenuItemButton);
+    final first = tester.getTopLeft(find.descendant(of: menu, matching: find.text('20 piece packet')));
+    final second = tester.getTopLeft(find.descendant(of: menu, matching: find.text('6 piece packet')));
     expect(first.dy, lessThan(second.dy));
     expect(find.textContaining('₹'), findsNothing);
   });
@@ -110,7 +137,8 @@ void main() {
     await db.writeMeta('van_location_id', 'van-1');
     await openReturn(tester, await shop('shop-1'));
 
-    await tapPlus(tester, 'p1', times: 4);
+    await chooseProduct(tester, '20 piece packet');
+    await tapPlus(tester, times: 4);
     expect(saveButton(tester).onPressed, isNull);
 
     await tapAndSettle(tester, find.byKey(const ValueKey('replaced-yes')));
@@ -122,11 +150,14 @@ void main() {
     await db.writeMeta('van_location_id', 'van-1');
     await openReturn(tester, await shop('shop-1'));
 
-    await tapPlus(tester, 'p1', times: 4);
-    await tapPlus(tester, 'p2', times: 1);
+    await chooseProduct(tester, '20 piece packet');
+    await tapPlus(tester, times: 4);
+    await addItem(tester);
+    await chooseProduct(tester, '6 piece packet', index: 1);
+    await tapPlus(tester, index: 1);
     await tapAndSettle(
       tester,
-      find.descendant(of: find.byKey(const ValueKey('return-reason-p2')), matching: find.text('Damaged')),
+      find.descendant(of: find.byKey(const ValueKey('return-reason-1')), matching: find.text('Damaged')),
     );
     await tapAndSettle(tester, find.byKey(const ValueKey('replaced-yes')));
     await tapAndSettle(tester, find.byKey(const ValueKey('save-return')));
@@ -152,7 +183,8 @@ void main() {
 
     expect(find.byKey(const ValueKey('replaced-yes')), findsNothing);
 
-    await tapPlus(tester, 'p1', times: 2);
+    await chooseProduct(tester, '20 piece packet');
+    await tapPlus(tester, times: 2);
     await tapAndSettle(tester, find.byKey(const ValueKey('save-return')));
 
     expect((await onlyReturn())['replacedFromVan'], isFalse);
@@ -161,7 +193,8 @@ void main() {
   testWidgets('a multi-branch shop must name the branch before saving', (tester) async {
     await openReturn(tester, await shop('shop-3'));
 
-    await tapPlus(tester, 'p1', times: 1);
+    await chooseProduct(tester, '20 piece packet');
+    await tapPlus(tester);
     expect(saveButton(tester).onPressed, isNull);
 
     final field = find.descendant(
@@ -175,6 +208,49 @@ void main() {
 
     await tapAndSettle(tester, find.byKey(const ValueKey('save-return')));
     expect((await onlyReturn())['branchId'], 'branch-1');
+  });
+
+  testWidgets('the same product can come back on two lines, once expired and once damaged', (tester) async {
+    await openReturn(tester, await shop('shop-1'));
+
+    // Add item waits for the first line to name its product.
+    final add = find.byKey(const ValueKey('return-add-item'));
+    expect(tester.widget<OutlinedButton>(add).onPressed, isNull);
+
+    await chooseProduct(tester, '20 piece packet');
+    await tapPlus(tester, times: 4);
+    await addItem(tester);
+    await chooseProduct(tester, '20 piece packet', index: 1);
+    await tapPlus(tester, index: 1);
+    await tapAndSettle(
+      tester,
+      find.descendant(of: find.byKey(const ValueKey('return-reason-1')), matching: find.text('Damaged')),
+    );
+    await tapAndSettle(tester, find.byKey(const ValueKey('save-return')));
+
+    expect((await onlyReturn())['lines'], [
+      {'productId': 'p1', 'quantity': 4.0, 'reason': 'Expired'},
+      {'productId': 'p1', 'quantity': 1.0, 'reason': 'Damaged'},
+    ]);
+  });
+
+  testWidgets('removing a line takes it off the return', (tester) async {
+    await openReturn(tester, await shop('shop-1'));
+
+    await chooseProduct(tester, '20 piece packet');
+    await tapPlus(tester, times: 2);
+    await addItem(tester);
+    await chooseProduct(tester, '6 piece packet', index: 1);
+    await tapPlus(tester, index: 1, times: 3);
+
+    await tapAndSettle(tester, find.byKey(const ValueKey('return-remove-1')));
+    expect(line(1), findsNothing);
+    expect(tester.widget<IconButton>(find.byKey(const ValueKey('return-remove-0'))).onPressed, isNull);
+
+    await tapAndSettle(tester, find.byKey(const ValueKey('save-return')));
+    expect((await onlyReturn())['lines'], [
+      {'productId': 'p1', 'quantity': 2.0, 'reason': 'Expired'},
+    ]);
   });
 
   test('the repository refuses a return with nothing on it before anything is written', () async {

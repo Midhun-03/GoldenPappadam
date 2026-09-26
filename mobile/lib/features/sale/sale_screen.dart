@@ -3,14 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../core/money.dart';
+import '../../core/product_line_card.dart';
 import '../../core/searchable_dropdown.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/local/database.dart';
 import '../../data/sales_repository.dart';
 
-/// A new bill built as three short steps on one page: pick the shop, set a quantity on whatever
-/// it is priced for, then say how it was paid. Save records it straight into the outbox.
+/// A new bill built as three short steps on one page: pick the shop, add a line per product -
+/// chosen from a dropdown, with a quantity - then say how it was paid. Save records it straight
+/// into the outbox.
 ///
 /// The price sits on each row as plain text. There is no field to edit it, because the office
 /// decides what each shop pays and the salesperson carries that decision rather than making one.
@@ -29,6 +31,12 @@ class SaleScreen extends ConsumerStatefulWidget {
 
 enum _PaymentPlan { credit, paid, partPaid }
 
+/// One line of the bill while it is being built: a product, once chosen, and its quantity.
+class _BillLine {
+  CachedProduct? product;
+  final quantity = TextEditingController();
+}
+
 class _SaleScreenState extends ConsumerState<SaleScreen> {
   CachedCustomer? _shop;
   List<CachedCustomer> _shops = const [];
@@ -41,9 +49,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
   List<CachedBranch> _branches = const [];
   CachedBranch? _branch;
 
-  final Map<String, TextEditingController> _qtyControllers = {};
-  final _productSearch = TextEditingController();
-  String _productFilter = '';
+  List<_BillLine> _billLines = [_BillLine()];
 
   _PaymentPlan _plan = _PaymentPlan.credit;
   final _partialAmount = TextEditingController();
@@ -53,17 +59,15 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
   void initState() {
     super.initState();
     _shop = widget.shop;
-    _productSearch.addListener(() => setState(() => _productFilter = _productSearch.text));
     _partialAmount.addListener(() => setState(() {}));
     _load();
   }
 
   @override
   void dispose() {
-    for (final controller in _qtyControllers.values) {
-      controller.dispose();
+    for (final line in _billLines) {
+      line.quantity.dispose();
     }
-    _productSearch.dispose();
     _partialAmount.dispose();
     super.dispose();
   }
@@ -103,10 +107,10 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     final branches = shop.hasMultipleBranches ? await db.branchesFor(shop.id) : const <CachedBranch>[];
     if (!mounted) return;
 
-    // A new shop means a fresh bill: the old quantities were against the old shop's prices, and a
+    // A new shop means a fresh bill: the old lines were against the old shop's prices, and a
     // branch chosen for the old shop must never silently attach to this one.
-    for (final controller in _qtyControllers.values) {
-      controller.dispose();
+    for (final line in _billLines) {
+      line.quantity.dispose();
     }
 
     setState(() {
@@ -114,9 +118,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
       _prices = prices;
       _branches = branches;
       _branch = null;
-      _qtyControllers.clear();
-      _productSearch.clear();
-      _productFilter = '';
+      _billLines = [_BillLine()];
       _plan = _PaymentPlan.credit;
       _partialAmount.clear();
     });
@@ -130,31 +132,40 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
   List<CachedProduct> get _sellable =>
       _products.where((product) => _prices[product.id] != null).toList();
 
-  List<CachedProduct> get _visibleProducts {
-    final needle = _productFilter.trim().toLowerCase();
-    if (needle.isEmpty) return _sellable;
+  double _quantityOf(_BillLine line) => double.tryParse(line.quantity.text) ?? 0;
 
-    return _sellable.where((p) => p.name.toLowerCase().contains(needle)).toList();
-  }
-
-  TextEditingController _controllerFor(String productId) =>
-      _qtyControllers.putIfAbsent(productId, TextEditingController.new);
-
-  double _quantityOf(CachedProduct product) =>
-      double.tryParse(_qtyControllers[product.id]?.text ?? '') ?? 0;
-
-  /// Every priced product with a quantity on it. Nothing here can name the same product twice,
-  /// because there is exactly one row per product rather than a row per line.
+  /// Every line with a product and a quantity. A product can be on one line only, because the
+  /// dropdowns never offer what another line already has.
   List<SaleLine> get _lines => [
-        for (final product in _sellable)
-          if (_quantityOf(product) > 0)
+        for (final line in _billLines)
+          if (line.product != null && _quantityOf(line) > 0)
             SaleLine(
-              productId: product.id,
-              productName: product.name,
-              quantity: _quantityOf(product),
-              unitPrice: _prices[product.id] ?? 0,
+              productId: line.product!.id,
+              productName: line.product!.name,
+              quantity: _quantityOf(line),
+              unitPrice: _prices[line.product!.id] ?? 0,
             ),
       ];
+
+  /// What this line may choose: the shop's priced products that no other line has taken.
+  List<CachedProduct> _choicesFor(_BillLine line) {
+    final taken = {
+      for (final other in _billLines)
+        if (other != line && other.product != null) other.product!.id,
+    };
+
+    return _sellable.where((product) => !taken.contains(product.id)).toList();
+  }
+
+  bool get _canAddLine => _billLines.every((line) => line.product != null) &&
+      _billLines.length < _sellable.length;
+
+  void _addLine() => setState(() => _billLines = [..._billLines, _BillLine()]);
+
+  void _removeLine(_BillLine line) {
+    setState(() => _billLines = _billLines.where((other) => other != line).toList());
+    line.quantity.dispose();
+  }
 
   double get _total => _lines.fold(0, (sum, line) => sum + line.lineTotal);
 
@@ -193,7 +204,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
                 children: [
                   const NumberedStepHeader(1, 'Select shop'),
                   _shopCard(context),
-                  const NumberedStepHeader(2, 'Add products', caption: 'Price is read-only'),
+                  const NumberedStepHeader(2, 'Products', caption: 'Price is read-only'),
                   _productsCard(context),
                   if (_shop != null && _sellable.isNotEmpty) ...[
                     const NumberedStepHeader(3, 'Payment'),
@@ -298,64 +309,49 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_sellable.length > 5) ...[
-          TextField(
-            controller: _productSearch,
-            decoration: InputDecoration(
-              hintText: 'Search products',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _productFilter.isEmpty
-                  ? null
-                  : IconButton(icon: const Icon(Icons.clear), onPressed: _productSearch.clear),
-            ),
+        for (final (index, line) in _billLines.indexed)
+          // The object key keeps each line's dropdown and quantity with that line when another
+          // is removed; the index key is what the tests and the screen reader count by.
+          KeyedSubtree(
+            key: ObjectKey(line),
+            child: _lineCard(index, line),
           ),
-          const SizedBox(height: 10),
-        ],
-        AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: _visibleProducts.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('No product by that name', style: TextStyle(color: AppColors.textMuted)),
-                )
-              : Column(
-                  children: [
-                    for (final product in _visibleProducts) ...[
-                      _productRow(product),
-                      if (product != _visibleProducts.last) const Divider(height: 22),
-                    ],
-                  ],
-                ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('add-item'),
+            onPressed: _canAddLine ? _addLine : null,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add item'),
+          ),
         ),
       ],
     );
   }
 
-  Widget _productRow(CachedProduct product) {
-    final price = _prices[product.id] ?? 0;
+  Widget _lineCard(int index, _BillLine line) {
+    final product = line.product;
+    final price = product == null ? null : _prices[product.id];
 
-    return Padding(
-      key: ValueKey('product-row-${product.id}'),
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+    return ProductLineCard(
+      name: 'bill',
+      index: index,
+      choices: _choicesFor(line),
+      selected: product,
+      onSelected: (chosen) => setState(() => line.product = chosen),
+      quantity: line.quantity,
+      onQuantityChanged: (_) => setState(() {}),
+      onRemove: _billLines.length == 1 ? null : () => _removeLine(line),
+      // Shown, never typed: the office decides what each shop pays.
+      besideQuantity: ReadOnlyField(
+        label: 'Price',
+        value: price == null ? '—' : '${money(price)} / ${product!.unitCode.toLowerCase()}',
+      ),
+      footer: Row(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(product.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text('${money(price)} / ${product.unitCode.toLowerCase()}',
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          QuantityStepper(
-            controller: _controllerFor(product.id),
-            fieldKey: ValueKey('qty-${product.id}'),
-            onChanged: (_) => setState(() {}),
-          ),
+          const Text('Line total', style: TextStyle(color: AppColors.textMuted)),
+          const Spacer(),
+          Text(money((price ?? 0) * _quantityOf(line)), style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
       ),
     );

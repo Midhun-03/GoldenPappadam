@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
+import '../../core/product_line_card.dart';
 import '../../core/searchable_dropdown.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -10,8 +11,9 @@ import '../../data/sales_repository.dart';
 
 /// Expired or damaged packets a shop handed back, opened from that shop's page.
 ///
-/// Three short steps: which branch (only for a multi-branch shop), how many of each product came
-/// back and why, and whether fresh packets went to the shop from the van. There is no money on
+/// Three short steps: which branch (only for a multi-branch shop), a line per product that came
+/// back - chosen from a dropdown, with a quantity and why - and whether fresh packets went to the
+/// shop from the van. There is no money on
 /// this screen at all: the office decides what the packets were worth and whether the shop is
 /// credited, so the salesperson never promises a figure on the doorstep.
 class ReturnScreen extends ConsumerStatefulWidget {
@@ -23,6 +25,13 @@ class ReturnScreen extends ConsumerStatefulWidget {
   ConsumerState<ReturnScreen> createState() => _ReturnScreenState();
 }
 
+/// One line of the return while it is being entered.
+class _ReturnLineDraft {
+  CachedProduct? product;
+  final quantity = TextEditingController();
+  String reason = 'Expired';
+}
+
 class _ReturnScreenState extends ConsumerState<ReturnScreen> {
   List<CachedProduct> _products = const [];
   List<CachedBranch> _branches = const [];
@@ -31,8 +40,7 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
   bool _loaded = false;
   bool _saving = false;
 
-  final Map<String, TextEditingController> _qtyControllers = {};
-  final Map<String, String> _reasons = {};
+  List<_ReturnLineDraft> _drafts = [_ReturnLineDraft()];
 
   /// Null until the salesperson answers: handing over fresh packets moves van stock, so it is
   /// never assumed either way.
@@ -46,8 +54,8 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
 
   @override
   void dispose() {
-    for (final controller in _qtyControllers.values) {
-      controller.dispose();
+    for (final draft in _drafts) {
+      draft.quantity.dispose();
     }
     super.dispose();
   }
@@ -77,22 +85,29 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
     });
   }
 
-  TextEditingController _controllerFor(String productId) =>
-      _qtyControllers.putIfAbsent(productId, TextEditingController.new);
+  double _quantityOf(_ReturnLineDraft draft) => double.tryParse(draft.quantity.text) ?? 0;
 
-  double _quantityOf(CachedProduct product) =>
-      double.tryParse(_qtyControllers[product.id]?.text ?? '') ?? 0;
-
+  /// The same product may be on two lines - four expired and one damaged is an ordinary pickup -
+  /// so unlike a bill, nothing is taken out of the other lines' dropdowns.
   List<ReturnLine> get _lines => [
-        for (final product in _products)
-          if (_quantityOf(product) > 0)
+        for (final draft in _drafts)
+          if (draft.product != null && _quantityOf(draft) > 0)
             ReturnLine(
-              productId: product.id,
-              productName: product.name,
-              quantity: _quantityOf(product),
-              reason: _reasons[product.id] ?? 'Expired',
+              productId: draft.product!.id,
+              productName: draft.product!.name,
+              quantity: _quantityOf(draft),
+              reason: draft.reason,
             ),
       ];
+
+  bool get _canAddLine => _drafts.every((draft) => draft.product != null);
+
+  void _addLine() => setState(() => _drafts = [..._drafts, _ReturnLineDraft()]);
+
+  void _removeLine(_ReturnLineDraft draft) {
+    setState(() => _drafts = _drafts.where((other) => other != draft).toList());
+    draft.quantity.dispose();
+  }
 
   double get _total => _lines.fold(0, (sum, line) => sum + line.quantity);
 
@@ -158,54 +173,39 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
       );
     }
 
-    return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Column(
-        children: [
-          for (final product in _products) ...[
-            _productRow(product),
-            if (product != _products.last) const Divider(height: 22),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _productRow(CachedProduct product) {
-    final counted = _quantityOf(product) > 0;
-    final reason = _reasons[product.id] ?? 'Expired';
-
-    return Padding(
-      key: ValueKey('return-row-${product.id}'),
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(product.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (index, draft) in _drafts.indexed)
+          KeyedSubtree(
+            key: ObjectKey(draft),
+            child: ProductLineCard(
+              name: 'return',
+              index: index,
+              choices: _products,
+              selected: draft.product,
+              onSelected: (chosen) => setState(() => draft.product = chosen),
+              quantity: draft.quantity,
+              onQuantityChanged: (_) => setState(() {}),
+              onRemove: _drafts.length == 1 ? null : () => _removeLine(draft),
+              belowQuantity: ChoiceRow<String>(
+                key: ValueKey('return-reason-$index'),
+                value: draft.reason,
+                onChanged: (value) => setState(() => draft.reason = value),
+                options: const [('Expired', 'Expired'), ('Damaged', 'Damaged')],
               ),
-              const SizedBox(width: 10),
-              QuantityStepper(
-                controller: _controllerFor(product.id),
-                fieldKey: ValueKey('return-qty-${product.id}'),
-                onChanged: (_) => setState(() {}),
-              ),
-            ],
-          ),
-          // Why they came back, asked only for what actually came back.
-          if (counted) ...[
-            const SizedBox(height: 8),
-            ChoiceRow<String>(
-              key: ValueKey('return-reason-${product.id}'),
-              value: reason,
-              onChanged: (value) => setState(() => _reasons[product.id] = value),
-              options: const [('Expired', 'Expired'), ('Damaged', 'Damaged')],
             ),
-          ],
-        ],
-      ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('return-add-item'),
+            onPressed: _canAddLine ? _addLine : null,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add item'),
+          ),
+        ),
+      ],
     );
   }
 
