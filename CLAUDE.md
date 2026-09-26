@@ -172,7 +172,7 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
 
-The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`.
+The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`; reports, shelf life and returns in `docs/05-reports-returns-design.md`.
 
 ## 5. Technology stack
 
@@ -275,7 +275,7 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-09-23_
+_Last updated: 2026-09-26_
 
 **Phase 1 is complete. Phase 3 is in progress** — a Flutter salesperson app that works offline and
 synchronizes with this API, designed in `docs/03-field-sales-design.md` (approved 2026-09-15).
@@ -412,6 +412,18 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   "Normal bill". Drift schema v4 (`Customers.gstin`, `OutboxEntries.documentNumber`). A shop can no longer
   be marked GST registered before the business GSTIN is in Settings, so the phone never saves a sale the
   server would refuse for that reason. Still not on the phone: adding shops, sharing the PDF.
+- **Reports done (2026-09-25)**, designed in `docs/05-reports-returns-design.md`: sales, collections,
+  outstanding by age, and a customer statement, each on screen, as PDF and as Excel from one
+  `ReportDocument` with server-side totals (`Features/Reports/`, ClosedXML for Excel, QuestPDF house style
+  shared through `Common/PdfStyle.cs`). A **Reports** group in the sidebar; **Statement** on the customer
+  page.
+- **Shelf life, repacking and expiry done (2026-09-26)**, same document. `Product.ShelfLifeDays`; stock age is
+  worked out from the ledger first-in-first-out (`StockAgeCalculator`, no batch tables) with van loads
+  keeping packing dates; `inventory.RepackEntries` + movement type `Repacking` (exact conversion via the
+  loose root product, left-over back to loose, fresh date); expired stock written off only on the office's
+  say-so. Inventory gets **Stock age** and **Repacking**, Reports gets **Stock movement**, and the dashboard
+  counts expired / expiring / worth-repacking products. Next in the plan: returns (office, then phone), a
+  daily summary.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
@@ -596,7 +608,7 @@ Never design around an assumption for these; ask, or keep the design open.
 | # | Question | Status | Affects |
 |---|---|---|---|
 | ~~1~~ | ~~Do different shops pay different prices?~~ | **Answered 2026-09-15: yes.** See §4 "Confirmed requirements" | sales pricing |
-| 2 | Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded? | TBD — owner to confirm the actual process | inventory + sales |
+| ~~2~~ | ~~Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded?~~ | **Answered 2026-09-25:** only expired or damaged packets come back, never resold; replacement, credit or nothing, decided by the office per shop. Pappadam lasts 20 days from packing; unsold packets are repacked (any size, no loss, fresh 20 days) when the office decides. Being built - `docs/05-reports-returns-design.md` | inventory + sales |
 | 3 | Are discounts given, and at bill level or item level? | TBD — owner to confirm | invoice totals |
 | 4 | GST: the exact HSN code, that pappadam is exempt rather than nil-rated, and the "Bill of Supply" heading on GST bills for exempt goods | **Partly answered 2026-09-23:** one HSN, no GST today, GST bills only for GST-registered shops. Accountant to confirm the three details | invoices |
 | 5 | Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now? | TBD — owner / accountant | invoice numbering |

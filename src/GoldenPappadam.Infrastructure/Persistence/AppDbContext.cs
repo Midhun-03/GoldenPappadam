@@ -20,6 +20,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<StockLocation> StockLocations => Set<StockLocation>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<PackingEntry> PackingEntries => Set<PackingEntry>();
+    public DbSet<RepackEntry> RepackEntries => Set<RepackEntry>();
 
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerBranch> CustomerBranches => Set<CustomerBranch>();

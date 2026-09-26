@@ -4,43 +4,18 @@ import { toast } from 'sonner'
 import { invoicesApi } from '@/api/sales'
 import type { InvoiceDocumentType } from '@/api/types'
 import { ApiError } from '@/lib/api'
+import { openInNewTab, saveFile } from '@/lib/files'
 
 /**
  * Viewing, saving and printing all use the stored PDF, so what is printed in the office is the
  * same file the customer is emailed. There is no separate print layout to drift out of step.
  */
 
-/** Opens the PDF in a new tab. The tab is opened first, inside the click, so no pop-up blocker objects. */
-export async function viewInvoicePdf(invoiceId: string) {
-  const tab = window.open('', '_blank')
+/** Opens the stored PDF in a new tab, where the browser's viewer can print or save it. */
+export const viewInvoicePdf = (invoiceId: string) => openInNewTab(() => invoicesApi.pdf(invoiceId))
 
-  try {
-    const url = URL.createObjectURL(await invoicesApi.pdf(invoiceId))
-
-    if (tab) {
-      tab.location.href = url
-    } else {
-      window.location.href = url
-    }
-
-    // The tab keeps its own copy once loaded.
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  } catch (caught) {
-    tab?.close()
-    throw caught
-  }
-}
-
-export async function downloadInvoicePdf(invoiceId: string, invoiceNumber: string) {
-  const url = URL.createObjectURL(await invoicesApi.pdf(invoiceId))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `Invoice-${invoiceNumber.replaceAll('/', '-')}.pdf`
-  document.body.append(link)
-  link.click()
-  link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
-}
+export const downloadInvoicePdf = (invoiceId: string, invoiceNumber: string) =>
+  saveFile(() => invoicesApi.pdf(invoiceId), `Invoice-${invoiceNumber.replaceAll('/', '-')}.pdf`)
 
 /**
  * Loads the PDF into a hidden frame and opens the browser's print dialog for it - A4, exactly as

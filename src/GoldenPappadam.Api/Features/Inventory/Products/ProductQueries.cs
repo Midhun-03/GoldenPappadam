@@ -26,5 +26,6 @@ public static class ProductQueries
             p.IsActive,
             p.HsnCode,
             p.TaxTreatment,
-            p.GstRate));
+            p.GstRate,
+            p.ShelfLifeDays));
 }

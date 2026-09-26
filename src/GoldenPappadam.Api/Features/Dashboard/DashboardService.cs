@@ -17,6 +17,9 @@ public class DashboardService(AppDbContext db, StockService stock)
 {
     private const int ListSize = 5;
 
+    // Built on the same two services the dashboard already has, so it needs nothing new injected.
+    private readonly StockAgeService _ages = new(db, stock);
+
     public async Task<DashboardSummaryDto> GetSummaryAsync(CancellationToken ct)
     {
         var today = IndiaTime.Today();
@@ -60,7 +63,8 @@ public class DashboardService(AppDbContext db, StockService stock)
                 .Take(ListSize)
                 .Select(c => new CustomerBalanceDto(c.Id, c.Name, c.Balance))
                 .ToList(),
-            lowStock.Take(ListSize).ToList());
+            lowStock.Take(ListSize).ToList(),
+            await _ages.GetAlertsAsync(ct));
     }
 
     /// <summary>

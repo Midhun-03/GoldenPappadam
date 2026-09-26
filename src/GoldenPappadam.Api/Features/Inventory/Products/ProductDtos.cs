@@ -21,7 +21,8 @@ public record ProductDto(
     bool IsActive,
     string? HsnCode,
     TaxTreatment? TaxTreatment,
-    decimal? GstRate);
+    decimal? GstRate,
+    int? ShelfLifeDays);
 
 /// <summary>
 /// Source fields are required for packed products and ignored for loose ones.
@@ -39,4 +40,5 @@ public record SaveProductRequest(
     decimal? LowStockThreshold,
     [MaxLength(8)] string? HsnCode = null,
     TaxTreatment? TaxTreatment = null,
-    decimal? GstRate = null);
+    decimal? GstRate = null,
+    [Range(1, 3650)] int? ShelfLifeDays = null);

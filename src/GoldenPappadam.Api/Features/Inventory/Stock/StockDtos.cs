@@ -67,3 +67,5 @@ public record StockEntryResponse(
     Guid LocationId,
     decimal QuantityOnHand,
     string? Warning);
+
+public record WriteOffExpiredRequest([Required] Guid ProductId, [Required] Guid LocationId);

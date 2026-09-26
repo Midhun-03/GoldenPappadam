@@ -38,7 +38,8 @@ public class ProductService(AppDbContext db)
             SourceQuantityPerPack = sourceQuantityPerPack,
             HsnCode = tax.HsnCode,
             TaxTreatment = tax.Treatment,
-            GstRate = tax.GstRate
+            GstRate = tax.GstRate,
+            ShelfLifeDays = request.ShelfLifeDays
         };
 
         db.Products.Add(product);
@@ -88,6 +89,9 @@ public class ProductService(AppDbContext db)
         product.HsnCode = tax.HsnCode;
         product.TaxTreatment = tax.Treatment;
         product.GstRate = tax.GstRate;
+
+        // A new shelf life changes how old stock is judged from now on; nothing already recorded moves.
+        product.ShelfLifeDays = request.ShelfLifeDays;
 
         await db.SaveChangesAsync(ct);
 

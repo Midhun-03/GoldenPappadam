@@ -1,17 +1,23 @@
 import {
   Boxes,
+  CalendarClock,
   ClipboardList,
+  ChartNoAxesColumn,
   FileText,
+  HandCoins,
+  Hourglass,
   LayoutDashboard,
   LogOut,
   Menu,
   Package,
+  PackageOpen,
   PackagePlus,
   Route,
   Settings,
   Store,
   Truck,
   Wallet,
+  Warehouse,
   type LucideIcon,
 } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
@@ -50,8 +56,10 @@ const navigation: NavGroup[] = [
     label: 'Inventory',
     items: [
       { to: '/stock', label: 'Stock', icon: Boxes },
+      { to: '/stock-age', label: 'Stock age', icon: CalendarClock },
       { to: '/products', label: 'Products', icon: Package },
       { to: '/packing', label: 'Packing', icon: PackagePlus },
+      { to: '/repacking', label: 'Repacking', icon: PackageOpen },
     ],
   },
   {
@@ -60,6 +68,15 @@ const navigation: NavGroup[] = [
       { to: '/field-sales', label: 'Today on the road', icon: Route },
       { to: '/van', label: 'Van', icon: Truck },
       { to: '/stock-requests', label: 'Stock requests', icon: ClipboardList },
+    ],
+  },
+  {
+    label: 'Reports',
+    items: [
+      { to: '/reports/sales', label: 'Sales', icon: ChartNoAxesColumn },
+      { to: '/reports/collections', label: 'Collections', icon: HandCoins },
+      { to: '/reports/outstanding', label: 'Outstanding', icon: Hourglass },
+      { to: '/reports/stock', label: 'Stock movement', icon: Warehouse },
     ],
   },
   {

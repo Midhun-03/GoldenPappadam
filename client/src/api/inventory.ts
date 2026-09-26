@@ -4,6 +4,9 @@ import type {
   PackingEntry,
   PackingResponse,
   Product,
+  RepackEntry,
+  RepackPlan,
+  StockAgeRow,
   ProductKind,
   SaveProduct,
   StockEntryResponse,
@@ -97,4 +100,21 @@ export const packingApi = {
     sourceQuantityUsed?: number
     notes?: string
   }) => api.post<PackingResponse>(`${base}/packing`, request),
+}
+
+export type RepackRequest = { fromProductId: string; fromQuantity: number; toProductId: string; notes?: string }
+
+export const stockAgeApi = {
+  list: () => api.get<StockAgeRow[]>(`${base}/stock/age`),
+  /** Records what has expired in one place as damage. */
+  writeOff: (productId: string, locationId: string) =>
+    api.post<StockEntryResponse>(`${base}/stock/age/write-off`, { productId, locationId }),
+}
+
+export const repackingApi = {
+  /** What a repack would make, worked out by the server; nothing is saved. */
+  preview: (request: RepackRequest) => api.post<RepackPlan>(`${base}/repacking/preview`, request),
+  create: (request: RepackRequest) =>
+    api.post<{ repackEntryId: string; result: RepackPlan }>(`${base}/repacking`, request),
+  history: () => api.get<RepackEntry[]>(`${base}/repacking`),
 }

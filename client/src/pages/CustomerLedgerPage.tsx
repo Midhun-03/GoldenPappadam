@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { FileText, Plus, Scroll, Wallet } from 'lucide-react'
+import { FileText, Plus, Scroll, ScrollText, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { customersApi, invoicesApi } from '@/api/sales'
@@ -16,10 +16,12 @@ import { cn } from '@/lib/utils'
 import { CustomerBranchesCard } from './CustomerBranchesCard'
 import { CustomerPricesCard } from './CustomerPricesCard'
 import { RecordPaymentDialog } from './RecordPaymentDialog'
+import { StatementDialog } from './reports/StatementDialog'
 
 export function CustomerLedgerPage() {
   const { customerId = '' } = useParams()
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
+  const [isStatementOpen, setIsStatementOpen] = useState(false)
 
   const customer = useQuery({ queryKey: ['customers', customerId], queryFn: () => customersApi.get(customerId) })
   const ledger = useQuery({
@@ -75,6 +77,10 @@ export function CustomerLedgerPage() {
         }
         action={
           <>
+            <Button variant="outline" disabled={!customer.data} onClick={() => setIsStatementOpen(true)}>
+              <ScrollText className="size-4" />
+              Statement
+            </Button>
             <Button variant="outline" asChild>
               <Link to={`/invoices/new?customerId=${customerId}`}>
                 <Plus className="size-4" />
@@ -274,6 +280,9 @@ export function CustomerLedgerPage() {
       </div>
 
       <RecordPaymentDialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen} customerId={customerId} />
+      {customer.data && (
+        <StatementDialog customer={customer.data} open={isStatementOpen} onOpenChange={setIsStatementOpen} />
+      )}
     </>
   )
 }

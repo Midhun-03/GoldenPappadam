@@ -1,5 +1,6 @@
 using System.Globalization;
 using GoldenPappadam.Domain.Common;
+using static GoldenPappadam.Api.Common.PdfStyle;
 using GoldenPappadam.Domain.Sales;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -19,40 +20,17 @@ namespace GoldenPappadam.Api.Features.Sales.Invoices.Documents;
 /// </summary>
 public static class InvoicePdfRenderer
 {
-    private const string Ink = "#231F1A";
-    private const string Muted = "#6B6258";
-    private const string Rule = "#CFC6B8";
-    private const string Accent = "#B8801F";
-    private const string HeaderFill = "#F6EEDF";
-
-    /// <summary>The Golden Pappadam mark, the same one the admin panel uses.</summary>
-    private const string Logo = """
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-          <rect width="32" height="32" rx="7" fill="#231f1a"/>
-          <circle cx="16" cy="16" r="9" fill="#e0a338"/>
-          <circle cx="16" cy="16" r="9" fill="none" stroke="#f2c878" stroke-width="1.5"/>
-          <circle cx="12.6" cy="13.6" r="1.1" fill="#a9741f"/>
-          <circle cx="18.8" cy="15.2" r="0.9" fill="#a9741f"/>
-          <circle cx="15.1" cy="19" r="1" fill="#a9741f"/>
-        </svg>
-        """;
-
-    private static readonly CultureInfo India = CultureInfo.GetCultureInfo("en-IN");
-
-    static InvoicePdfRenderer()
-    {
-        // Free for businesses under USD 1M annual revenue; see questpdf.com/license.
-        QuestPDF.Settings.License = LicenseType.Community;
-    }
-
     public record BusinessDetails(string? Phone, string? Email, string? PaymentTerms, string? BankDetails, string? Terms);
 
     public static byte[] Render(InvoiceDetailDto invoice, BusinessDetails business) =>
         Compose(invoice, business).GeneratePdf();
 
     /// <summary>The document itself, for anything other than a PDF - page images in a preview or a test.</summary>
-    public static IDocument Compose(InvoiceDetailDto invoice, BusinessDetails business) =>
-        Document.Create(container => container.Page(page =>
+    public static IDocument Compose(InvoiceDetailDto invoice, BusinessDetails business)
+    {
+        UseCommunityLicense();
+
+        return Document.Create(container => container.Page(page =>
             {
                 page.Size(PageSizes.A4);
                 page.Margin(28);
@@ -87,6 +65,7 @@ public static class InvoicePdfRenderer
                 CreationDate = invoice.FinalizedAt,
                 ModifiedDate = invoice.FinalizedAt
             });
+    }
 
     /// <summary>
     /// A GST bill - Tax Invoice or Bill of Supply - carries both GSTINs, HSN codes and the place of
@@ -585,10 +564,6 @@ public static class InvoicePdfRenderer
         TaxTreatment.NonGst => "Non-GST supply",
         _ => ""
     };
-
-    private static string Money(decimal value) => value.ToString("#,##0.00", India);
-
-    private static string Quantity(decimal value) => value.ToString("#,##0.###", India);
 
     private static string Rate(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture) + "%";
 }

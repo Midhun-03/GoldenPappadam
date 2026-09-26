@@ -30,5 +30,12 @@ public enum StockMovementType
     Damage,
 
     /// <summary>Correction after a physical count. Can be positive or negative.</summary>
-    Adjustment
+    Adjustment,
+
+    /// <summary>
+    /// Unsold packets opened and packed again: negative on the packets opened, positive on the
+    /// packets made (and on the loose stock for any pieces left over). The new packets start a fresh
+    /// shelf life. See <see cref="RepackEntry"/>.
+    /// </summary>
+    Repacking
 }

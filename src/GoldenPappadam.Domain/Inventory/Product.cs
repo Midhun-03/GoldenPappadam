@@ -42,6 +42,13 @@ public class Product : AuditableEntity
     /// <summary>Null means no low-stock alert for this product.</summary>
     public decimal? LowStockThreshold { get; set; }
 
+    /// <summary>
+    /// How many days the product stays good, counted from packing (for loose stock, from when it was
+    /// made). Pappadam is 20. After that it is expired and must be written off, never sold. Null means
+    /// the product does not expire, and it is left out of stock-age reporting.
+    /// </summary>
+    public int? ShelfLifeDays { get; set; }
+
     /// <summary>HSN code printed on GST invoices, 4 to 8 digits. Confirmed by the accountant.</summary>
     public string? HsnCode { get; set; }
 

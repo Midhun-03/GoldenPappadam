@@ -9,5 +9,6 @@ public enum StockReferenceType
 {
     PackingEntry,
     Invoice,
-    VanLoad
+    VanLoad,
+    RepackEntry
 }

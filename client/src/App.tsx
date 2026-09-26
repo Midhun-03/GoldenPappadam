@@ -10,6 +10,8 @@ import { InvoicesPage } from './pages/InvoicesPage'
 import { LoginPage } from './pages/LoginPage'
 import { NewInvoicePage } from './pages/NewInvoicePage'
 import { PackingPage } from './pages/PackingPage'
+import { RepackingPage } from './pages/RepackingPage'
+import { StockAgePage } from './pages/StockAgePage'
 import { PaymentsPage } from './pages/PaymentsPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -18,6 +20,12 @@ import { StockPage } from './pages/StockPage'
 import { StockRequestsPage } from './pages/StockRequestsPage'
 import { FieldSalesDayPage } from './pages/FieldSalesDayPage'
 import { VanPage } from './pages/VanPage'
+import {
+  CollectionsReportPage,
+  OutstandingReportPage,
+  SalesReportPage,
+  StockReportPage,
+} from './pages/reports/ReportPage'
 
 // The dashboard is the only screen that draws charts, so its charting library loads with it
 // rather than with every other page.
@@ -50,9 +58,11 @@ export function App() {
           />
 
           <Route path="/stock" element={<StockPage />} />
+          <Route path="/stock-age" element={<StockAgePage />} />
           <Route path="/stock/:productId" element={<StockHistoryPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/packing" element={<PackingPage />} />
+          <Route path="/repacking" element={<RepackingPage />} />
           <Route path="/van" element={<VanPage />} />
           <Route path="/field-sales" element={<FieldSalesDayPage />} />
           <Route path="/stock-requests" element={<StockRequestsPage />} />
@@ -63,6 +73,10 @@ export function App() {
           <Route path="/invoices/new" element={<NewInvoicePage />} />
           <Route path="/invoices/:invoiceId" element={<InvoiceDetailPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
+          <Route path="/reports/sales" element={<SalesReportPage />} />
+          <Route path="/reports/collections" element={<CollectionsReportPage />} />
+          <Route path="/reports/outstanding" element={<OutstandingReportPage />} />
+          <Route path="/reports/stock" element={<StockReportPage />} />
 
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

@@ -5,7 +5,9 @@ using GoldenPappadam.Api.Features.FieldSales.Day;
 using GoldenPappadam.Api.Features.FieldSales.StockRequests;
 using GoldenPappadam.Api.Features.FieldSales.VanLoads;
 using GoldenPappadam.Api.Features.Inventory.Packing;
+using GoldenPappadam.Api.Features.Inventory.Repacking;
 using GoldenPappadam.Api.Features.Mobile;
+using GoldenPappadam.Api.Features.Reports;
 using GoldenPappadam.Api.Features.Inventory.Products;
 using GoldenPappadam.Api.Features.Inventory.Stock;
 using GoldenPappadam.Api.Features.Sales.CustomerBranches;
@@ -98,6 +100,8 @@ builder.Services.AddAuthorizationBuilder()
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<StockService>();
 builder.Services.AddScoped<PackingService>();
+builder.Services.AddScoped<RepackingService>();
+builder.Services.AddScoped<StockAgeService>();
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<CustomerBranchService>();
 builder.Services.AddScoped<CustomerPriceService>();
@@ -111,6 +115,12 @@ builder.Services.AddScoped<StockRequestService>();
 builder.Services.AddScoped<InvoiceSettingsService>();
 builder.Services.AddScoped<InvoiceDocumentService>();
 builder.Services.AddScoped<InvoiceEmailService>();
+builder.Services.AddScoped<SalesReport>();
+builder.Services.AddScoped<CollectionsReport>();
+builder.Services.AddScoped<OutstandingReport>();
+builder.Services.AddScoped<StatementReport>();
+builder.Services.AddScoped<StockMovementReport>();
+builder.Services.AddScoped<StockAgeReport>();
 
 // Invoice PDFs go through an abstraction, so moving them to Supabase Storage (or any object store)
 // later is one registration here. Relative paths resolve against the app, never a fixed drive.

@@ -41,6 +41,7 @@ const empty = {
   hsnCode: '',
   taxTreatment: '' as TaxTreatment | '',
   gstRate: '',
+  shelfLifeDays: '',
 }
 
 const NOT_DECIDED = 'undecided'
@@ -78,6 +79,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             hsnCode: product.hsnCode ?? '',
             taxTreatment: product.taxTreatment ?? '',
             gstRate: product.gstRate?.toString() ?? '',
+            shelfLifeDays: product.shelfLifeDays?.toString() ?? '',
           }
         : empty,
     )
@@ -114,6 +116,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
       hsnCode: form.hsnCode.trim() || null,
       taxTreatment: form.taxTreatment || null,
       gstRate: form.taxTreatment === 'Taxable' ? toNumber(form.gstRate) : null,
+      shelfLifeDays: toNumber(form.shelfLifeDays),
     })
   }
 
@@ -251,7 +254,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-1.5">
               <Label htmlFor="sellingPrice">Selling price</Label>
               <Input
@@ -262,6 +265,19 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
                 placeholder="Not sold directly"
                 value={form.sellingPrice}
                 onChange={(event) => setForm({ ...form, sellingPrice: event.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="shelfLifeDays">Shelf life (days)</Label>
+              <Input
+                id="shelfLifeDays"
+                type="number"
+                step="1"
+                min="1"
+                placeholder="Does not expire"
+                value={form.shelfLifeDays}
+                onChange={(event) => setForm({ ...form, shelfLifeDays: event.target.value })}
               />
             </div>
 

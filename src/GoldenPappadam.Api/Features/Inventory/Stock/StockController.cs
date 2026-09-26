@@ -1,3 +1,4 @@
+using GoldenPappadam.Api.Common;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +8,7 @@ namespace GoldenPappadam.Api.Features.Inventory.Stock;
 
 [ApiController]
 [Route("api/inventory/stock")]
-public class StockController(AppDbContext db, StockService stock) : ControllerBase
+public class StockController(AppDbContext db, StockService stock, StockAgeService ages) : ControllerBase
 {
     /// <summary>
     /// Current stock for every product, with the low-stock flag. Defaults to the main warehouse,
@@ -68,4 +69,14 @@ public class StockController(AppDbContext db, StockService stock) : ControllerBa
     [HttpPost("adjustments")]
     public Task<StockEntryResponse> Adjust(AdjustStockRequest request, CancellationToken ct) =>
         stock.AdjustToCountAsync(request, ct);
+
+    /// <summary>How old the stock is, per product and place, for products with a shelf life.</summary>
+    [HttpGet("age")]
+    public Task<IReadOnlyList<StockAgeRowDto>> GetAge(DateOnly? asOf = null, CancellationToken ct = default) =>
+        ages.GetAsync(asOf ?? IndiaTime.Today(), ct);
+
+    /// <summary>Writes off what has expired in one place as damage. Only ever on a person's say-so.</summary>
+    [HttpPost("age/write-off")]
+    public Task<StockEntryResponse> WriteOffExpired(WriteOffExpiredRequest request, CancellationToken ct) =>
+        ages.WriteOffExpiredAsync(request.ProductId, request.LocationId, ct);
 }

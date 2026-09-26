@@ -16,7 +16,8 @@ public record DashboardSummaryDto(
     int LowStockCount,
     IReadOnlyList<InvoiceListItemDto> RecentInvoices,
     IReadOnlyList<CustomerBalanceDto> TopOutstanding,
-    IReadOnlyList<StockOnHandDto> LowStockProducts);
+    IReadOnlyList<StockOnHandDto> LowStockProducts,
+    StockAgeAlertsDto StockAge);
 
 /// <summary>
 /// What one product sold over a date range. <see cref="SalesValue"/> is the sum of the line

@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom'
 import { dashboardApi } from '@/api/dashboard'
 import { stockApi } from '@/api/inventory'
 import { invoicesApi } from '@/api/sales'
+import type { StockAgeAlerts } from '@/api/types'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -375,6 +376,7 @@ export function DashboardPage() {
                   centreLabel={health.total === 1 ? 'product' : 'products'}
                   formatValue={(value) => String(value)}
                 />
+                <StockAgeStrip alerts={summary.data?.stockAge} />
               </div>
             )}
           </Section>
@@ -527,5 +529,33 @@ export function DashboardPage() {
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Stock that needs a decision because of its age - repack it, or write it off - with a way straight
+ * to the page where that is done. Silent when there is nothing to do.
+ */
+function StockAgeStrip({ alerts }: { alerts: StockAgeAlerts | undefined }) {
+  if (!alerts || alerts.toRepack + alerts.expiringSoon + alerts.expired === 0) return null
+
+  const items = [
+    { count: alerts.expired, label: 'expired', tone: 'text-destructive' },
+    { count: alerts.expiringSoon, label: 'expiring in 3 days', tone: 'text-warning' },
+    { count: alerts.toRepack, label: 'worth repacking', tone: 'text-foreground' },
+  ].filter((item) => item.count > 0)
+
+  return (
+    <Link
+      to="/stock-age"
+      className="mt-3 flex flex-wrap gap-x-4 gap-y-1 rounded-lg border bg-muted/40 px-3 py-2 text-sm hover:bg-muted"
+    >
+      {items.map((item) => (
+        <span key={item.label}>
+          <span className={cn('font-semibold tabular-nums', item.tone)}>{item.count}</span>{' '}
+          {item.count === 1 ? 'product' : 'products'} {item.label}
+        </span>
+      ))}
+    </Link>
   )
 }

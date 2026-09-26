@@ -74,6 +74,8 @@ export type Product = {
   taxTreatment: TaxTreatment | null
   /** Full GST rate in percent; only for a taxable product. */
   gstRate: number | null
+  /** Days the product stays good from packing; null means it does not expire. */
+  shelfLifeDays: number | null
 }
 
 export type SaveProduct = {
@@ -89,6 +91,7 @@ export type SaveProduct = {
   hsnCode: string | null
   taxTreatment: TaxTreatment | null
   gstRate: number | null
+  shelfLifeDays: number | null
 }
 
 export type StockOnHand = {
@@ -447,6 +450,7 @@ export type DashboardSummary = {
   outstandingTotal: number
   lowStockCount: number
   recentInvoices: InvoiceListItem[]
+  stockAge: StockAgeAlerts
   topOutstanding: CustomerBalance[]
   lowStockProducts: StockOnHand[]
 }
@@ -623,4 +627,61 @@ export type FieldDevice = {
   vanName: string | null
   lastSeenAt: string
   isActive: boolean
+}
+
+/** One product in one place, split into age bands relative to its shelf life. */
+export type StockAgeRow = {
+  productId: string
+  productCode: string
+  productName: string
+  unitCode: string
+  locationId: string
+  locationCode: string
+  locationName: string
+  shelfLifeDays: number
+  fresh: number
+  repackWindow: number
+  ageing: number
+  expiringSoon: number
+  expired: number
+  total: number
+  /** Stock that expires within the next few days (the dashboard's "expiring soon"). */
+  expiringWithinDays: number
+  oldestPackedOn: string | null
+  freshLabel: string
+  repackLabel: string
+  ageingLabel: string
+  expiringLabel: string
+  layers: { packedOn: string; ageDays: number; quantity: number }[]
+}
+
+export type StockAgeAlerts = { toRepack: number; expiringSoon: number; expired: number }
+
+export type RepackPlan = {
+  fromProductId: string
+  fromProductName: string
+  fromQuantity: number
+  fromUnitCode: string
+  toProductId: string
+  toProductName: string
+  toQuantity: number
+  toUnitCode: string
+  leftoverProductId: string | null
+  leftoverProductName: string | null
+  leftoverQuantity: number
+  looseUnitCode: string
+  fromOnHand: number
+  warning: string | null
+}
+
+export type RepackEntry = {
+  id: string
+  occurredAt: string
+  fromProductName: string
+  fromQuantity: number
+  toProductName: string
+  toQuantity: number
+  leftoverProductName: string | null
+  leftoverQuantity: number
+  notes: string | null
 }

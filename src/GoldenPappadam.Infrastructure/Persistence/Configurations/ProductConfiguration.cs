@@ -21,6 +21,8 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
                 "CK_Products_SourceNotSelf",
                 "[SourceProductId] IS NULL OR [SourceProductId] <> [Id]");
 
+            table.HasCheckConstraint("CK_Products_ShelfLifeDays", "[ShelfLifeDays] IS NULL OR [ShelfLifeDays] > 0");
+
             // A rate belongs to taxable products only; exempt and nil-rated goods carry none.
             table.HasCheckConstraint(
                 "CK_Products_GstRate",
