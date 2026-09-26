@@ -8,6 +8,9 @@ import '../../core/widgets.dart';
 import '../../data/local/database.dart';
 import '../payment/payment_screen.dart';
 import '../returns/return_screen.dart';
+import 'branch_form_screen.dart';
+import 'rates_screen.dart';
+import 'shop_form_screen.dart';
 import '../sale/sale_screen.dart';
 
 /// One shop, with the three things the salesperson needs before deciding anything: who it is,
@@ -36,7 +39,17 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
         }
 
         return Scaffold(
-          appBar: AppBar(title: Text(shop.name)),
+          appBar: AppBar(
+            title: Text(shop.name),
+            actions: [
+              IconButton(
+                key: const ValueKey('edit-shop'),
+                tooltip: 'Edit shop details',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => _open(ShopFormScreen(shop: shop)),
+              ),
+            ],
+          ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
             children: [
@@ -88,8 +101,9 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
               ),
               _TodayHere(shopName: shop.name),
               _PaymentHistory(shopId: shop.id, shopName: shop.name),
-              if (shop.hasMultipleBranches) _BranchesHere(shopId: shop.id),
-              _PricesHere(shopId: shop.id),
+              if (shop.hasMultipleBranches)
+                _BranchesHere(shop: shop, onOpen: _open),
+              _PricesHere(shop: shop, onOpen: _open),
             ],
           ),
         );
@@ -289,22 +303,23 @@ class _PaymentHistory extends ConsumerWidget {
   }
 }
 
-/// The physical shops under a multi-branch customer, e.g. Kundara under Danya Supermarket - a
-/// reminder of which branches exist before the salesperson opens Record sale and has to pick one.
+/// The physical shops under a multi-branch customer, e.g. Kundara under Danya Supermarket. The
+/// salesperson adds a branch here when they find one - never a second customer - and taps one to
+/// correct its details. Closing a branch is the office's call.
 class _BranchesHere extends ConsumerWidget {
-  const _BranchesHere({required this.shopId});
+  const _BranchesHere({required this.shop, required this.onOpen});
 
-  final String shopId;
+  final CachedCustomer shop;
+  final Future<void> Function(Widget screen) onOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
 
     return FutureBuilder<List<CachedBranch>>(
-      future: db.branchesFor(shopId),
+      future: db.branchesFor(shop.id),
       builder: (context, snapshot) {
         final branches = snapshot.data ?? const <CachedBranch>[];
-        if (branches.isEmpty) return const SizedBox.shrink();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,13 +329,30 @@ class _BranchesHere extends ConsumerWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
+                  if (branches.isEmpty)
+                    const ListTile(
+                      dense: true,
+                      title: Text('No branches yet. Add one before billing this shop.',
+                          style: TextStyle(color: AppColors.textMuted)),
+                    ),
                   for (final branch in branches)
                     ListTile(
                       dense: true,
                       leading: const Icon(Icons.storefront_outlined, color: AppColors.textMuted),
                       title: Text(branch.name),
                       subtitle: (branch.location ?? '').isEmpty ? null : Text(branch.location!),
+                      trailing: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textMuted),
+                      onTap: () => onOpen(BranchFormScreen(shop: shop, branch: branch)),
                     ),
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey('add-branch'),
+                    dense: true,
+                    leading: const Icon(Icons.add, color: AppColors.goldDark),
+                    title: const Text('Add a branch',
+                        style: TextStyle(color: AppColors.goldDark, fontWeight: FontWeight.w600)),
+                    onTap: () => onOpen(BranchFormScreen(shop: shop)),
+                  ),
                 ],
               ),
             ),
@@ -331,27 +363,29 @@ class _BranchesHere extends ConsumerWidget {
   }
 }
 
-/// What this shop pays. Read-only, and deliberately so: only the office sets a price, and the app
-/// does not even have a field to type one into.
+/// What this shop pays. Tap a rate to change it, or set rates for other products - both on the
+/// rates screen, as product cards. Every change goes to the office's price history with the
+/// salesperson's name and applies from the next bill; the bill screen has no field to type a price.
 class _PricesHere extends ConsumerWidget {
-  const _PricesHere({required this.shopId});
+  const _PricesHere({required this.shop, required this.onOpen});
 
-  final String shopId;
+  final CachedCustomer shop;
+  final Future<void> Function(Widget screen) onOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
 
+    Future<void> edit({CachedProduct? product}) => onOpen(RatesScreen(shop: shop, product: product));
+
     return FutureBuilder<(Map<String, double?>, List<CachedProduct>)>(
-      future: (() async => (await db.pricesFor(shopId), await db.allProducts()))(),
+      future: (() async => (await db.pricesFor(shop.id), await db.allProducts()))(),
       builder: (context, snapshot) {
         final data = snapshot.data;
         if (data == null) return const SizedBox.shrink();
 
         final (prices, products) = data;
         final priced = products.where((p) => prices[p.id] != null).toList();
-
-        if (priced.isEmpty) return const SizedBox.shrink();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,13 +397,31 @@ class _PricesHere extends ConsumerWidget {
                 children: [
                   for (final product in priced)
                     ListTile(
+                      key: ValueKey('rate-row-${product.id}'),
                       dense: true,
                       title: Text(product.name),
-                      trailing: Text(
-                        money(prices[product.id]!),
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            money(prices[product.id]!),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.edit_outlined, size: 18, color: AppColors.textMuted),
+                        ],
                       ),
+                      onTap: () => edit(product: product),
                     ),
+                  if (priced.isNotEmpty) const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey('set-rate'),
+                    dense: true,
+                    leading: const Icon(Icons.add, color: AppColors.goldDark),
+                    title: const Text('Set rates',
+                        style: TextStyle(color: AppColors.goldDark, fontWeight: FontWeight.w600)),
+                    onTap: () => edit(),
+                  ),
                 ],
               ),
             ),

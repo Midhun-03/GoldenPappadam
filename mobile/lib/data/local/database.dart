@@ -63,8 +63,8 @@ class Products extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// What one shop pays for one product. Read-only on the phone: only the office can change a price,
-/// and there is no screen here that offers to.
+/// What one shop pays for one product. The salesperson can set or change a rate from the shop's page
+/// (recorded in the office's price history); a bill line itself is never priced by hand.
 @DataClassName('CachedPrice')
 class CustomerPrices extends Table {
   TextColumn get customerId => text()();
@@ -296,7 +296,13 @@ class AppDatabase extends _$AppDatabase {
   Future<List<OutboxEntry>> dueEntries(DateTime now, {bool ignoreBackoff = false}) {
     final query = select(outboxEntries)
       ..where((e) => e.status.isIn([OutboxStatus.pending.stored, OutboxStatus.syncing.stored]))
-      ..orderBy([(e) => OrderingTerm(expression: e.recordedAt)]);
+      ..orderBy([
+        (e) => OrderingTerm(expression: e.recordedAt),
+        // Times are stored to the second, and a sale, its payment and its visit share one. Ties go
+        // in the order they were written - the bill before the payment that settles it, a new shop
+        // before its rates and its first bill.
+        (e) => OrderingTerm(expression: const CustomExpression<int>('rowid')),
+      ]);
 
     if (!ignoreBackoff) {
       query.where((e) => e.nextAttemptAt.isSmallerOrEqualValue(now) | e.nextAttemptAt.isNull());

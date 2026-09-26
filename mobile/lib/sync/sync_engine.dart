@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 
 import '../core/config.dart';
 import '../data/local/database.dart';
+import '../data/shops_repository.dart';
 import '../data/remote/api_client.dart';
 
 /// How long to wait after each failed attempt. The last value repeats, so a phone left in a
@@ -284,12 +285,17 @@ class SyncEngine {
             ))
         .toList();
 
-    await _db.replaceSnapshot(
-        customers: customers,
-        products: products,
-        prices: prices,
-        payments: payments,
-        branches: branches);
+    // One transaction, so no screen ever sees the office's list without the shops, branches and
+    // rates this phone has made but not yet sent.
+    await _db.transaction(() async {
+      await _db.replaceSnapshot(
+          customers: customers,
+          products: products,
+          prices: prices,
+          payments: payments,
+          branches: branches);
+      await _db.reapplyPendingShopChanges();
+    });
 
     final pricesAsOf = body['pricesAsOf'];
     if (pricesAsOf is String) await _db.writeMeta(_pricesAsOfKey, pricesAsOf);

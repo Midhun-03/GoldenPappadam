@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme.dart';
 import 'data/local/database.dart';
 import 'data/sales_repository.dart';
+import 'data/shops_repository.dart';
 import 'data/remote/api_client.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/dashboard_screen.dart';
@@ -36,6 +37,9 @@ final syncProvider = Provider<SyncEngine>((ref) {
 
 final salesRepositoryProvider =
     Provider<SalesRepository>((ref) => SalesRepository(ref.watch(databaseProvider)));
+
+final shopsRepositoryProvider =
+    Provider<ShopsRepository>((ref) => ShopsRepository(ref.watch(databaseProvider)));
 
 /// Hands the work to the office without making anyone wait for it. The sale is already saved on
 /// the phone by the time this is called, so failure here changes nothing the salesperson can see.

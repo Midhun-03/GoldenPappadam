@@ -376,7 +376,7 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   does, right after the shop is chosen. 8 new C# tests plus 4 `MobileContractTests`, 6 new Dart
   tests (`new_bill_flow_test`, `sales_repository_test`, `sync_engine_test`). Drift schema bumped to
   v3 (`Branches` table, `Customers.hasMultipleBranches` column).
-- **Salesmen onboard shops — backend and admin done (2026-09-23), phone screens next.** Rules in §4. Three
+- **Salesmen onboard shops — done (backend and admin 2026-09-23, phone 2026-09-26).** Rules in §4. Three
   new sync submission types - `Customer`, `CustomerBranch`, `CustomerPrice` - create-or-update by an id the
   phone generates, so a new shop can be created, given a branch, priced and billed in one offline batch
   (proved end-to-end in `MobileContractTests`). They call the same `CustomerService`,
@@ -386,8 +386,16 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   (existing agreed rates backfilled as its first entries). Who created a customer comes from the existing
   `CreatedBy` audit field - no new column. The office sees a "Sales team" badge and filter on Customers, a
   rate history on each customer's price card, and "Rates changed by the sales team" on Today on the road.
-  Admin endpoints are unchanged and still admin-only. **Not yet built:** the Flutter screens for adding a
-  shop, a branch and a rate - the API is ready for them.
+  Admin endpoints are unchanged and still admin-only. **Phone (2026-09-26):** a **New shop** button on the Shops tab
+  (and "Add as a new shop" under a search). The form checks the name as it is typed against the shops the
+  phone knows: an exact match cannot be saved and is offered to open instead, and a name containing a
+  known shop ("Danya Supermarket Coimbatore") is pointed at that shop to add a branch. The form takes
+  contact details, "Has several branches" and the first rates; the shop page gains Edit, Add / edit
+  branch, and a Rates screen. **Every product entry on the phone - bill, return, rates - uses the shared
+  `ProductLineCard`** (product dropdown, the line's field, delete, Add item); new screens must too. `ShopsRepository` writes the outbox and the cache together so a
+  new shop is billable offline at once; after each snapshot the pending shop, branch and rate changes are
+  re-applied so a sync cannot hide them. The outbox now breaks same-second ties by write order (`rowid`),
+  which also guarantees a bill goes before its payment and visit.
 - **Invoice management done (2026-09-23)**, designed in `docs/04-invoice-design.md`. The bill *is* the
   invoice: `sales.Invoices` gained its number parts, document type, a supplier/customer/branch snapshot, the
   tax basis and GST totals; lines gained a line number, HSN, treatment, discount share and CGST/SGST/IGST.
@@ -411,7 +419,7 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   snapshot carries each shop's `gstin`/`isGstRegistered`; the sale screen and shop page say "GST bill" or
   "Normal bill". Drift schema v4 (`Customers.gstin`, `OutboxEntries.documentNumber`). A shop can no longer
   be marked GST registered before the business GSTIN is in Settings, so the phone never saves a sale the
-  server would refuse for that reason. Still not on the phone: adding shops, sharing the PDF.
+  server would refuse for that reason. Still not on the phone: sharing the PDF.
 - **Reports done (2026-09-25)**, designed in `docs/05-reports-returns-design.md`: sales, collections,
   outstanding by age, and a customer statement, each on screen, as PDF and as Excel from one
   `ReportDocument` with server-side totals (`Features/Reports/`, ClosedXML for Excel, QuestPDF house style

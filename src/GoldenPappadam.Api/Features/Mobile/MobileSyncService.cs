@@ -540,11 +540,6 @@ public class MobileSyncService(
     }
 
     /// <summary>
-    /// The van this phone sells from, or a refusal. Which van a phone belongs to is the office's
-    /// decision, deliberately: the server reads it from the device rather than trusting anything the
-    /// phone sends, so a phone the office has not placed cannot touch stock at all.
-    /// </summary>
-    /// <summary>
     /// Packets collected from a shop, through the same <see cref="ReturnService"/> as the office.
     ///
     /// The phone can say only two things about what the shop got: fresh packets from the van, or
@@ -582,6 +577,11 @@ public class MobileSyncService(
             created.Return.ReturnNumber);
     }
 
+    /// <summary>
+    /// The van this phone sells from, or a refusal. Which van a phone belongs to is the office's
+    /// decision, deliberately: the server reads it from the device rather than trusting anything the
+    /// phone sends, so a phone the office has not placed cannot touch stock at all.
+    /// </summary>
     private static Guid RequireVan(Device device) =>
         device.LocationId
         ?? throw new DomainException("This phone is not assigned to a van yet. Ask the office to set that up.");

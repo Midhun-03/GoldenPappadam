@@ -185,10 +185,13 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
               choices: _products,
               selected: draft.product,
               onSelected: (chosen) => setState(() => draft.product = chosen),
-              quantity: draft.quantity,
-              onQuantityChanged: (_) => setState(() {}),
+              field: QuantityField(
+                controller: draft.quantity,
+                fieldKey: ValueKey('return-qty-$index'),
+                onChanged: (_) => setState(() {}),
+              ),
               onRemove: _drafts.length == 1 ? null : () => _removeLine(draft),
-              belowQuantity: ChoiceRow<String>(
+              below: ChoiceRow<String>(
                 key: ValueKey('return-reason-$index'),
                 value: draft.reason,
                 onChanged: (value) => setState(() => draft.reason = value),
@@ -196,15 +199,7 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
               ),
             ),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const ValueKey('return-add-item'),
-            onPressed: _canAddLine ? _addLine : null,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add item'),
-          ),
-        ),
+        AddItemButton(buttonKey: const ValueKey('return-add-item'), onPressed: _canAddLine ? _addLine : null),
       ],
     );
   }

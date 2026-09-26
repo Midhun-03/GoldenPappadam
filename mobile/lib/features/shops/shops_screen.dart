@@ -8,10 +8,16 @@ import '../../core/widgets.dart';
 import '../../data/local/database.dart';
 import '../../data/sales_repository.dart';
 import '../sync/sync_views.dart';
+import 'shop_form_screen.dart';
 import 'shop_screen.dart';
 
 /// The list the salesperson opens on. Search first, because on a route of fifteen shops the
 /// fastest way to the right one is to type three letters of its name.
+///
+/// New shop is always one tap away, and under a search the typed name can be added directly. Either
+/// way the form checks the name against the shops the phone knows, so one the office already has is
+/// opened rather than entered twice - and a name containing a known shop's ("Danya Supermarket
+/// Coimbatore") is pointed at that shop, to be added as its branch.
 class ShopsScreen extends ConsumerStatefulWidget {
   const ShopsScreen({super.key});
 
@@ -35,6 +41,13 @@ class _ShopsScreenState extends ConsumerState<ShopsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Shops'), actions: const [PendingBadge()]),
+      floatingActionButton: FloatingActionButton.extended(
+        key: const ValueKey('new-shop'),
+        onPressed: () => Navigator.of(context).push(appRoute<void>(
+            (_) => ShopFormScreen(initialName: _term.trim().isEmpty ? null : _term.trim()))),
+        icon: const Icon(Icons.add_business_outlined),
+        label: const Text('New shop'),
+      ),
       body: Column(
         children: [
           const SyncBanner(),
@@ -80,12 +93,16 @@ class _ShopsScreenState extends ConsumerState<ShopsScreen> {
                     }
 
                     final shops = snapshot.data ?? const <CachedCustomer>[];
+                    final searching = _term.trim().isNotEmpty;
 
                     if (shops.isEmpty) {
                       return RefreshIndicator(
                         onRefresh: () => ref.read(syncProvider).syncNow(),
                         child: ListView(
-                          children: [_EmptyShops(searching: _term.isNotEmpty)],
+                          children: [
+                            _EmptyShops(searching: searching),
+                            if (searching) _AddShop(term: _term),
+                          ],
                         ),
                       );
                     }
@@ -94,12 +111,17 @@ class _ShopsScreenState extends ConsumerState<ShopsScreen> {
                       onRefresh: () => ref.read(syncProvider).syncNow(),
                       child: ListView.separated(
                         padding: const EdgeInsets.only(bottom: 8),
-                        itemCount: shops.length,
+                        itemCount: shops.length + 1,
                         separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, index) => _ShopTile(
-                          shop: shops[index],
-                          pending: pendingByShop[shops[index].name] ?? 0,
-                        ),
+                        itemBuilder: (context, index) => index == shops.length
+                            ? (searching
+                                ? _AddShop(term: _term)
+                                // Room for the New shop button, so it never covers the last shop.
+                                : const SizedBox(height: 72))
+                            : _ShopTile(
+                                shop: shops[index],
+                                pending: pendingByShop[shops[index].name] ?? 0,
+                              ),
                       ),
                     );
                   },
@@ -184,4 +206,73 @@ class _EmptyShops extends StatelessWidget {
             ? 'Try part of the name, or the phone number.'
             : 'Sync once with a connection and the shop list is yours, signal or not.',
       );
+}
+
+/// Under a search: add what was typed as a new shop - unless it already is one, or looks like a
+/// branch of one.
+class _AddShop extends ConsumerWidget {
+  const _AddShop({required this.term});
+
+  final String term;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repository = ref.watch(shopsRepositoryProvider);
+
+    return FutureBuilder<(CachedCustomer?, CachedCustomer?)>(
+      future: (() async => (await repository.findByName(term), await repository.likelyParentOf(term)))(),
+      builder: (context, snapshot) {
+        final data = snapshot.data;
+        if (data == null) return const SizedBox.shrink();
+
+        final (exact, parent) = data;
+
+        // It is already in the list above. Nothing to add.
+        if (exact != null) return const SizedBox.shrink();
+
+        void addNew() => Navigator.of(context)
+            .push(appRoute<void>((_) => ShopFormScreen(initialName: term.trim())));
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (parent != null) ...[
+                AppCard(
+                  color: AppColors.warningSoft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Is this a branch of ${parent.name}?',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      const Text('Another shop of a customer we know is added as its branch, '
+                          'not as a new customer.'),
+                      const SizedBox(height: 10),
+                      FilledButton(
+                        key: const ValueKey('open-parent'),
+                        onPressed: () => Navigator.of(context)
+                            .push(appRoute<void>((_) => ShopScreen(shopId: parent.id))),
+                        child: Text('Open ${parent.name}'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              OutlinedButton.icon(
+                key: const ValueKey('add-new-shop'),
+                onPressed: addNew,
+                icon: const Icon(Icons.add_business_outlined, size: 18),
+                label: Text(parent == null
+                    ? 'Add "${term.trim()}" as a new shop'
+                    : 'No, "${term.trim()}" is a different shop'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

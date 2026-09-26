@@ -316,15 +316,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
             key: ObjectKey(line),
             child: _lineCard(index, line),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const ValueKey('add-item'),
-            onPressed: _canAddLine ? _addLine : null,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add item'),
-          ),
-        ),
+        AddItemButton(buttonKey: const ValueKey('add-item'), onPressed: _canAddLine ? _addLine : null),
       ],
     );
   }
@@ -339,11 +331,14 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
       choices: _choicesFor(line),
       selected: product,
       onSelected: (chosen) => setState(() => line.product = chosen),
-      quantity: line.quantity,
-      onQuantityChanged: (_) => setState(() {}),
+      field: QuantityField(
+        controller: line.quantity,
+        fieldKey: ValueKey('bill-qty-$index'),
+        onChanged: (_) => setState(() {}),
+      ),
       onRemove: _billLines.length == 1 ? null : () => _removeLine(line),
       // Shown, never typed: the office decides what each shop pays.
-      besideQuantity: ReadOnlyField(
+      besideField: ReadOnlyField(
         label: 'Price',
         value: price == null ? '—' : '${money(price)} / ${product!.unitCode.toLowerCase()}',
       ),
@@ -499,6 +494,6 @@ class _NoPrices extends StatelessWidget {
   Widget build(BuildContext context) => const EmptyState(
         icon: Icons.sell_outlined,
         title: 'No prices for this shop yet',
-        message: 'The office sets what each shop pays. Ask them to add it, then sync.',
+        message: "Set what this shop pays on its page (Shops, then 'Set a rate'), then come back to bill it.",
       );
 }
