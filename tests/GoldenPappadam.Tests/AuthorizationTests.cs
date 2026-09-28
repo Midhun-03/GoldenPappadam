@@ -30,7 +30,15 @@ public class AuthorizationTests : IAsyncLifetime
         "/api/fieldsales/van-loads",
         "/api/fieldsales/stock-requests",
         "/api/fieldsales/stock-requests/packing-needs",
-        "/api/fieldsales/devices"
+        "/api/fieldsales/devices",
+        "/api/staff/employees",
+        "/api/staff/attendance",
+        "/api/staff/attendance-statuses",
+        "/api/staff/wages/week",
+        "/api/staff/wage-payments",
+        "/api/accounting/expenses",
+        "/api/accounting/expenses/summary",
+        "/api/accounting/expense-categories"
     ];
 
     private ApiFactory _api = null!;

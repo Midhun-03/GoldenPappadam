@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Api.Features.Accounting.Expenses;
 using GoldenPappadam.Api.Features.Dashboard;
 using GoldenPappadam.Api.Features.FieldSales.Day;
 using GoldenPappadam.Api.Features.FieldSales.StockRequests;
@@ -18,6 +19,9 @@ using GoldenPappadam.Api.Features.Sales.Invoices.Documents;
 using GoldenPappadam.Api.Features.Sales.Payments;
 using GoldenPappadam.Api.Features.Sales.Returns;
 using GoldenPappadam.Api.Features.Sales.Settings;
+using GoldenPappadam.Api.Features.Staff.Attendance;
+using GoldenPappadam.Api.Features.Staff.Employees;
+using GoldenPappadam.Api.Features.Staff.Wages;
 using GoldenPappadam.Infrastructure.Documents;
 using GoldenPappadam.Infrastructure.Email;
 using GoldenPappadam.Infrastructure.Identity;
@@ -124,6 +128,11 @@ builder.Services.AddScoped<StatementReport>();
 builder.Services.AddScoped<StockMovementReport>();
 builder.Services.AddScoped<StockAgeReport>();
 builder.Services.AddScoped<ReturnsReport>();
+builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<AttendanceService>();
+builder.Services.AddScoped<WageCalculator>();
+builder.Services.AddScoped<WagePaymentService>();
+builder.Services.AddScoped<ExpenseService>();
 
 // Invoice PDFs go through an abstraction, so moving them to Supabase Storage (or any object store)
 // later is one registration here. Relative paths resolve against the app, never a fixed drive.

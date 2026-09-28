@@ -63,6 +63,7 @@ A small, usable, **admin-side only** MVP. Scope set 2026-09-11; target completio
 **Build order within phase 1** (owner-set, 2026-09-14): 1. Inventory → 2. Packing / stock conversion → 3. Sales → 4. Customers → 5. Credit and partial payments → 6. Dashboard → 7. Basic reports.
 
 **Out of phase 1** unless explicitly added: production/raw-material management, salesperson/route/visit/delivery management, full accounting, a salesperson-facing app.
+_Added 2026-09-28: employees, daily wages and expenses (§4 "Employees, wages and expenses"). Full accounting - payables, ledgers, double entry - is still out._
 Keep payments simple and practical — not a full enterprise accounting system. Push back on scope creep.
 
 ## 4. Inventory design requirements
@@ -170,9 +171,90 @@ Keep payments simple and practical — not a full enterprise accounting system. 
   file. Storage is behind `IInvoiceDocumentStorage` so it can move to Supabase Storage.
 - **Email failure never affects the invoice.** Every attempt is logged; the office retries.
 
+### Confirmed requirements (2026-09-28, employees, wages and expenses)
+
+Built 2026-09-28 (except the dashboard profit figure) - `docs/06-staff-expenses-design.md`. Office-only:
+every endpoint is admin-only through the fallback policy and nothing is added to `/api/mobile/*`, so a
+salesperson never sees wages or company expenses. Schemas: `staff` (employees, wages, attendance, wage
+payments) and `accounting` (expenses).
+
+**Employees and wage rates**
+- An employee is master data (deactivated, never deleted): name, role/designation, contact details and
+  joining date where known, active status. An employee is not a login; a salesperson who is also paid wages
+  has an employee record and a user account, not linked for now.
+- Pay is a **daily wage**, different per employee, kept as dated history (amount + effective-from date). A
+  change adds a row and never overwrites: Ravi ₹650 from Jan 2026, ₹700 from Jun, ₹750 from Sep. The
+  current wage is the latest row in effect today; a past day is paid at the rate in effect on that day.
+
+**Attendance**
+- One record per employee per date (an IST calendar date): Present, Half day, Absent or Leave.
+- The day fraction each status counts for is configuration, not code - default 1 / 0.5 / 0 / 0. A change
+  applies only to weeks not yet paid.
+- **Sunday is a working day for some employees, in turn** (e.g. of six, three work one Sunday and the other
+  three the next). There is no roster: whoever worked is marked. A day with no record counts 0 and is shown
+  as "not recorded", so a forgotten entry is visible before the week is paid.
+
+**Weekly wages (paid every Saturday)**
+- Each Saturday pays for **Sunday to Saturday of that week, the Saturday included** (full or half day), worked
+  out once Saturday's attendance is in. The period's dates are shown with every calculation and stored on
+  every payment.
+- Payable = Σ (day fraction × daily wage in effect that day), so a mid-week wage change pays each day at its
+  own rate. E.g. 4.5 days × ₹700 = ₹3,150.
+- The Weekly wages screen shows per employee: attendance summary, applicable wage, days worked, amount,
+  status, payment date and method. Status is **Pending** until a payment exists, then **Paid**. Methods are
+  the existing money methods (Cash, UPI, Bank transfer, Cheque, Other) - never `ReturnCredit`.
+- A wage payment is a transaction (never edited or deleted) and **snapshots** the period, each day's
+  status, fraction and rate, the total days and the amount, so a later change to a wage, attendance, the
+  fractions or the employee never alters it.
+- **A correction to a paid week is carried to the next week**, never applied to the paid one. Attendance in a
+  paid week may be corrected; the difference (recalculated amount − amount already paid for that week) becomes
+  an **adjustment line** on the employee's next unpaid week: plus if underpaid, minus if overpaid. The line
+  names the day, the old and new status and the rate, so the paid payment stays as it was and the correction
+  is explained where it is settled. A deduction larger than the next week's pay carries on to the week
+  after; a payment is never negative. A payment recorded that never happened is cancelled (kept, status
+  Cancelled, its expense cancelled with it).
+- Overtime, bonuses, advances, deductions, other leave rules and other wage types are **not built**; they
+  are expected to become further line types on a wage payment, next to the carried adjustment, and extra
+  attendance statuses - without restructuring.
+
+**Expenses**
+- An expense is money already spent: category, amount, date (IST), description, payment method; who
+  created/changed it and when come from the audit fields. Money owed to suppliers (payables) is out of scope.
+  An expense never moves stock - a Raw material expense creates no raw-material inventory.
+- Categories are master data the admin can add, rename and deactivate, never delete. Seeded with fixed ids,
+  like units: Employee wages, Raw material, Packaging, Fuel, Electricity, Gas, Transportation, Vehicle
+  maintenance, Rent, Repairs, Marketing, Other. Expenses reference the category by id, so a rename relabels
+  history and a deactivated category only disappears from new entries.
+- **Employee wages is a system category.** Its expenses are made only by wage payments - exactly one per
+  wage payment, in the same transaction, linked to it and dated the payment date - and are never entered,
+  edited or cancelled by hand. That is what stops a wage being counted twice.
+- Other expenses may be edited by an admin and are cancelled, never deleted. This is a deliberate exception
+  to §6 "transactions are never edited": an expense is issued to no one and changes no stock or customer
+  balance. **Every earlier version is kept**: each edit and cancellation writes an immutable change record
+  (previous values, who, when), like `sales.CustomerPriceChanges`.
+- History: search, filter by category and date range, totals. Reports total **by category** for a period,
+  never a single figure, and count an expense in the period of its date (a wage week lands in the month it
+  was paid). Receipt attachments are optional and later; when added, the files go behind a storage
+  interface like `IInvoiceDocumentStorage`.
+
+**Dashboard: this month's profit or loss.** The admin dashboard shows one figure for the current month
+(IST), as a profit or a loss and by how much, beside this month's expenses and wages. Proposed definition,
+pending confirmation (§10 Q10):
+
+```text
+  Sales billed this month   (finalized, not cancelled; after bill discount; excluding GST)
+− Return credits given this month
+− Expenses dated this month (wages included)
+= Profit (positive) or loss (negative)
+```
+
+Sales count when billed, not when paid, because most sales are on credit; money collected stays a separate
+tile. Known limits, shown with the figure rather than hidden: a bulk raw-material purchase counts wholly in
+the month it was paid, and stock on hand has no cost value.
+
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
 
-The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`; reports, shelf life and returns in `docs/05-reports-returns-design.md`.
+The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`; reports, shelf life and returns in `docs/05-reports-returns-design.md`; employees, wages and expenses in `docs/06-staff-expenses-design.md`.
 
 ## 5. Technology stack
 
@@ -275,7 +357,17 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-09-26_
+_Last updated: 2026-09-28_
+
+**Employees, wages and expenses done (2026-09-28)**, rules in §4, design in `docs/06-staff-expenses-design.md`.
+Migration `AddStaffAndExpenses` (new `staff` and `accounting` schemas, new tables only). Admin screens:
+Attendance (the daily register), Weekly wages (pay one or all, with a confirmation), Employees with wage
+history, Expenses with totals by category, and Settings cards for expense categories and attendance day
+values. A paid week is a snapshot; attendance corrected afterwards is settled as a correction line on the
+next unpaid week; each wage payment makes exactly one Employee wages expense, which cannot be entered by
+hand. 35 new tests (24 StaffWageTests, 11 ExpenseTests), and the 8 new endpoints added to the
+authorization checks (salesperson 403, admin 200, anonymous 401). **Not built:** the
+dashboard's monthly profit or loss, waiting on the definition in §10 Q10.
 
 **Phase 1 is complete. Phase 3 is in progress** — a Flutter salesperson app that works offline and
 synchronizes with this API, designed in `docs/03-field-sales-design.md` (approved 2026-09-15).
@@ -633,5 +725,10 @@ Never design around an assumption for these; ask, or keep the design open.
 | 3 | Are discounts given, and at bill level or item level? | TBD — owner to confirm | invoice totals |
 | 4 | GST: the exact HSN code, that pappadam is exempt rather than nil-rated, and the "Bill of Supply" heading on GST bills for exempt goods | **Partly answered 2026-09-23:** one HSN, no GST today, GST bills only for GST-registered shops. Accountant to confirm the three details | invoices |
 | 5 | Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now? | TBD — owner / accountant | invoice numbering |
+| ~~6~~ | ~~Which days does a Saturday's wage cover? Is Sunday a working day?~~ | **Answered 2026-09-28:** Sunday to Saturday, Saturday included; Sunday is worked by some employees in turn | weekly wages |
+| ~~7~~ | ~~A wage changed mid-week?~~ | **Answered 2026-09-28:** each day at its own rate | weekly wages |
+| ~~8~~ | ~~Attendance found wrong after a week is paid?~~ | **Answered 2026-09-28:** carry the difference to the next week | weekly wages |
+| ~~9~~ | ~~Expense edits: keep earlier versions?~~ | **Answered 2026-09-28:** keep every earlier version | expenses |
+| 10 | Profit: the dashboard shows this month's profit or loss (**answered 2026-09-28**). Is the proposed definition in §4 right - billed sales, return credits and expenses by date? | **Partly answered** — owner / accountant to confirm the definition | dashboard |
 
 Answered on 2026-09-14 and now part of the design: stock shortfall warns instead of blocking; one loose variety can be packed into many packet sizes; a pack can occasionally be made from another pack.

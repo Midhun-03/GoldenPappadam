@@ -688,3 +688,259 @@ export type RepackEntry = {
   leftoverQuantity: number
   notes: string | null
 }
+
+/** Someone paid a daily wage. Not a login account. */
+export type Employee = {
+  id: string
+  name: string
+  designation: string | null
+  phone: string | null
+  address: string | null
+  joinedOn: string | null
+  isActive: boolean
+  /** The wage in effect today. */
+  currentDailyWage: number | null
+  currentWageFrom: string | null
+  /** A raise already entered for a later date. */
+  upcomingDailyWage: number | null
+  upcomingWageFrom: string | null
+  createdAt: string
+}
+
+/** Details only. The wage is given once on creation, then changed through the wage history. */
+export type SaveEmployee = {
+  name: string
+  designation: string | null
+  phone: string | null
+  address: string | null
+  joinedOn: string | null
+  dailyWage?: number | null
+  wageEffectiveFrom?: string | null
+}
+
+/** One entry in the wage history. `isSuperseded`: replaced by a later entry with the same start date. */
+export type WageRate = {
+  id: string
+  dailyWage: number
+  effectiveFrom: string
+  setAt: string
+  setByName: string | null
+  isCurrent: boolean
+  isUpcoming: boolean
+  isSuperseded: boolean
+}
+
+export type AttendanceStatus = {
+  id: string
+  code: string
+  name: string
+  /** Share of a day's wage the status earns: 1, 0.5, 0. */
+  dayFraction: number
+  sortOrder: number
+}
+
+export type AttendanceRow = {
+  employeeId: string
+  name: string
+  designation: string | null
+  isActive: boolean
+  /** Null: not recorded. */
+  statusId: string | null
+  /** The employee's week is already paid: a change is settled in their next unpaid week. */
+  weekPaid: boolean
+  changedAt: string | null
+  changedByName: string | null
+}
+
+export type AttendanceSheet = {
+  date: string
+  weekStart: string
+  weekEnd: string
+  weekLabel: string
+  isFuture: boolean
+  statuses: AttendanceStatus[]
+  rows: AttendanceRow[]
+}
+
+export type SaveAttendanceResponse = {
+  sheet: AttendanceSheet
+  changed: number
+  warnings: string[]
+}
+
+export type WageStatus = 'Paid' | 'Pending' | 'NothingToPay'
+
+export type WageDay = {
+  date: string
+  statusId: string | null
+  statusName: string
+  dayFraction: number
+  dailyWage: number | null
+  amount: number
+}
+
+export type WageAdjustment = {
+  kind: 'Correction' | 'CarriedBalance'
+  date: string
+  description: string
+  amount: number
+}
+
+export type EmployeeWage = {
+  employeeId: string
+  name: string
+  designation: string | null
+  isActive: boolean
+  status: WageStatus
+  /** The rates the worked days were paid at: two when a raise fell mid-week. */
+  dailyWages: number[]
+  days: WageDay[]
+  statusCounts: { name: string; days: number }[]
+  notRecordedDays: number
+  daysWorked: number
+  workAmount: number
+  adjustments: WageAdjustment[]
+  adjustmentAmount: number
+  /** What to hand over; for a paid week, what was handed over. */
+  payable: number
+  /** An overpayment larger than this week's pay, carried on to the next week. */
+  carriedForward: number
+  missingWageDates: string[]
+  payment: {
+    id: string
+    paymentDate: string
+    method: PaymentMethod
+    reference: string | null
+    amount: number
+    paidAt: string
+    paidByName: string | null
+  } | null
+  /** Attendance corrected after this week was paid, to be settled in the next unpaid week. */
+  changedSincePaid: WageAdjustment[]
+  changedSincePaidAmount: number
+}
+
+export type WageWeek = {
+  weekStart: string
+  weekEnd: string
+  label: string
+  /** False until the week's Saturday. */
+  canPay: boolean
+  employees: EmployeeWage[]
+  paidTotal: number
+  pendingTotal: number
+  paidCount: number
+  pendingCount: number
+}
+
+export type WagePaymentStatus = 'Paid' | 'Cancelled'
+
+export type WagePaymentLine = {
+  lineType: 'Attendance' | 'Correction' | 'CarriedBalance'
+  workDate: string
+  statusName: string | null
+  dayFraction: number
+  previousStatusName: string | null
+  previousDayFraction: number | null
+  dailyWage: number
+  amount: number
+}
+
+export type WagePayment = {
+  id: string
+  employeeId: string
+  employeeName: string
+  periodStart: string
+  periodEnd: string
+  periodLabel: string
+  paymentDate: string
+  method: PaymentMethod
+  reference: string | null
+  notes: string | null
+  daysWorked: number
+  workAmount: number
+  adjustmentAmount: number
+  amount: number
+  carriedForward: number
+  status: WagePaymentStatus
+  paidAt: string
+  paidByName: string | null
+  cancelledAt: string | null
+  cancelledByName: string | null
+  cancellationReason: string | null
+  expenseId: string | null
+  lines: WagePaymentLine[]
+}
+
+export type PayWages = {
+  weekStart: string
+  paymentDate: string
+  method: PaymentMethod
+  reference: string | null
+  notes: string | null
+  /** `expectedAmount` is the figure the office was shown; the server refuses if it has changed since. */
+  employees: { employeeId: string; expectedAmount: number }[]
+}
+
+/** `isSystem`: Employee wages, filled only by wage payments. */
+export type ExpenseCategory = {
+  id: string
+  name: string
+  isActive: boolean
+  isSystem: boolean
+}
+
+export type ExpenseStatus = 'Recorded' | 'Cancelled'
+
+export type Expense = {
+  id: string
+  categoryId: string
+  categoryName: string
+  expenseDate: string
+  amount: number
+  description: string | null
+  paymentMethod: PaymentMethod | null
+  reference: string | null
+  status: ExpenseStatus
+  /** Made by a wage payment: changed only by cancelling that payment. */
+  isWageExpense: boolean
+  wagePaymentId: string | null
+  employeeId: string | null
+  createdAt: string
+  createdByName: string | null
+  updatedAt: string | null
+  updatedByName: string | null
+  /** How many earlier versions edits and cancellation have kept. */
+  versionCount: number
+}
+
+export type SaveExpense = {
+  categoryId: string
+  expenseDate: string
+  amount: number
+  description: string | null
+  paymentMethod: PaymentMethod | null
+  reference: string | null
+  reason?: string | null
+}
+
+export type ExpenseVersion = {
+  change: 'Recorded' | 'Edited' | 'Cancelled'
+  categoryName: string
+  expenseDate: string
+  amount: number
+  description: string | null
+  paymentMethod: PaymentMethod | null
+  reference: string | null
+  changedAt: string
+  changedByName: string | null
+  reason: string | null
+}
+
+export type ExpenseSummary = {
+  from: string | null
+  to: string | null
+  total: number
+  count: number
+  categories: { categoryId: string; name: string; total: number; count: number }[]
+}

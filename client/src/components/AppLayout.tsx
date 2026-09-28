@@ -1,10 +1,13 @@
 import {
   Boxes,
+  CalendarCheck,
   CalendarClock,
   ClipboardList,
   ChartNoAxesColumn,
   FileText,
   HandCoins,
+  IdCard,
+  IndianRupee,
   Hourglass,
   KeyRound,
   LayoutDashboard,
@@ -13,6 +16,7 @@ import {
   Package,
   PackageOpen,
   PackagePlus,
+  ReceiptIndianRupee,
   Route,
   Settings,
   Store,
@@ -73,6 +77,18 @@ const navigation: NavGroup[] = [
       { to: '/van', label: 'Van', icon: Truck },
       { to: '/stock-requests', label: 'Stock requests', icon: ClipboardList },
     ],
+  },
+  {
+    label: 'Staff',
+    items: [
+      { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
+      { to: '/wages', label: 'Weekly wages', icon: IndianRupee },
+      { to: '/employees', label: 'Employees', icon: IdCard },
+    ],
+  },
+  {
+    label: 'Accounts',
+    items: [{ to: '/expenses', label: 'Expenses', icon: ReceiptIndianRupee }],
   },
   {
     label: 'Reports',

@@ -55,6 +55,14 @@ export const shiftDay = (value: string, days: number) => {
   return date.toISOString().slice(0, 10)
 }
 
+/** The Sunday of the wage week (Sunday to Saturday) a plain date falls in. */
+export const weekStartOf = (value: string) => shiftDay(value, -new Date(`${value}T00:00:00Z`).getUTCDay())
+
+const weekdayFormat = new Intl.DateTimeFormat('en-IN', { weekday: 'short', timeZone: 'UTC' })
+
+/** "Sun", "Mon"... for a plain date. */
+export const formatWeekday = (value: string) => weekdayFormat.format(new Date(`${value}T00:00:00Z`))
+
 /**
  * Money with the digits dropped, for chart axes where the exact figure is in the tooltip.
  * Keeps one decimal so neighbouring axis ticks never round to the same label.

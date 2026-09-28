@@ -23,6 +23,11 @@ import { StockPage } from './pages/StockPage'
 import { StockRequestsPage } from './pages/StockRequestsPage'
 import { FieldSalesDayPage } from './pages/FieldSalesDayPage'
 import { VanPage } from './pages/VanPage'
+import { AttendancePage } from './pages/AttendancePage'
+import { EmployeeDetailPage } from './pages/EmployeeDetailPage'
+import { EmployeesPage } from './pages/EmployeesPage'
+import { ExpensesPage } from './pages/ExpensesPage'
+import { WagesPage } from './pages/WagesPage'
 import {
   CollectionsReportPage,
   OutstandingReportPage,
@@ -85,6 +90,12 @@ export function App() {
           <Route path="/reports/outstanding" element={<OutstandingReportPage />} />
           <Route path="/reports/stock" element={<StockReportPage />} />
           <Route path="/reports/returns" element={<ReturnsReportPage />} />
+
+          <Route path="/attendance" element={<AttendancePage />} />
+          <Route path="/wages" element={<WagesPage />} />
+          <Route path="/employees" element={<EmployeesPage />} />
+          <Route path="/employees/:employeeId" element={<EmployeeDetailPage />} />
+          <Route path="/expenses" element={<ExpensesPage />} />
 
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

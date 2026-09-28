@@ -8,5 +8,11 @@ public static class Schemas
 
     /// <summary>The van and the road: loads, and later devices, visits and routes.</summary>
     public const string FieldSales = "fieldsales";
+
+    /// <summary>Employees, their wage rates, attendance and weekly wage payments.</summary>
+    public const string Staff = "staff";
+
+    /// <summary>Money spent: expenses and their categories. Not a ledger or double entry.</summary>
+    public const string Accounting = "accounting";
     public const string Identity = "identity";
 }

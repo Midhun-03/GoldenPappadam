@@ -6,6 +6,7 @@ import { categoriesApi, unitsApi } from '@/api/inventory'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { InvoiceSettingsCard } from './InvoiceSettingsCard'
+import { AttendanceValuesCard, ExpenseCategoriesCard } from './StaffSettingsCards'
 import { UsersCard } from './UsersCard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,13 +34,15 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="The business on its invoices, who can sign in, and the categories and units that products are built from."
+        description="The business on its invoices, who can sign in, the categories and units that products are built from, and how expenses and attendance are counted."
       />
       <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
         <InvoiceSettingsCard />
         <UsersCard />
         <CategoriesCard />
         <UnitsCard />
+        <ExpenseCategoriesCard />
+        <AttendanceValuesCard />
       </div>
     </>
   )

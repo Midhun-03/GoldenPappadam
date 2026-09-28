@@ -1,8 +1,10 @@
 using System.Reflection;
+using GoldenPappadam.Domain.Accounting;
 using GoldenPappadam.Domain.Common;
 using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
+using GoldenPappadam.Domain.Staff;
 using GoldenPappadam.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -44,6 +46,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<StockRequestLine> StockRequestLines => Set<StockRequestLine>();
     public DbSet<VanLoad> VanLoads => Set<VanLoad>();
     public DbSet<VanLoadLine> VanLoadLines => Set<VanLoadLine>();
+
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeeWageRate> EmployeeWageRates => Set<EmployeeWageRate>();
+    public DbSet<AttendanceStatus> AttendanceStatuses => Set<AttendanceStatus>();
+    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+    public DbSet<WagePayment> WagePayments => Set<WagePayment>();
+    public DbSet<WagePaymentLine> WagePaymentLines => Set<WagePaymentLine>();
+
+    public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
+    public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<ExpenseChange> ExpenseChanges => Set<ExpenseChange>();
 
     /// <summary>
     /// SQL Server's datetime2 does not remember that a value is UTC, so EF hands it back as
@@ -119,6 +132,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
                     {
                         EnsureOnlyAllowedChanges(entry, ReturnNote.PropertiesEditableAfterRecording, "recorded return");
                     }
+                    else if (entry.Entity is WagePayment)
+                    {
+                        EnsureOnlyAllowedChanges(entry, WagePayment.PropertiesEditableAfterPayment, "wage payment");
+                    }
+                    else if (entry.Entity is Expense { WagePaymentId: not null })
+                    {
+                        EnsureOnlyAllowedChanges(entry, Expense.PropertiesEditableOnWageExpense, "wage expense");
+                    }
 
                     auditable.UpdatedAt = now;
                     auditable.UpdatedBy = userId;
@@ -140,8 +161,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     }
 
     /// <summary>
-    /// Invoices and return notes are documents. The only changes they may ever receive are the ones
-    /// their type allows - being cancelled, or a pending return being settled; anything else, an
+    /// Invoices, return notes and wage payments are documents. The only changes they may ever receive
+    /// are the ones their type allows - being cancelled, or a pending return being settled; anything else, an
     /// amount, a customer, a date, is refused here, whichever code path tried it, rather than
     /// trusting every service to remember.
     /// </summary>
