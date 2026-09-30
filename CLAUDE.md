@@ -83,7 +83,7 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 ### Confirmed requirements (2026-09-14)
 
 - **Units:** products may use different units (kg, pieces, packets). Never assume one unit for all products. Each variety/size/type of pappadam has its own stock.
-- **Packing is in phase 1.** Loose stock down, packed stock up, recorded as a packing transaction with history. Actual quantities may differ from the theoretical ones because of packing loss, so the recorded quantity is what was actually used.
+- **Packing is in phase 1.** Loose stock down, packed stock up, recorded as a packing transaction with history. Actual quantities may differ from the theoretical ones because of packing loss, so the recorded quantity is what was actually used. _Changed 2026-09-30: loose consumed is calculated from a standard pieces-per-kg conversion - see "Packing conversion" below; how packing loss fits is §10 Q11._
 - **Pricing:** every product has a default selling price, overridable on a sale line. Customer-specific pricing must be addable later without redesign. Never hard-code one unchangeable price.
 - **Returns:** the design must stay return-ready (extensible movement types + the reference pattern). Do not build a returns workflow in phase 1. _Superseded 2026-09-25: returns were answered (§10 Q2) and built in the office on 2026-09-26 - see `docs/05-reports-returns-design.md` §3._
 - **Discounts:** a simple bill-level discount field is enough for now; item-level discounts must remain addable later. No promotion/discount engine.
@@ -93,8 +93,8 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 
 - **Customer-specific pricing is real** (closes §10 question 1). The same product has a different price for
   different shops. Prices live in `sales.CustomerPrices`; a shop with no price row pays the product's
-  `SellingPrice`. *Who may set a price was changed on 2026-09-23 — see below; the admin-only rule no longer
-  holds.* A bill line still cannot be priced by hand on the phone: the salesperson changes the customer's
+  `SellingPrice`. *Who may set a price was changed on 2026-09-23 and narrowed on 2026-09-30 — see below; the
+  admin-only rule no longer holds.* A bill line still cannot be priced by hand on the phone: the salesperson changes the customer's
   rate, which is audited, rather than typing a one-off price onto a bill.
 - **A recorded price is never rewritten.** An offline sale is a transaction that already happened, so it is
   saved at the price the phone used; if the price changed while the phone was offline, the bill is *flagged*
@@ -131,7 +131,9 @@ Keep payments simple and practical — not a full enterprise accounting system. 
 - **Salesmen acquire new shops** (2026-09-23), so they must not depend on the office to create customers.
   A salesperson may: create a customer; say whether it has multiple branches; add branches to a new or
   existing customer; edit a customer's and a branch's details; set and change customer-product rates,
-  including the initial rates for a new shop; and bill existing customers and branches.
+  including the initial rates for a new shop; and bill existing customers and branches. _Narrowed 2026-09-30:
+  a salesperson sets only a new customer's initial rates; any later change needs admin approval - see
+  "Rate-change approval" below._
 - **A salesperson may not:** delete or cancel sales; deactivate or delete customers, branches or prices
   (removing a rate — sending the shop back to the standard price — is the office's call); set or change a
   customer's opening balance (a shop the salesperson found owes nothing yet); change product master data;
@@ -252,9 +254,61 @@ Sales count when billed, not when paid, because most sales are on credit; money 
 tile. Known limits, shown with the figure rather than hidden: a bulk raw-material purchase counts wholly in
 the month it was paid, and stock on hand has no cost value.
 
+### Confirmed requirements (2026-09-30, rate-change approval and packing conversion)
+
+Design: `docs/07-rate-approval-packing-design.md`. **Packing conversion built 2026-09-30; rate-change approval
+not yet** - the phone still lets a salesperson change an existing customer's rate until it is. §10
+Q11-Q14 were answered by the owner on 2026-09-30 and are folded in below.
+
+**Rate-change approval** (narrows the 2026-09-23 salesman rules)
+- A salesperson sets customer-product rates **only when onboarding a new customer** they create: the initial
+  rates are saved together with the customer, in the same save. After that, every rate of that customer is
+  protected from the salesperson - including a first agreed rate for a product added later.
+- To change a rate the salesperson submits a **rate-change request**; the rate changes only when an admin
+  approves it. Rejected, or still pending: the existing rate stays, and bills use it.
+- A request keeps the customer, product, the rate when requested, the requested rate, the requesting
+  salesperson and when, its status (**Pending, Approved, Rejected, Cancelled** - a salesperson may cancel
+  their own pending request), the admin who decided and when, and an optional reason/note. Never deleted.
+  A new request for the same customer and product **replaces** one still pending (the old one is kept,
+  marked Cancelled).
+- Approval changes the rate through the same path as any rate change, so it is recorded in
+  `sales.CustomerPriceChanges` (admin as changer, linked to the request) and applies from the next bill;
+  bills already made are never re-priced.
+- Requests travel through the offline sync batch like everything else from the phone, with ids made on it.
+- Admins change rates directly, with no request.
+- Enforced by the backend services, not the app: no endpoint, sync submission type or workflow lets a
+  salesperson change a live rate of an existing customer.
+
+**Packing conversion** (replaces the 2026-09-14 "recorded quantity is what was actually used")
+- Packing converts loose stock into packets: loose ↓ and packets ↑ in **one transaction**, both movements
+  referencing one packing entry - never one without the other. It is a conversion of existing stock, not
+  new production.
+- **Loose kg consumed is calculated**, not typed in - for now (owner, 2026-09-30); recording actual packing
+  loss may come back later:
+  - a **count-based** packet: packets × pieces per packet ÷ pieces per kg. E.g. 50 kg made and added as
+    loose; 100 packets × 20 = 2,000 pieces = 10 kg, so loose goes 50 → 40 kg and packets +100.
+  - a **weight-based** packet: packets × weight per packet. E.g. 100 × 250 g = 25 kg.
+- **Pieces per kg belongs to each loose pappadam variety** - an average, not a measurement, set on the loose
+  product and never hard-coded. The standard 4-inch pappadam is **200 pieces/kg** (confirmed); a larger one,
+  e.g. 4.5-inch, gets fewer and has its own figure, entered when that loose product is set up. A packet is
+  converted with the figure of the loose pappadam it is packed from. Pieces per packet (or weight per
+  packet) comes from the packed product, never assumed.
+- Packing is **refused** when the warehouse's loose stock does not cover it, saying by how much
+  ("needs 3,000 pieces, 2,000 available"). Packing may never take loose stock below zero - an exception to
+  the 2026-09-14 "warn, never block" rule, which still holds for sales and van loads.
+- Each packing entry snapshots what it used: pieces per packet, pieces per kg, loose before / consumed /
+  after, packets made. A later change to the configuration or product never alters it. The same packing
+  submitted twice packs once.
+- Existing stock and packing entries are **never recalculated**; they stay as recorded. Packets of packets
+  (box of 12) and repacking keep working, counted through the same conversion.
+- The packed products' current settings are **wrong** and are corrected when this is built: the 20-piece
+  packet says 0.250 kg of loose per packet and the 6-piece 0.080 kg, where the standard pappadam's
+  200 pieces/kg makes them 0.100 kg and 0.030 kg. The correction applies to packing from then on; the 5
+  packing entries already made keep the quantities they recorded.
+
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
 
-The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`; reports, shelf life and returns in `docs/05-reports-returns-design.md`; employees, wages and expenses in `docs/06-staff-expenses-design.md`.
+The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`; reports, shelf life and returns in `docs/05-reports-returns-design.md`; employees, wages and expenses in `docs/06-staff-expenses-design.md`; rate-change approval and packing conversion in `docs/07-rate-approval-packing-design.md`.
 
 ## 5. Technology stack
 
@@ -368,6 +422,15 @@ next unpaid week; each wage payment makes exactly one Employee wages expense, wh
 hand. 35 new tests (24 StaffWageTests, 11 ExpenseTests), and the 8 new endpoints added to the
 authorization checks (salesperson 403, admin 200, anonymous 401). **Not built:** the
 dashboard's monthly profit or loss, waiting on the definition in §10 Q10.
+
+**Packing conversion done (2026-09-30)**, rules in §4, design `docs/07-rate-approval-packing-design.md` part A.
+`Product.PiecesPerKg` (loose kg; 200 backfilled on the standard pappadam) and `Product.PiecesPerPack` (count-based
+packets; exactly one of it or `SourceQuantityPerPack` per packed product). `PackConversion` is the one place a pack's
+contents are worked out - packing, repacking (which now counts in pieces, so divisions stay exact) and the product
+screen. Packing calculates what the source loses, refuses a shortfall (source row locked, so two packings cannot
+both take the last stock), packs once per `ClientRequestId`, and snapshots the conversion on the entry. New
+`POST /api/inventory/packing/preview`. Migration `AddPackingConversion`. **To do by the office:** set the 20-piece
+and 6-piece packets to "20 pieces" / "6 pieces" on the product screen - they still carry the wrong kg figures.
 
 **Phase 1 is complete. Phase 3 is in progress** — a Flutter salesperson app that works offline and
 synchronizes with this API, designed in `docs/03-field-sales-design.md` (approved 2026-09-15).
@@ -575,7 +638,7 @@ Decisions made:
 - Target framework: .NET 10 (SDK 10.0.301 installed). Local SQL Server available: LocalDB (`MSSQLLocalDB`) and SQL Express. Do not touch the `BARTENDER` SQL instance on the owner's laptop.
 
 - 2026-09-14 — Phase-1 requirement answers recorded in §4 "Confirmed requirements" and the build order in §3.
-- 2026-09-14 — Inventory design approved: `docs/01-inventory-design.md`. Current stock is computed from the movement ledger (no cache column in phase 1). Stock shortfalls **warn, never block**, so stock may go negative. A packed product's source may be a loose product or another packed product (`SourceProductId`), with no cycles allowed.
+- 2026-09-14 — Inventory design approved: `docs/01-inventory-design.md`. Current stock is computed from the movement ledger (no cache column in phase 1). Stock shortfalls **warn, never block**, so stock may go negative. _Except packing, from 2026-09-30: refused when loose stock does not cover it (§4 "Packing conversion")._ A packed product's source may be a loose product or another packed product (`SourceProductId`), with no cycles allowed.
 
 - 2026-09-14 — Solution structure (3 projects + tests, feature folders, controllers) and cookie-based login with ASP.NET Core Identity.
 - 2026-09-14 — Development database: **SQL Express (`.\SQLEXPRESS`), database `GoldenPappadam`**. Moved off LocalDB, which kept failing to auto-start on this machine; SQL Express runs as a service. Tests use the same instance.
@@ -730,5 +793,9 @@ Never design around an assumption for these; ask, or keep the design open.
 | ~~8~~ | ~~Attendance found wrong after a week is paid?~~ | **Answered 2026-09-28:** carry the difference to the next week | weekly wages |
 | ~~9~~ | ~~Expense edits: keep earlier versions?~~ | **Answered 2026-09-28:** keep every earlier version | expenses |
 | 10 | Profit: the dashboard shows this month's profit or loss (**answered 2026-09-28**). Is the proposed definition in §4 right - billed sales, return credits and expenses by date? | **Partly answered** — owner / accountant to confirm the definition | dashboard |
+| ~~11~~ | ~~Packing loss: record what was actually used?~~ | **Answered 2026-09-30:** not for now - loose consumed is calculated from the loose variety's pieces per kg | packing |
+| ~~12~~ | ~~200 pieces/kg for every variety? Weight-based packets?~~ | **Answered 2026-09-30:** per loose variety - 200 for the standard 4-inch, its own figure for a larger one (4.5-inch); a weight-based packet consumes its weight (100 × 250 g = 25 kg) | packing |
+| ~~13~~ | ~~Products say 0.250 kg / 0.080 kg per packet - which is right?~~ | **Answered 2026-09-30:** 200 pieces/kg is correct for the standard pappadam these are packed from; the product settings are corrected when built, recorded packing entries stay as they are | packing, stock age, repacking |
+| ~~14~~ | ~~Rate approval: onboarding = same save? Newer request replaces a pending one?~~ | **Answered 2026-09-30:** yes to both | rate approval |
 
 Answered on 2026-09-14 and now part of the design: stock shortfall warns instead of blocking; one loose variety can be packed into many packet sizes; a pack can occasionally be made from another pack.

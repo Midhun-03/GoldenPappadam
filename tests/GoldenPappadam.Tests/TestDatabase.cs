@@ -81,7 +81,9 @@ public sealed class TestDatabase : IAsyncDisposable
             Name = "Loose pappadam",
             CategoryId = category.Id,
             Kind = ProductKind.Loose,
-            UnitOfMeasureId = kg.Id
+            UnitOfMeasureId = kg.Id,
+            // The standard pappadam's average (owner, 2026-09-30).
+            PiecesPerKg = 200m
         };
         Db.Add(loose);
         await Db.SaveChangesAsync();

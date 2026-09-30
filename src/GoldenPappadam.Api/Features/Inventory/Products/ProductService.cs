@@ -21,7 +21,8 @@ public class ProductService(AppDbContext db)
         await EnsureCategoryAndUnitExist(request.CategoryId, request.UnitOfMeasureId, ct);
 
         // A brand new product cannot be part of a cycle, because nothing can point at it yet.
-        var (sourceProductId, sourceQuantityPerPack) = await ResolveSourceAsync(Guid.Empty, request, ct);
+        var (sourceProductId, sourceQuantityPerPack, piecesPerPack) = await ResolveSourceAsync(Guid.Empty, request, ct);
+        var piecesPerKg = await ResolvePiecesPerKgAsync(null, request, ct);
         var tax = ResolveTax(request);
         await EnsureTreatmentWhileGstIsOnAsync(tax.Treatment, ct);
 
@@ -36,6 +37,8 @@ public class ProductService(AppDbContext db)
             LowStockThreshold = request.LowStockThreshold,
             SourceProductId = sourceProductId,
             SourceQuantityPerPack = sourceQuantityPerPack,
+            PiecesPerPack = piecesPerPack,
+            PiecesPerKg = piecesPerKg,
             HsnCode = tax.HsnCode,
             TaxTreatment = tax.Treatment,
             GstRate = tax.GstRate,
@@ -71,8 +74,9 @@ public class ProductService(AppDbContext db)
 
         // Everything is validated before the entity is touched, so a rejected request
         // never leaves a half-changed product behind in the change tracker.
-        var (sourceProductId, sourceQuantityPerPack) = await ResolveSourceAsync(product.Id, request, ct);
+        var (sourceProductId, sourceQuantityPerPack, piecesPerPack) = await ResolveSourceAsync(product.Id, request, ct);
         await EnsureNoCycleAsync(product.Id, sourceProductId, ct);
+        var piecesPerKg = await ResolvePiecesPerKgAsync(product.Id, request, ct);
         var tax = ResolveTax(request);
         await EnsureTreatmentWhileGstIsOnAsync(tax.Treatment, ct);
 
@@ -84,6 +88,10 @@ public class ProductService(AppDbContext db)
         product.LowStockThreshold = request.LowStockThreshold;
         product.SourceProductId = sourceProductId;
         product.SourceQuantityPerPack = sourceQuantityPerPack;
+        product.PiecesPerPack = piecesPerPack;
+
+        // A new figure applies to packing from now on; packing entries already made keep the one they used.
+        product.PiecesPerKg = piecesPerKg;
 
         // A new rate applies from the next bill. Invoices already made keep the tax they printed.
         product.HsnCode = tax.HsnCode;
@@ -153,21 +161,52 @@ public class ProductService(AppDbContext db)
         }
     }
 
+    /// <summary>
+    /// A loose variety counted in kg may carry its pieces per kg; nothing else may. Removing it from a
+    /// variety that count-based packets are packed from would leave them impossible to pack, so it is
+    /// refused.
+    /// </summary>
+    private async Task<decimal?> ResolvePiecesPerKgAsync(Guid? productId, SaveProductRequest request, CancellationToken ct)
+    {
+        if (request.PiecesPerKg is not null &&
+            (request.Kind != ProductKind.Loose || request.UnitOfMeasureId != KnownUnits.KilogramId))
+        {
+            throw new DomainException("Pieces per kg belongs to a loose product counted in kg.");
+        }
+
+        if (request.PiecesPerKg is null && productId is { } id &&
+            await db.Products.AnyAsync(p => p.SourceProductId == id && p.PiecesPerPack != null && p.IsActive, ct))
+        {
+            throw new DomainException(
+                "Packets counted in pieces are packed from this pappadam, so it needs its pieces per kg.");
+        }
+
+        return request.PiecesPerKg;
+    }
+
     /// <summary>Works out the source fields for a request without touching the entity.</summary>
-    private async Task<(Guid? SourceProductId, decimal? SourceQuantityPerPack)> ResolveSourceAsync(
+    private async Task<(Guid? SourceProductId, decimal? SourceQuantityPerPack, int? PiecesPerPack)> ResolveSourceAsync(
         Guid productId,
         SaveProductRequest request,
         CancellationToken ct)
     {
         if (request.Kind != ProductKind.Packed)
         {
-            return (null, null);
+            return (null, null, null);
         }
 
-        if (request.SourceProductId is null || request.SourceQuantityPerPack is null or <= 0)
+        if (request.SourceProductId is null)
+        {
+            throw new DomainException("A packed product needs the product it is packed from.");
+        }
+
+        var byPieces = request.PiecesPerPack is > 0;
+        var byQuantity = request.SourceQuantityPerPack is > 0;
+
+        if (byPieces == byQuantity)
         {
             throw new DomainException(
-                "A packed product needs a source product and a source quantity per pack greater than zero.");
+                "Say how much one pack holds: a number of pieces, or a quantity of what it is packed from - one, not both.");
         }
 
         if (request.SourceProductId == productId)
@@ -185,7 +224,16 @@ public class ProductService(AppDbContext db)
             throw new DomainException($"The source product '{source.Name}' is not active.");
         }
 
-        return (source.Id, request.SourceQuantityPerPack);
+        if (byPieces && (source.Kind != ProductKind.Loose || source.UnitOfMeasureId != KnownUnits.KilogramId))
+        {
+            throw new DomainException(
+                "A packet is counted in pieces only when it is packed from loose pappadam counted in kg. " +
+                "For a box of packets, give the number of packets it holds.");
+        }
+
+        return byPieces
+            ? (source.Id, null, request.PiecesPerPack)
+            : (source.Id, request.SourceQuantityPerPack, null);
     }
 
     /// <summary>Walks up the packing chain so a product can never end up packed from itself.</summary>

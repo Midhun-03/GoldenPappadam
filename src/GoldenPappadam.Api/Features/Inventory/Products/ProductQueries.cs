@@ -27,5 +27,12 @@ public static class ProductQueries
             p.HsnCode,
             p.TaxTreatment,
             p.GstRate,
-            p.ShelfLifeDays));
+            p.ShelfLifeDays,
+            p.PiecesPerPack,
+            p.PiecesPerKg,
+            p.PiecesPerPack != null
+                ? p.SourceProduct!.PiecesPerKg != null && p.SourceProduct.PiecesPerKg > 0
+                    ? (decimal)p.PiecesPerPack / p.SourceProduct.PiecesPerKg
+                    : null
+                : p.SourceQuantityPerPack));
 }

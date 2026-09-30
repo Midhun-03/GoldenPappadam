@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ApiError } from '@/lib/api'
+import { formatQuantity } from '@/lib/format'
 
 type Props = {
   open: boolean
@@ -36,6 +37,11 @@ const empty = {
   unitOfMeasureId: '',
   sourceProductId: '',
   sourceQuantityPerPack: '',
+  /** How a packet from loose kg says what it holds: a number of pieces, or a weight. */
+  contents: 'pieces' as 'pieces' | 'quantity',
+  piecesPerPack: '',
+  // The standard pappadam's average (owner, 2026-09-30); a larger variety is changed to its own.
+  piecesPerKg: '200',
   sellingPrice: '',
   lowStockThreshold: '',
   hsnCode: '',
@@ -74,6 +80,9 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             unitOfMeasureId: product.unitOfMeasureId,
             sourceProductId: product.sourceProductId ?? '',
             sourceQuantityPerPack: product.sourceQuantityPerPack?.toString() ?? '',
+            contents: product.piecesPerPack !== null ? 'pieces' : 'quantity',
+            piecesPerPack: product.piecesPerPack?.toString() ?? '',
+            piecesPerKg: product.piecesPerKg?.toString() ?? '',
             sellingPrice: product.sellingPrice?.toString() ?? '',
             lowStockThreshold: product.lowStockThreshold?.toString() ?? '',
             hsnCode: product.hsnCode ?? '',
@@ -102,6 +111,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
     setError(null)
 
     const isPacked = form.kind === 'Packed'
+    const byPieces = isPacked && sourceIsLooseKg && form.contents === 'pieces'
 
     save.mutate({
       productCode: form.productCode,
@@ -110,7 +120,9 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
       kind: form.kind,
       unitOfMeasureId: form.unitOfMeasureId,
       sourceProductId: isPacked ? form.sourceProductId || null : null,
-      sourceQuantityPerPack: isPacked ? toNumber(form.sourceQuantityPerPack) : null,
+      sourceQuantityPerPack: isPacked && !byPieces ? toNumber(form.sourceQuantityPerPack) : null,
+      piecesPerPack: byPieces ? toNumber(form.piecesPerPack) : null,
+      piecesPerKg: form.kind === 'Loose' && unitIsKg ? toNumber(form.piecesPerKg) : null,
       sellingPrice: toNumber(form.sellingPrice),
       lowStockThreshold: toNumber(form.lowStockThreshold),
       hsnCode: form.hsnCode.trim() || null,
@@ -122,9 +134,20 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
 
   // A pack can come from loose stock or from another pack, but never from itself.
   const sourceOptions = products.filter((candidate) => candidate.id !== product?.id && candidate.isActive)
-  const sourceUnit = units.find(
-    (unit) => unit.id === sourceOptions.find((candidate) => candidate.id === form.sourceProductId)?.unitOfMeasureId,
-  )
+  const source = sourceOptions.find((candidate) => candidate.id === form.sourceProductId)
+  const sourceUnit = units.find((unit) => unit.id === source?.unitOfMeasureId)
+  const unitIsKg = units.find((unit) => unit.id === form.unitOfMeasureId)?.code === 'KG'
+
+  // Only a packet of loose pappadam counted in kg can say what it holds in pieces.
+  const sourceIsLooseKg = source?.kind === 'Loose' && sourceUnit?.code === 'KG'
+  const piecesPerPack = toNumber(form.piecesPerPack)
+  const conversion =
+    sourceIsLooseKg && form.contents === 'pieces' && piecesPerPack && source?.piecesPerKg
+      ? `${piecesPerPack} pieces = ${formatQuantity(piecesPerPack / source.piecesPerKg)} kg of ${source.name} ` +
+        `at ${formatQuantity(source.piecesPerKg)} pieces per kg`
+      : sourceIsLooseKg && form.contents === 'pieces' && source?.piecesPerKg === null
+        ? `${source.name} has no pieces per kg yet. Set it on that product first.`
+        : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -238,19 +261,78 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
                 </Select>
               </div>
 
-              <div className="grid gap-1.5">
-                <Label htmlFor="sourceQuantityPerPack">
-                  Used per pack{sourceUnit ? ` (${sourceUnit.code})` : ''}
-                </Label>
-                <Input
-                  id="sourceQuantityPerPack"
-                  type="number"
-                  step="0.001"
-                  min="0.001"
-                  value={form.sourceQuantityPerPack}
-                  onChange={(event) => setForm({ ...form, sourceQuantityPerPack: event.target.value })}
-                />
-              </div>
+              {sourceIsLooseKg ? (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="product-contents">Packet holds</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="product-contents"
+                      type="number"
+                      step={form.contents === 'pieces' ? '1' : '0.001'}
+                      min={form.contents === 'pieces' ? '1' : '0.001'}
+                      className="min-w-0"
+                      value={form.contents === 'pieces' ? form.piecesPerPack : form.sourceQuantityPerPack}
+                      onChange={(event) =>
+                        setForm(
+                          form.contents === 'pieces'
+                            ? { ...form, piecesPerPack: event.target.value }
+                            : { ...form, sourceQuantityPerPack: event.target.value },
+                        )
+                      }
+                    />
+                    <Select
+                      value={form.contents}
+                      onValueChange={(value) => setForm({ ...form, contents: value as 'pieces' | 'quantity' })}
+                    >
+                      <SelectTrigger aria-label="Counted in" className="w-28 shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pieces">pieces</SelectItem>
+                        <SelectItem value="quantity">kg</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="sourceQuantityPerPack">
+                    {source?.kind === 'Packed'
+                      ? `${source.unitCode === 'PKT' ? 'Packets' : source.unitCode} per pack`
+                      : `Used per pack${sourceUnit ? ` (${sourceUnit.code})` : ''}`}
+                  </Label>
+                  <Input
+                    id="sourceQuantityPerPack"
+                    type="number"
+                    step="0.001"
+                    min="0.001"
+                    value={form.sourceQuantityPerPack}
+                    onChange={(event) => setForm({ ...form, sourceQuantityPerPack: event.target.value })}
+                  />
+                </div>
+              )}
+
+              {conversion && <p className="text-xs text-muted-foreground sm:col-span-2">{conversion}</p>}
+            </div>
+          )}
+
+          {form.kind === 'Loose' && unitIsKg && (
+            <div className="grid gap-1.5 rounded-lg border bg-muted/40 p-3">
+              <Label htmlFor="piecesPerKg">Pieces per kg</Label>
+              <Input
+                id="piecesPerKg"
+                type="number"
+                step="0.001"
+                min="0.001"
+                className="sm:w-40"
+                placeholder="Not counted in pieces"
+                value={form.piecesPerKg}
+                onChange={(event) => setForm({ ...form, piecesPerKg: event.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                The average for this pappadam - 200 for the standard 4-inch, fewer for a larger one. Packets counted
+                in pieces use it to work out the loose they take.
+              </p>
             </div>
           )}
 

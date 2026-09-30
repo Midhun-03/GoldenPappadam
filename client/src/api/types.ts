@@ -76,6 +76,12 @@ export type Product = {
   gstRate: number | null
   /** Days the product stays good from packing; null means it does not expire. */
   shelfLifeDays: number | null
+  /** A count-based packet from loose kg: the pieces it holds. Null otherwise. */
+  piecesPerPack: number | null
+  /** A loose variety counted in kg: its average pieces per kg (200 for the standard pappadam). */
+  piecesPerKg: number | null
+  /** What one pack uses of its source, worked out by the server: 0.1 kg for 20 pieces at 200/kg. */
+  sourcePerPack: number | null
 }
 
 export type SaveProduct = {
@@ -92,6 +98,8 @@ export type SaveProduct = {
   taxTreatment: TaxTreatment | null
   gstRate: number | null
   shelfLifeDays: number | null
+  piecesPerPack: number | null
+  piecesPerKg: number | null
 }
 
 export type StockOnHand = {
@@ -155,6 +163,29 @@ export type PackingResponse = {
   sourceQuantityUsed: number
   sourceQuantityOnHand: number
   warning: string | null
+  plan: PackingPlan
+}
+
+/**
+ * A packing worked out by the server - the same code that saves it. The pieces fields are set for a
+ * count-based packet only. `shortfall` is why it cannot be packed, or null when it can.
+ */
+export type PackingPlan = {
+  packedProductId: string
+  packedProductName: string
+  packsProduced: number
+  packedUnitCode: string
+  sourceProductId: string
+  sourceProductName: string
+  sourceUnitCode: string
+  piecesPerPack: number | null
+  piecesPerKg: number | null
+  sourcePerPack: number
+  sourceUsed: number
+  piecesUsed: number | null
+  sourceOnHandBefore: number
+  sourceOnHandAfter: number
+  shortfall: string | null
 }
 
 export type InvoiceStatus = 'Issued' | 'Cancelled'
@@ -466,6 +497,13 @@ export type PackingEntry = {
   sourceProductName: string
   sourceQuantityUsed: number
   notes: string | null
+  sourceUnitCode: string
+  /** The conversion the entry used. Null on entries made before 30 Sep 2026, which never recorded it. */
+  piecesPerPack: number | null
+  piecesPerKg: number | null
+  sourcePerPack: number | null
+  sourceOnHandBefore: number | null
+  sourceOnHandAfter: number | null
 }
 
 /**

@@ -111,9 +111,15 @@ Records one packing operation: source stock consumed, packs produced.
 | PackedProductId | FK to Products | must be `Kind = Packed` |
 | SourceProductId | FK to Products | must equal `PackedProduct.SourceProductId` (stored on the entry so history survives a later change to the product) |
 | PacksProduced | decimal(18,3), > 0 | |
-| SourceQuantityUsed | decimal(18,3), > 0 | **actual** source stock consumed, not the theoretical figure |
+| SourceQuantityUsed | decimal(18,3), > 0 | source stock consumed - **calculated** since 2026-09-30 (see below); typed by the office before that |
 | OccurredAt | datetime2 (UTC) | |
 | Notes | nvarchar(300), null | |
+
+_Changed 2026-09-30 (`docs/07-rate-approval-packing-design.md` part A): the quantity used is no longer typed. It is
+worked out from the product - packets × pieces per packet ÷ the loose variety's `PiecesPerKg` for a count-based
+packet, packets × `SourceQuantityPerPack` for anything else - and packing is **refused** when the warehouse does not
+hold enough. Each entry also keeps the conversion it used and the stock before. The paragraph below is the original
+design._
 
 The screen suggests `PacksProduced × SourceQuantityPerPack` and the user can overwrite it with what was actually
 used, so packing loss is reflected in real stock instead of being hidden. Saving one entry writes, in a single
@@ -140,8 +146,8 @@ one entry writes −12.000 on the packet product and +1.000 on the box.
 - If it ever becomes slow, a `StockBalances` cache table updated in the same transaction can be added later. That is
   a well-understood optimisation and does not change the ledger design.
 
-**Stock may go negative, and that is allowed.** When a sale or packing entry exceeds available stock, the app shows
-a warning and still saves, because deliveries sometimes run ahead of data entry (owner's decision, 2026-09-14).
+**Stock may go negative, and that is allowed** - except through packing, which is refused since 2026-09-30. When a
+sale exceeds available stock, the app shows a warning and still saves, because deliveries sometimes run ahead of data entry (owner's decision, 2026-09-14).
 Negative balances are highlighted on the stock screen so they get corrected with an `Adjustment` movement rather
 than quietly ignored.
 
@@ -151,7 +157,8 @@ than quietly ignored.
 2. Products: list with current stock, filter by category and kind, add, edit, deactivate.
 3. Stock on hand: current stock per product, low-stock products highlighted.
 4. Add stock: opening stock and production entry.
-5. Packing: choose the packed product, enter packs produced, accept or correct the suggested source quantity.
+5. Packing: choose the packed product and enter packs produced; the loose used, and what is left, are worked out
+   and shown before saving (since 2026-09-30).
 6. Adjustment and damage entry, with a mandatory note.
 7. Stock history per product: every movement with its type, reference and running balance.
 

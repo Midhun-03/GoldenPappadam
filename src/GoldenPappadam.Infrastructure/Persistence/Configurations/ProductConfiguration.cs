@@ -10,11 +10,20 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
     {
         builder.ToTable("Products", Schemas.Inventory, table =>
         {
-            // A packed product must say what it is packed from; a loose product must not.
+            // A packed product says what it is packed from and how much one pack holds - a quantity of
+            // the source, or a number of pieces - never both. A loose product says neither.
             table.HasCheckConstraint(
                 "CK_Products_Source",
-                "([Kind] = 'Packed' AND [SourceProductId] IS NOT NULL AND [SourceQuantityPerPack] > 0) " +
-                "OR ([Kind] = 'Loose' AND [SourceProductId] IS NULL AND [SourceQuantityPerPack] IS NULL)");
+                "([Kind] = 'Packed' AND [SourceProductId] IS NOT NULL AND " +
+                "(([SourceQuantityPerPack] > 0 AND [PiecesPerPack] IS NULL) OR " +
+                "([SourceQuantityPerPack] IS NULL AND [PiecesPerPack] > 0))) " +
+                "OR ([Kind] = 'Loose' AND [SourceProductId] IS NULL AND [SourceQuantityPerPack] IS NULL " +
+                "AND [PiecesPerPack] IS NULL)");
+
+            // Pieces per kg describes a loose variety.
+            table.HasCheckConstraint(
+                "CK_Products_PiecesPerKg",
+                "[PiecesPerKg] IS NULL OR ([Kind] = 'Loose' AND [PiecesPerKg] > 0)");
 
             // The shortest possible cycle. Longer chains are checked in application code.
             table.HasCheckConstraint(
@@ -34,6 +43,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.Name).HasMaxLength(150).IsRequired();
         builder.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.SourceQuantityPerPack).HasPrecision(18, 3);
+        builder.Property(x => x.PiecesPerKg).HasPrecision(18, 3);
         builder.Property(x => x.SellingPrice).HasPrecision(18, 2);
         builder.Property(x => x.LowStockThreshold).HasPrecision(18, 3);
         builder.Property(x => x.HsnCode).HasMaxLength(8);

@@ -2,6 +2,7 @@ import { api } from '@/lib/api'
 import type {
   Category,
   PackingEntry,
+  PackingPlan,
   PackingResponse,
   Product,
   RepackEntry,
@@ -94,12 +95,11 @@ export const stockApi = {
 
 export const packingApi = {
   history: () => api.get<PackingEntry[]>(`${base}/packing`),
-  create: (request: {
-    packedProductId: string
-    packsProduced: number
-    sourceQuantityUsed?: number
-    notes?: string
-  }) => api.post<PackingResponse>(`${base}/packing`, request),
+  /** What the loose loses is worked out by the server, never sent. */
+  create: (request: { packedProductId: string; packsProduced: number; notes?: string; clientRequestId: string }) =>
+    api.post<PackingResponse>(`${base}/packing`, request),
+  preview: (request: { packedProductId: string; packsProduced: number }) =>
+    api.post<PackingPlan>(`${base}/packing/preview`, request),
 }
 
 export type RepackRequest = { fromProductId: string; fromQuantity: number; toProductId: string; notes?: string }

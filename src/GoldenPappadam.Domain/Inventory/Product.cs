@@ -30,11 +30,25 @@ public class Product : AuditableEntity
     public Product? SourceProduct { get; set; }
 
     /// <summary>
-    /// Packed products only: how much source stock one pack consumes, expressed in the
-    /// source product's unit - 0.250 when the source is loose kg, 20 when it is loose pieces,
-    /// 12 when the source is packets. Null for loose products.
+    /// Packed products only: how much source stock one pack consumes, expressed in the source
+    /// product's unit - 0.250 for a 250 g packet of loose kg, 12 for a box of packets, 20 when the
+    /// loose is counted in pieces. Null for a count-based packet, which uses <see cref="PiecesPerPack"/>
+    /// instead; exactly one of the two is set on a packed product.
     /// </summary>
     public decimal? SourceQuantityPerPack { get; set; }
+
+    /// <summary>
+    /// A count-based packet packed from loose pappadam counted in kg: how many pieces it holds (20, 6).
+    /// The loose it uses is worked out with the source's <see cref="PiecesPerKg"/>.
+    /// </summary>
+    public int? PiecesPerPack { get; set; }
+
+    /// <summary>
+    /// A loose variety counted in kg: its average pieces per kg - 200 for the standard 4-inch
+    /// pappadam, fewer for a larger one. An average, not a measurement; a packet is converted with the
+    /// figure of the loose it is packed from.
+    /// </summary>
+    public decimal? PiecesPerKg { get; set; }
 
     /// <summary>Default selling price. Null means the product is not normally sold as it is.</summary>
     public decimal? SellingPrice { get; set; }

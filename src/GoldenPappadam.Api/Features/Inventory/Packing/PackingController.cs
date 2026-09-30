@@ -11,6 +11,11 @@ public class PackingController(PackingService packing) : ControllerBase
     public Task<PackingResponse> Create(CreatePackingRequest request, CancellationToken ct) =>
         packing.CreateAsync(request, ct);
 
+    /// <summary>What a packing would use and leave, worked out by the same code that saves it.</summary>
+    [HttpPost("preview")]
+    public Task<PackingPlanDto> Preview(PackingPreviewRequest request, CancellationToken ct) =>
+        packing.PreviewAsync(request, ct);
+
     [HttpGet]
     public Task<IReadOnlyList<PackingEntryDto>> GetHistory(
         DateTime? from = null,

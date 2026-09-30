@@ -106,7 +106,7 @@ public class StockLocationTests : IAsyncLifetime
         await _database.AddStockAsync(_loose.Id, 50m, Warehouse);
         await _database.AddStockAsync(_packet.Id, 30m, Van);
 
-        await _packing.CreateAsync(new CreatePackingRequest(_packet.Id, 40m, null, null, null), default);
+        await _packing.CreateAsync(new CreatePackingRequest(_packet.Id, 40m, null, null), default);
 
         Assert.Equal(40m, await _stock.GetQuantityOnHandAsync(_packet.Id, Warehouse, default));
         Assert.Equal(30m, await _stock.GetQuantityOnHandAsync(_packet.Id, Van, default));
