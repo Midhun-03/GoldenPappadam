@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IndianRupee, Loader2, Plus, X } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
+import { describeRate, rateRequestsApi } from '@/api/rateRequests'
 import { customerPriceChangesApi, customerPricesApi } from '@/api/sales'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { TableSkeleton } from '@/components/TableSkeleton'
@@ -23,10 +24,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ApiError } from '@/lib/api'
 import { formatMoney } from '@/lib/format'
 import { PriceChangesTable } from './PriceChangesTable'
+import { RateRequestActions } from './RateRequestActions'
 
 /**
- * What this shop pays, at every branch. The office and the sales team both set these, so the card
- * shows the full rate history with who changed what - the office's way to review and correct.
+ * What this shop pays, at every branch. The office sets and changes rates here directly; a salesman
+ * sets them only when adding a new shop, and asks for any later change - those requests wait at the
+ * top of this card. The full history below says who changed what.
  */
 export function CustomerPricesCard({ customerId }: { customerId: string }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -45,6 +48,12 @@ export function CustomerPricesCard({ customerId }: { customerId: string }) {
   })
 
   const agreed = (prices.data ?? []).filter((price) => price.agreedPrice !== null)
+
+  // A salesman's change to this shop's rate waits for the office; decide it here or on Rate requests.
+  const waiting = useQuery({
+    queryKey: ['rate-requests', { customerId, status: 'Pending' }],
+    queryFn: () => rateRequestsApi.list({ customerId, status: 'Pending' }),
+  })
 
   const remove = useMutation({
     mutationFn: (productId: string) => customerPricesApi.remove(customerId, productId),
@@ -73,6 +82,21 @@ export function CustomerPricesCard({ customerId }: { customerId: string }) {
       </CardHeader>
 
       <CardContent className="px-0">
+        {(waiting.data?.length ?? 0) > 0 && (
+          <div className="mx-4 mb-4 grid gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3">
+            <p className="text-sm font-medium">Waiting for you</p>
+            {waiting.data!.map((request) => (
+              <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="min-w-0">
+                  {request.productName}: {describeRate(request.currentPrice, request.standardPrice)} →{' '}
+                  <span className="font-medium tabular-nums">{formatMoney(request.requestedPrice)}</span>
+                  <span className="text-xs text-muted-foreground"> · asked by {request.requestedBy ?? 'the sales team'}</span>
+                </span>
+                <RateRequestActions request={request} />
+              </div>
+            ))}
+          </div>
+        )}
         {prices.isPending ? (
           <TableSkeleton columns={3} />
         ) : prices.isError ? (

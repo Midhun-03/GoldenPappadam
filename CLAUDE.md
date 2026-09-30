@@ -256,9 +256,8 @@ the month it was paid, and stock on hand has no cost value.
 
 ### Confirmed requirements (2026-09-30, rate-change approval and packing conversion)
 
-Design: `docs/07-rate-approval-packing-design.md`. **Packing conversion built 2026-09-30; rate-change approval
-not yet** - the phone still lets a salesperson change an existing customer's rate until it is. §10
-Q11-Q14 were answered by the owner on 2026-09-30 and are folded in below.
+Design: `docs/07-rate-approval-packing-design.md`. **Both built 2026-09-30** (packing conversion, then
+rate-change approval).
 
 **Rate-change approval** (narrows the 2026-09-23 salesman rules)
 - A salesperson sets customer-product rates **only when onboarding a new customer** they create: the initial
@@ -423,6 +422,19 @@ hand. 35 new tests (24 StaffWageTests, 11 ExpenseTests), and the 8 new endpoints
 authorization checks (salesperson 403, admin 200, anonymous 401). **Not built:** the
 dashboard's monthly profit or loss, waiting on the definition in §10 Q10.
 
+**Rate-change approval done (2026-09-30)**, rules in §4, design `docs/07-rate-approval-packing-design.md` part B.
+`sales.CustomerRateRequests` (Pending / Approved / Rejected / Cancelled; id made on the phone; one Pending per
+customer and product, a newer one replacing it; only the decision may change once made) and
+`CustomerPriceChanges.RateRequestId`. Enforced in `CustomerPriceService`: its office path refuses a salesperson
+whatever the door (`ICurrentUser.IsInRole`), `SetInitialRatesAsync` is open only for a customer with no rate
+history (the new shop, in the same transaction), and approval goes through `ApplyApprovedRequestAsync`. Sync:
+`Customer` carries `initialRates` (refused on an edit), new `RateRequest` and `RateRequestCancel`, and an old
+app's `CustomerPrice` becomes a request; the snapshot carries the salesperson's own requests. Office: Sales >
+**Rate requests** (approve / reject with a note), pending requests on the customer's price card, "asked by" in
+the rate history. Phone: drift v5 `RateRequests`; a new shop's rates travel inside it; the shop page shows each
+request's state with Withdraw; "Request a rate change" on the shared product cards. Migration
+`AddRateChangeRequests`.
+
 **Packing conversion done (2026-09-30)**, rules in §4, design `docs/07-rate-approval-packing-design.md` part A.
 `Product.PiecesPerKg` (loose kg; 200 backfilled on the standard pappadam) and `Product.PiecesPerPack` (count-based
 packets; exactly one of it or `SourceQuantityPerPack` per packed product). `PackConversion` is the one place a pack's
@@ -540,13 +552,15 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   `MobileSyncService`. Every rate change, from anyone, goes to the immutable `sales.CustomerPriceChanges`
   (existing agreed rates backfilled as its first entries). Who created a customer comes from the existing
   `CreatedBy` audit field - no new column. The office sees a "Sales team" badge and filter on Customers, a
-  rate history on each customer's price card, and "Rates changed by the sales team" on Today on the road.
+  rate history on each customer's price card, and "Rates set by the sales team" on Today on the road.
+  _Since 2026-09-30 a salesperson sets only a new shop's first rates; later changes are requests - see
+  "Rate-change approval done" above._
   Admin endpoints are unchanged and still admin-only. **Phone (2026-09-26):** a **New shop** button on the Shops tab
   (and "Add as a new shop" under a search). The form checks the name as it is typed against the shops the
   phone knows: an exact match cannot be saved and is offered to open instead, and a name containing a
   known shop ("Danya Supermarket Coimbatore") is pointed at that shop to add a branch. The form takes
   contact details, "Has several branches" and the first rates; the shop page gains Edit, Add / edit
-  branch, and a Rates screen. **Every product entry on the phone - bill, return, rates - uses the shared
+  branch, and a rate-change request screen (from 2026-09-30). **Every product entry on the phone - bill, return, rates - uses the shared
   `ProductLineCard`** (product dropdown, the line's field, delete, Add item); new screens must too. `ShopsRepository` writes the outbox and the cache together so a
   new shop is billable offline at once; after each snapshot the pending shop, branch and rate changes are
   re-applied so a sync cannot hide them. The outbox now breaks same-second ties by write order (`rowid`),

@@ -42,14 +42,15 @@ void main() {
 
   Map<String, dynamic> body(OutboxEntry entry) => jsonDecode(entry.payload) as Map<String, dynamic>;
 
-  test('a new shop and its rates go out shop first, and it can be billed at once', () async {
+  test('a new shop carries its first rates inside it, and can be billed at once', () async {
     final id = await shops.createShop(
       const ShopDetails(name: '  Anand Bakery ', phone: '9847012345', address: ' '),
       rates: const [RateEntry(productId: 'p1', productName: '20 piece packet', unitPrice: 38)],
     );
 
+    // One submission: the office creates the shop and its rates together, or neither.
     final entries = await sent();
-    expect(entries.map((e) => e.type), ['Customer', 'CustomerPrice']);
+    expect(entries.map((e) => e.type), ['Customer']);
 
     expect(body(entries[0])['customer'], {
       'id': id,
@@ -58,8 +59,10 @@ void main() {
       'phone': '9847012345',
       'address': null,
       'hasMultipleBranches': false,
+      'initialRates': [
+        {'productId': 'p1', 'unitPrice': 38.0}
+      ],
     });
-    expect(body(entries[1])['customerPrice'], {'customerId': id, 'productId': 'p1', 'unitPrice': 38.0});
 
     // Already on the phone: a normal-bill shop that owes nothing, at the rate just agreed.
     final cached = await db.findCustomer(id);
@@ -123,15 +126,57 @@ void main() {
     expect(branches.single.phone, '0422 000');
   });
 
-  test('a rate changed on the road applies to the next bill on the phone', () async {
+  test('changing a rate is a request: the price the phone bills at stays until the office agrees', () async {
     final danya = (await db.findCustomer('danya'))!;
-    final product = (await db.allProducts()).single;
 
-    await shops.setRate(danya, product, 37);
+    await shops.requestRates(danya, const [RateEntry(productId: 'p1', productName: '20 piece packet', unitPrice: 37)],
+        reason: 'Festival offer');
 
-    expect((await db.pricesFor('danya'))['p1'], 37);
-    expect(body((await sent()).single)['customerPrice'], {'customerId': 'danya', 'productId': 'p1', 'unitPrice': 37.0});
-    expect(() => shops.setRate(danya, product, 0), throwsArgumentError);
+    // Still the standard 45: nothing is billed at 37 until it is approved.
+    expect((await db.pricesFor('danya'))['p1'], 45);
+
+    final entry = (await sent()).single;
+    expect(entry.type, 'RateRequest');
+    final request = body(entry)['rateRequest'] as Map<String, dynamic>;
+    expect(request.keys, containsAll(['id', 'customerId', 'productId', 'requestedPrice', 'reason']));
+    expect((request['customerId'], request['productId'], request['requestedPrice'], request['reason']),
+        ('danya', 'p1', 37.0, 'Festival offer'));
+
+    final cached = (await db.rateRequestsFor('danya')).single;
+    expect((cached.id, cached.status, cached.requestedPrice), (request['id'], 'Pending', 37.0));
+  });
+
+  test('a newer request replaces the waiting one, and a waiting one can be withdrawn', () async {
+    final danya = (await db.findCustomer('danya'))!;
+    const first = RateEntry(productId: 'p1', productName: '20 piece packet', unitPrice: 37);
+    const second = RateEntry(productId: 'p1', productName: '20 piece packet', unitPrice: 38);
+
+    await shops.requestRates(danya, const [first]);
+    await shops.requestRates(danya, const [second]);
+
+    var requests = await db.rateRequestsFor('danya');
+    expect(requests.where((r) => r.status == 'Pending').single.requestedPrice, 38);
+    expect(requests.where((r) => r.status == 'Cancelled').single.requestedPrice, 37);
+
+    await shops.cancelRequest(danya, requests.firstWhere((r) => r.status == 'Pending'));
+
+    requests = await db.rateRequestsFor('danya');
+    expect(requests.every((r) => r.status == 'Cancelled'), isTrue);
+    expect((await sent()).last.type, 'RateRequestCancel');
+    expect(() => shops.requestRates(danya, const []), throwsArgumentError);
+  });
+
+  test('a request still on its way survives a snapshot that does not know it yet', () async {
+    final danya = (await db.findCustomer('danya'))!;
+    await shops.requestRates(danya, const [RateEntry(productId: 'p1', productName: '20 piece packet', unitPrice: 37)]);
+
+    await db.transaction(() async {
+      await snapshot(customers: [shopRow(id: 'danya', name: 'Danya Supermarket', balance: 500)]);
+      await db.reapplyPendingShopChanges();
+    });
+
+    expect((await db.rateRequestsFor('danya')).single.status, 'Pending');
+    expect((await db.pricesFor('danya'))['p1'], 45);
   });
 
   test('a sync that brings the office list back keeps what this phone has not sent yet', () async {

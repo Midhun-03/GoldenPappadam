@@ -498,7 +498,10 @@ public class MobileContractTests : IAsyncLifetime
                     "contactPerson": "Manager",
                     "phone": "9847000000",
                     "address": "Kundara",
-                    "hasMultipleBranches": true
+                    "hasMultipleBranches": true,
+                    "initialRates": [
+                      { "productId": "{{_productId}}", "unitPrice": 37.0 }
+                    ]
                   }
                 },
                 {
@@ -513,16 +516,6 @@ public class MobileContractTests : IAsyncLifetime
                     "address": null,
                     "phone": null,
                     "contactPerson": null
-                  }
-                },
-                {
-                  "clientRequestId": "{{Guid.NewGuid()}}",
-                  "type": "CustomerPrice",
-                  "recordedAt": "2026-09-23T05:00:02.000Z",
-                  "customerPrice": {
-                    "customerId": "{{shopId}}",
-                    "productId": "{{_productId}}",
-                    "unitPrice": 37.0
                   }
                 },
                 {
@@ -549,13 +542,13 @@ public class MobileContractTests : IAsyncLifetime
             Assert.Equal("Accepted", result.GetProperty("outcome").GetString());
         }
 
-        // The rate the salesperson set is the rate the bill used, so nothing is flagged.
-        Assert.False(results[3].GetProperty("priceMismatch").GetBoolean());
+        // The rate agreed with the new shop is the rate the bill used, so nothing is flagged.
+        Assert.False(results[2].GetProperty("priceMismatch").GetBoolean());
 
         using (var scope = _api.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var invoice = await db.Invoices.SingleAsync(i => i.Id == results[3].GetProperty("recordId").GetGuid());
+            var invoice = await db.Invoices.SingleAsync(i => i.Id == results[2].GetProperty("recordId").GetGuid());
 
             Assert.Equal(shopId, invoice.CustomerId);
             Assert.Equal(branchId, invoice.BranchId);
@@ -578,6 +571,174 @@ public class MobileContractTests : IAsyncLifetime
         Assert.Equal(37m, change.GetProperty("newPrice").GetDecimal());
         Assert.Equal("van@test.local", change.GetProperty("changedBy").GetString());
         Assert.True(change.GetProperty("changedBySalesperson").GetBoolean());
+    }
+
+    // ---------- rate-change approval (CLAUDE.md §4, 2026-09-30) ----------
+
+    private async Task<decimal?> AgreedRateAsync(Guid customerId)
+    {
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.CustomerPrices
+            .Where(cp => cp.CustomerId == customerId && cp.ProductId == _productId && cp.IsActive)
+            .Select(cp => (decimal?)cp.UnitPrice)
+            .FirstOrDefaultAsync();
+    }
+
+    private string RateRequestItem(Guid id, decimal price, string? reason = null) => $$"""
+        {
+          "clientRequestId": "{{Guid.NewGuid()}}",
+          "type": "RateRequest",
+          "recordedAt": "2026-09-30T05:00:00.000Z",
+          "rateRequest": {
+            "id": "{{id}}",
+            "customerId": "{{_customerId}}",
+            "productId": "{{_productId}}",
+            "requestedPrice": {{price}},
+            "reason": {{(reason is null ? "null" : $"\"{reason}\"")}}
+          }
+        }
+        """;
+
+    private Task<JsonElement> SubmitItemsAsync(params string[] items) =>
+        SubmitAsync($$"""{ "deviceId": "{{_deviceId}}", "items": [ {{string.Join(",", items)}} ] }""");
+
+    [Fact]
+    public async Task A_rate_change_from_the_phone_waits_for_the_office_and_applies_only_once_approved()
+    {
+        var requestId = Guid.NewGuid();
+
+        var sent = await SubmitItemsAsync(RateRequestItem(requestId, 38.0m, "Shop agreed after the festival"));
+        Assert.Equal("Accepted", sent.GetProperty("results")[0].GetProperty("outcome").GetString());
+
+        // Still Kumar Stores' old rate: nothing changes until the office agrees.
+        Assert.Equal(35m, await AgreedRateAsync(_customerId));
+
+        var office = await OfficeAsync();
+        var pending = await office.GetFromJsonAsync<JsonElement>("/api/sales/rate-requests?status=Pending");
+        var request = Assert.Single(pending.EnumerateArray());
+        Assert.Equal((35m, 38m), (request.GetProperty("priceWhenRequested").GetDecimal(), request.GetProperty("requestedPrice").GetDecimal()));
+        Assert.Equal("van@test.local", request.GetProperty("requestedBy").GetString());
+
+        var approved = await office.PostAsJsonAsync($"/api/sales/rate-requests/{requestId}/approve", new { note = "OK from 1 Oct" });
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        Assert.Equal(38m, await AgreedRateAsync(_customerId));
+
+        // The history names the admin who changed it and the salesman who asked.
+        var changes = await office.GetFromJsonAsync<JsonElement>($"/api/sales/customer-price-changes?customerId={_customerId}");
+        var latest = changes.EnumerateArray().First();
+        Assert.Equal(38m, latest.GetProperty("newPrice").GetDecimal());
+        Assert.False(latest.GetProperty("changedBySalesperson").GetBoolean());
+        Assert.Equal("van@test.local", latest.GetProperty("requestedBy").GetString());
+
+        // And the phone hears the answer with its next snapshot.
+        var snapshot = await _phone.GetFromJsonAsync<JsonElement>("/api/mobile/sync/snapshot");
+        var mine = Assert.Single(snapshot.GetProperty("rateRequests").EnumerateArray());
+        Assert.Equal(("Approved", "OK from 1 Oct"), (mine.GetProperty("status").GetString(), mine.GetProperty("decisionNote").GetString()));
+    }
+
+    [Fact]
+    public async Task A_rejected_request_leaves_the_rate_as_it_was()
+    {
+        var requestId = Guid.NewGuid();
+        await SubmitItemsAsync(RateRequestItem(requestId, 30.0m));
+
+        var office = await OfficeAsync();
+        var rejected = await office.PostAsJsonAsync($"/api/sales/rate-requests/{requestId}/reject", new { note = "Too low" });
+
+        Assert.Equal(HttpStatusCode.OK, rejected.StatusCode);
+        Assert.Equal(35m, await AgreedRateAsync(_customerId));
+
+        var again = await office.PostAsJsonAsync($"/api/sales/rate-requests/{requestId}/approve", new { note = (string?)null });
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_older_app_sending_a_rate_directly_makes_a_request_not_a_change()
+    {
+        var response = await SubmitItemsAsync($$"""
+            {
+              "clientRequestId": "{{Guid.NewGuid()}}",
+              "type": "CustomerPrice",
+              "recordedAt": "2026-09-30T05:00:00.000Z",
+              "customerPrice": { "customerId": "{{_customerId}}", "productId": "{{_productId}}", "unitPrice": 40.0 }
+            }
+            """);
+
+        Assert.Equal("Accepted", response.GetProperty("results")[0].GetProperty("outcome").GetString());
+        Assert.Equal(35m, await AgreedRateAsync(_customerId));
+
+        var office = await OfficeAsync();
+        var pending = await office.GetFromJsonAsync<JsonElement>("/api/sales/rate-requests?status=Pending");
+        Assert.Equal(40m, Assert.Single(pending.EnumerateArray()).GetProperty("requestedPrice").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Rates_sent_with_an_edit_of_a_shop_that_exists_are_refused()
+    {
+        var response = await SubmitItemsAsync($$"""
+            {
+              "clientRequestId": "{{Guid.NewGuid()}}",
+              "type": "Customer",
+              "recordedAt": "2026-09-30T05:00:00.000Z",
+              "customer": {
+                "id": "{{_customerId}}",
+                "name": "Kumar Stores",
+                "contactPerson": null,
+                "phone": "9847012345",
+                "address": null,
+                "hasMultipleBranches": false,
+                "initialRates": [ { "productId": "{{_productId}}", "unitPrice": 20.0 } ]
+              }
+            }
+            """);
+
+        var result = response.GetProperty("results")[0];
+        Assert.Equal("Rejected", result.GetProperty("outcome").GetString());
+        Assert.Contains("rate-change request", result.GetProperty("error").GetString());
+        Assert.Equal(35m, await AgreedRateAsync(_customerId));
+    }
+
+    [Fact]
+    public async Task A_newer_request_replaces_the_pending_one_and_only_a_pending_one_can_be_withdrawn()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+
+        await SubmitItemsAsync(RateRequestItem(first, 38.0m));
+        await SubmitItemsAsync(RateRequestItem(second, 39.0m));
+
+        using (var scope = _api.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var older = await db.CustomerRateRequests.SingleAsync(r => r.Id == first);
+            Assert.Equal((RateRequestStatus.Cancelled, second), (older.Status, older.ReplacedById!.Value));
+        }
+
+        var withdrawn = await SubmitItemsAsync($$"""
+            {
+              "clientRequestId": "{{Guid.NewGuid()}}",
+              "type": "RateRequestCancel",
+              "recordedAt": "2026-09-30T06:00:00.000Z",
+              "rateRequestCancel": { "id": "{{second}}" }
+            }
+            """);
+        Assert.Equal("Accepted", withdrawn.GetProperty("results")[0].GetProperty("outcome").GetString());
+
+        var office = await OfficeAsync();
+        Assert.Equal(0, (await office.GetFromJsonAsync<JsonElement>("/api/sales/rate-requests?status=Pending")).GetArrayLength());
+        Assert.Equal(35m, await AgreedRateAsync(_customerId));
+    }
+
+    [Fact]
+    public async Task A_salesperson_cannot_reach_the_office_rate_screens()
+    {
+        Assert.Equal(HttpStatusCode.Forbidden, (await _phone.GetAsync("/api/sales/rate-requests")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await _phone.PostAsJsonAsync($"/api/sales/rate-requests/{Guid.NewGuid()}/approve", new { note = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await _phone.PutAsJsonAsync($"/api/sales/customers/{_customerId}/prices/{_productId}", new { unitPrice = 50 })).StatusCode);
+        Assert.Equal(35m, await AgreedRateAsync(_customerId));
     }
 
     [Fact]

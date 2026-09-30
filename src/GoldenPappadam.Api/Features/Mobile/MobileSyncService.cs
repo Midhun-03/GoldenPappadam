@@ -6,6 +6,7 @@ using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Payments;
+using GoldenPappadam.Api.Features.Sales.RateRequests;
 using GoldenPappadam.Api.Features.Sales.Returns;
 using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Sales;
@@ -34,12 +35,16 @@ public class MobileSyncService(
     StockRequestService stockRequests,
     CustomerService customers,
     CustomerBranchService branches,
-    ReturnService returns)
+    ReturnService returns,
+    RateRequestService rateRequests)
 {
     private static readonly int[] UniqueViolationErrors = [2601, 2627];
 
     /// <summary>How much payment history the phone carries. Enough to answer a doorway question.</summary>
     private const int RecentPaymentDays = 90;
+
+    /// <summary>How long a decided rate-change request stays on the phone, so the salesperson sees the answer.</summary>
+    private const int RecentRateRequestDays = 30;
 
     // ---------- device ----------
 
@@ -138,6 +143,17 @@ public class MobileSyncService(
                 p.Notes))
             .ToListAsync(ct);
 
+        // This salesperson's own requests: what is waiting, and what the office decided lately.
+        var decidedSince = DateTime.UtcNow.AddDays(-RecentRateRequestDays);
+        var myRequests = await db.CustomerRateRequests
+            .Where(r => r.CreatedBy == currentUser.UserId &&
+                        (r.Status == RateRequestStatus.Pending || r.DecidedAt >= decidedSince))
+            .OrderByDescending(r => r.RequestedAt)
+            .Select(r => new SnapshotRateRequestDto(
+                r.Id, r.CustomerId, r.ProductId, r.RequestedPrice, r.PriceWhenRequested, r.Status.ToString(),
+                r.RequestedAt, r.DecidedAt, r.DecisionNote))
+            .ToListAsync(ct);
+
         var device = await CurrentDeviceAsync(ct);
 
         return new SnapshotDto(
@@ -149,7 +165,8 @@ public class MobileSyncService(
             priceRows,
             recentPayments,
             Enum.GetValues<PaymentMethod>().Where(m => m != PaymentMethod.ReturnCredit).Select(m => m.ToString()).ToArray(),
-            branches);
+            branches,
+            myRequests);
     }
 
     // ---------- upload ----------
@@ -215,6 +232,8 @@ public class MobileSyncService(
                 SubmissionType.CustomerBranch => await AcceptBranchAsync(device, item, ct),
                 SubmissionType.CustomerPrice => await AcceptCustomerPriceAsync(device, item, ct),
                 SubmissionType.Return => await AcceptReturnAsync(device, item, ct),
+                SubmissionType.RateRequest => await AcceptRateRequestAsync(device, item, ct),
+                SubmissionType.RateRequestCancel => await AcceptRateRequestCancelAsync(device, item, ct),
                 _ => Rejected(item, $"{item.Type} is not something this device can send.")
             };
         }
@@ -433,17 +452,37 @@ public class MobileSyncService(
 
         var existing = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == request.Id, ct);
 
+        var initialRates = (request.InitialRates ?? []).Select(r => (r.ProductId, r.UnitPrice)).ToList();
+
         if (existing is null)
         {
+            // The shop and the rates the salesperson agreed with it, together or not at all. This is the
+            // only moment a salesperson sets a rate (CLAUDE.md §4 "Rate-change approval"). The rates are
+            // checked first, so a bad one refuses the shop before anything is written.
+            await prices.EnsureInitialRatesValidAsync(initialRates, ct);
+
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
             await customers.CreateAsync(
                 new SaveCustomerRequest(
                     request.Name, request.ContactPerson, request.Phone, request.Address,
                     0m, null, request.HasMultipleBranches),
                 ct,
                 request.Id);
+            await prices.SetInitialRatesAsync(request.Id, initialRates, ct);
+            await db.SaveChangesAsync(ct);
+
+            await transaction.CommitAsync(ct);
         }
         else
         {
+            if (initialRates.Count > 0)
+            {
+                throw new DomainException(
+                    $"'{existing.Name}' already exists, so its rates cannot be set with its details. " +
+                    "Send the office a rate-change request instead.");
+            }
+
             if (!existing.IsActive)
             {
                 throw new DomainException($"Customer '{existing.Name}' was deactivated by the office.");
@@ -515,9 +554,10 @@ public class MobileSyncService(
     }
 
     /// <summary>
-    /// A rate the salesperson agreed with a shop. Through the same <see cref="CustomerPriceService"/>
-    /// the office uses, so it lands in the price history with the salesperson's name, and the office
-    /// can see and override it.
+    /// A rate from an older app version. A phone may no longer change a rate (CLAUDE.md §4 "Rate-change
+    /// approval", 2026-09-30), so this is recorded as a request for the office - neither bypassing the rule
+    /// nor losing what the salesperson asked for. The request takes the submission's id, so a retry is the
+    /// same request.
     /// </summary>
     private async Task<SubmissionResultDto> AcceptCustomerPriceAsync(
         Device device,
@@ -527,16 +567,51 @@ public class MobileSyncService(
         var request = item.CustomerPrice
                       ?? throw new DomainException("This submission says it is a price but carries none.");
 
-        await prices.SetAsync(request.CustomerId, request.ProductId, request.UnitPrice, ct);
+        var created = await rateRequests.CreateAsync(
+            item.ClientRequestId, request.CustomerId, request.ProductId, request.UnitPrice, null, item.RecordedAt, ct);
 
-        var priceId = await db.CustomerPrices
-            .Where(cp => cp.CustomerId == request.CustomerId && cp.ProductId == request.ProductId)
-            .Select(cp => cp.Id)
-            .FirstAsync(ct);
+        await RecordSubmissionAsync(device, item, created.Id, false, ct);
 
-        await RecordSubmissionAsync(device, item, priceId, false, ct);
+        return new SubmissionResultDto(
+            item.ClientRequestId, SubmissionOutcome.Accepted, created.Id, null, false,
+            ["Rates are changed by the office now: this was sent as a request."]);
+    }
 
-        return new SubmissionResultDto(item.ClientRequestId, SubmissionOutcome.Accepted, priceId, null, false, []);
+    /// <summary>
+    /// A request for the office to change a customer's rate. The rate itself does not move until an
+    /// admin approves; a newer request for the same product replaces one still pending.
+    /// </summary>
+    private async Task<SubmissionResultDto> AcceptRateRequestAsync(
+        Device device,
+        SubmissionItemRequest item,
+        CancellationToken ct)
+    {
+        var request = item.RateRequest
+                      ?? throw new DomainException("This submission says it is a rate request but carries none.");
+
+        var created = await rateRequests.CreateAsync(
+            request.Id, request.CustomerId, request.ProductId, request.RequestedPrice, request.Reason,
+            item.RecordedAt, ct);
+
+        await RecordSubmissionAsync(device, item, created.Id, false, ct);
+
+        return new SubmissionResultDto(item.ClientRequestId, SubmissionOutcome.Accepted, created.Id, null, false, []);
+    }
+
+    /// <summary>The salesperson withdrawing their own request, while the office has not decided it.</summary>
+    private async Task<SubmissionResultDto> AcceptRateRequestCancelAsync(
+        Device device,
+        SubmissionItemRequest item,
+        CancellationToken ct)
+    {
+        var request = item.RateRequestCancel
+                      ?? throw new DomainException("This submission says it withdraws a request but names none.");
+
+        var cancelled = await rateRequests.CancelAsync(request.Id, ct);
+
+        await RecordSubmissionAsync(device, item, cancelled.Id, false, ct);
+
+        return new SubmissionResultDto(item.ClientRequestId, SubmissionOutcome.Accepted, cancelled.Id, null, false, []);
     }
 
     /// <summary>

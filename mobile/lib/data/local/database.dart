@@ -63,8 +63,8 @@ class Products extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// What one shop pays for one product. The salesperson can set or change a rate from the shop's page
-/// (recorded in the office's price history); a bill line itself is never priced by hand.
+/// What one shop pays for one product. The salesperson sets a new shop's first rates; after that a
+/// change is a request the office approves ([RateRequests]). A bill line is never priced by hand.
 @DataClassName('CachedPrice')
 class CustomerPrices extends Table {
   TextColumn get customerId => text()();
@@ -73,6 +73,32 @@ class CustomerPrices extends Table {
 
   @override
   Set<Column> get primaryKey => {customerId, productId};
+}
+
+/// This salesperson's requests to change a shop's rate - pending, or decided lately - as the office has
+/// them, plus any just made here and not yet sent. A request never changes [CustomerPrices]: only the
+/// office's approval does, and the next snapshot brings the new rate.
+@DataClassName('CachedRateRequest')
+class RateRequests extends Table {
+  TextColumn get id => text()();
+  TextColumn get customerId => text()();
+  TextColumn get productId => text()();
+  RealColumn get requestedPrice => real()();
+
+  /// The shop's rate when the office received it; null = the standard price.
+  RealColumn get priceWhenRequested => real().nullable()();
+
+  /// Pending, Approved, Rejected or Cancelled, as the server names them.
+  TextColumn get status => text()();
+
+  DateTimeColumn get requestedAt => dateTime()();
+  DateTimeColumn get decidedAt => dateTime().nullable()();
+
+  /// What the office said, if anything.
+  TextColumn get decisionNote => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 /// Money already received from a shop, as the office has it. Replaced on every snapshot like the
@@ -159,13 +185,13 @@ extension OutboxStatusName on OutboxStatus {
       };
 }
 
-@DriftDatabase(tables: [Customers, Products, CustomerPrices, Payments, Branches, Meta, OutboxEntries])
+@DriftDatabase(tables: [Customers, Products, CustomerPrices, Payments, Branches, RateRequests, Meta, OutboxEntries])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'golden_pappadam'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -191,6 +217,9 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(customers, customers.gstin);
             await m.addColumn(outboxEntries, outboxEntries.documentNumber);
           }
+
+          // 5: rate-change requests (2026-09-30). A cache table; the next snapshot fills it.
+          if (from < 5) await m.createTable(rateRequests);
         },
       );
 
@@ -203,6 +232,7 @@ class AppDatabase extends _$AppDatabase {
     required List<CustomerPricesCompanion> prices,
     List<PaymentsCompanion> payments = const [],
     List<BranchesCompanion> branches = const [],
+    List<RateRequestsCompanion> rateRequests = const [],
   }) =>
       transaction(() async {
         await delete(this.customers).go();
@@ -210,6 +240,7 @@ class AppDatabase extends _$AppDatabase {
         await delete(customerPrices).go();
         await delete(this.payments).go();
         await delete(this.branches).go();
+        await delete(this.rateRequests).go();
 
         await batch((batch) {
           batch.insertAll(this.customers, customers);
@@ -217,8 +248,15 @@ class AppDatabase extends _$AppDatabase {
           batch.insertAll(customerPrices, prices);
           batch.insertAll(this.payments, payments);
           batch.insertAll(this.branches, branches);
+          batch.insertAll(this.rateRequests, rateRequests);
         });
       });
+
+  /// This shop's rate-change requests, newest first.
+  Future<List<CachedRateRequest>> rateRequestsFor(String customerId) => (select(rateRequests)
+        ..where((r) => r.customerId.equals(customerId))
+        ..orderBy([(r) => OrderingTerm(expression: r.requestedAt, mode: OrderingMode.desc)]))
+      .get();
 
   /// What the office has received from this shop, newest first.
   Future<List<CachedPayment>> paymentsFor(String customerId) =>
@@ -408,6 +446,7 @@ class AppDatabase extends _$AppDatabase {
         await delete(customerPrices).go();
         await delete(payments).go();
         await delete(branches).go();
+        await delete(rateRequests).go();
         await (delete(outboxEntries)
               ..where((e) => e.status.equals(OutboxStatus.synced.stored)))
             .go();

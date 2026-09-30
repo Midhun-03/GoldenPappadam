@@ -1,6 +1,6 @@
 # Rate-change approval and packing conversion - design
 
-_Approved 2026-09-30. **Part A built 2026-09-30**; part B not yet. Rules in `CLAUDE.md` §4 "Confirmed requirements
+_Approved 2026-09-30. **Both parts built 2026-09-30.** Rules in `CLAUDE.md` §4 "Confirmed requirements
 (2026-09-30)", §10 Q11-Q14 answered the same day. Two independent increments, built and committed
 separately: **A. packing conversion** first (smaller, office only), then **B. rate-change approval**
 (server, office and phone)._
@@ -147,7 +147,8 @@ current rate until the snapshot brings the approved one.
   what it was when asked if different - requested rate, salesman, when, reason; **Approve** / **Reject**
   with an optional note. History tab with filters.
 - **Customer page price card:** a pending request shows on its product row, with the same two buttons.
-- **Today on the road:** "Rates changed by the sales team" becomes "Rate requests", linking to the screen.
+- **Today on the road:** kept as "Rates set by the sales team" - a new shop's first rates are still set
+  from the phone - with a link to Rate requests for everything else.
 - Office rate edits stay direct, as now.
 
 ### B6. Tests

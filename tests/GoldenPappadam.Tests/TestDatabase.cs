@@ -149,5 +149,10 @@ public sealed class TestDatabase : IAsyncDisposable
     public sealed class TestCurrentUser : ICurrentUser
     {
         public Guid? UserId { get; set; }
+
+        /// <summary>The roles the pretend user has. None by default: service tests run as the office.</summary>
+        public HashSet<string> Roles { get; } = [];
+
+        public bool IsInRole(string role) => Roles.Contains(role);
     }
 }

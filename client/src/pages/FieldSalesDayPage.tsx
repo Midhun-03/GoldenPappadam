@@ -9,7 +9,7 @@ import { FilterBar, FilterField } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime, formatMoney, todayInIndia } from '@/lib/format'
@@ -236,7 +236,14 @@ export function FieldSalesDayPage() {
 
       <Card className="mt-4 lg:mt-5">
         <CardHeader>
-          <CardTitle>Rates changed by the sales team</CardTitle>
+          <CardTitle>Rates set by the sales team</CardTitle>
+          <CardDescription>
+            A new shop's first rates. Changes to a shop's rate come as{' '}
+            <Link to="/rate-requests" className="underline underline-offset-4">
+              rate requests
+            </Link>{' '}
+            for you to approve.
+          </CardDescription>
         </CardHeader>
         <CardContent className="px-0">
           {rateChanges.isPending ? (
@@ -246,8 +253,8 @@ export function FieldSalesDayPage() {
           ) : rateChanges.data.length === 0 ? (
             <EmptyState
               icon={IndianRupee}
-              title="No rates changed on the road"
-              description="When a salesperson agrees a new rate with a shop, it appears here for you to check."
+              title="No rates set on the road"
+              description="When a salesperson adds a shop with its rates, they appear here for you to check."
             />
           ) : (
             <PriceChangesTable changes={rateChanges.data} showCustomer />

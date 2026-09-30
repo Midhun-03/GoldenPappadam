@@ -130,6 +130,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private sealed class NoUser : ICurrentUser
     {
         public Guid? UserId => null;
+
+        public bool IsInRole(string role) => false;
     }
 
     public sealed class FakeEmailSender : IEmailSender

@@ -21,7 +21,7 @@ public class CustomerPriceTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _database = new TestDatabase();
-        _prices = new CustomerPriceService(_database.Db);
+        _prices = new CustomerPriceService(_database.Db, _database.CurrentUser);
         _invoices = new InvoiceService(_database.Db, new StockService(_database.Db), _prices);
 
         var (_, packet) = await _database.SeedProductsAsync();

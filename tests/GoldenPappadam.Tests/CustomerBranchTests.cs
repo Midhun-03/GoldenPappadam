@@ -22,7 +22,7 @@ public class CustomerBranchTests : IAsyncLifetime
     {
         _database = new TestDatabase();
         _branches = new CustomerBranchService(_database.Db);
-        _invoices = new InvoiceService(_database.Db, new StockService(_database.Db), new CustomerPriceService(_database.Db));
+        _invoices = new InvoiceService(_database.Db, new StockService(_database.Db), new CustomerPriceService(_database.Db, _database.CurrentUser));
         return Task.CompletedTask;
     }
 
@@ -156,7 +156,7 @@ public class CustomerBranchTests : IAsyncLifetime
         await _database.AddStockAsync(packet.Id, 100m);
 
         var customer = await _database.SeedCustomerAsync("Danya Supermarket");
-        var prices = new CustomerPriceService(_database.Db);
+        var prices = new CustomerPriceService(_database.Db, _database.CurrentUser);
         await prices.SetAsync(customer.Id, packet.Id, 37m, default);
 
         var kundara = await _database.SeedBranchAsync(customer.Id, "Kundara");

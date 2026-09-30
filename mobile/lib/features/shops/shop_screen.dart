@@ -103,7 +103,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
               _PaymentHistory(shopId: shop.id, shopName: shop.name),
               if (shop.hasMultipleBranches)
                 _BranchesHere(shop: shop, onOpen: _open),
-              _PricesHere(shop: shop, onOpen: _open),
+              _PricesHere(shop: shop, onOpen: _open, onChanged: () => setState(() {})),
             ],
           ),
         );
@@ -363,29 +363,47 @@ class _BranchesHere extends ConsumerWidget {
   }
 }
 
-/// What this shop pays. Tap a rate to change it, or set rates for other products - both on the
-/// rates screen, as product cards. Every change goes to the office's price history with the
-/// salesperson's name and applies from the next bill; the bill screen has no field to type a price.
+/// What this shop pays, and where the salesperson's requests to change it stand. Tapping a rate opens
+/// a request for it; the rate itself changes only when the office approves (CLAUDE.md §4 "Rate-change
+/// approval"), and the next sync brings it. The bill screen still has no field to type a price.
 class _PricesHere extends ConsumerWidget {
-  const _PricesHere({required this.shop, required this.onOpen});
+  const _PricesHere({required this.shop, required this.onOpen, required this.onChanged});
 
   final CachedCustomer shop;
   final Future<void> Function(Widget screen) onOpen;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
 
-    Future<void> edit({CachedProduct? product}) => onOpen(RatesScreen(shop: shop, product: product));
+    Future<void> request({CachedProduct? product}) => onOpen(RatesScreen(shop: shop, product: product));
 
-    return FutureBuilder<(Map<String, double?>, List<CachedProduct>)>(
-      future: (() async => (await db.pricesFor(shop.id), await db.allProducts()))(),
+    Future<void> withdraw(CachedRateRequest pending) async {
+      await ref.read(shopsRepositoryProvider).cancelRequest(shop, pending);
+      unawaitedSync(ref);
+      onChanged();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request withdrawn.')));
+      }
+    }
+
+    return FutureBuilder<(Map<String, double?>, List<CachedProduct>, List<CachedRateRequest>)>(
+      future: (() async =>
+          (await db.pricesFor(shop.id), await db.allProducts(), await db.rateRequestsFor(shop.id)))(),
       builder: (context, snapshot) {
         final data = snapshot.data;
         if (data == null) return const SizedBox.shrink();
 
-        final (prices, products) = data;
-        final priced = products.where((p) => prices[p.id] != null).toList();
+        final (prices, products, requests) = data;
+
+        // The newest request per product that is still worth showing: waiting, or decided lately.
+        final latest = <String, CachedRateRequest>{};
+        for (final r in requests.where((r) => r.status != 'Cancelled')) {
+          latest.putIfAbsent(r.productId, () => r);
+        }
+
+        final shown = products.where((p) => prices[p.id] != null || latest.containsKey(p.id)).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,32 +413,36 @@ class _PricesHere extends ConsumerWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  for (final product in priced)
+                  for (final product in shown)
                     ListTile(
                       key: ValueKey('rate-row-${product.id}'),
                       dense: true,
                       title: Text(product.name),
+                      subtitle: latest[product.id] == null
+                          ? null
+                          : _RequestLine(request: latest[product.id]!, onWithdraw: withdraw),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            money(prices[product.id]!),
+                            prices[product.id] == null ? '-' : money(prices[product.id]!),
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(width: 8),
                           const Icon(Icons.edit_outlined, size: 18, color: AppColors.textMuted),
                         ],
                       ),
-                      onTap: () => edit(product: product),
+                      onTap: () => request(product: product),
                     ),
-                  if (priced.isNotEmpty) const Divider(height: 1),
+                  if (shown.isNotEmpty) const Divider(height: 1),
                   ListTile(
-                    key: const ValueKey('set-rate'),
+                    key: const ValueKey('request-rate'),
                     dense: true,
-                    leading: const Icon(Icons.add, color: AppColors.goldDark),
-                    title: const Text('Set rates',
+                    leading: const Icon(Icons.send_outlined, color: AppColors.goldDark),
+                    title: const Text('Request a rate change',
                         style: TextStyle(color: AppColors.goldDark, fontWeight: FontWeight.w600)),
-                    onTap: () => edit(),
+                    subtitle: const Text('The office approves before the rate changes.'),
+                    onTap: () => request(),
                   ),
                 ],
               ),
@@ -429,5 +451,37 @@ class _PricesHere extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+/// Under a rate: where the salesperson's request for it stands.
+class _RequestLine extends StatelessWidget {
+  const _RequestLine({required this.request, required this.onWithdraw});
+
+  final CachedRateRequest request;
+  final Future<void> Function(CachedRateRequest request) onWithdraw;
+
+  @override
+  Widget build(BuildContext context) {
+    final asked = money(request.requestedPrice);
+    final note = (request.decisionNote ?? '').isEmpty ? '' : ' - ${request.decisionNote}';
+
+    return switch (request.status) {
+      'Pending' => Row(
+          children: [
+            Expanded(
+              child: Text('$asked requested · with the office',
+                  style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600)),
+            ),
+            TextButton(
+              key: ValueKey('withdraw-${request.id}'),
+              onPressed: () => onWithdraw(request),
+              child: const Text('Withdraw'),
+            ),
+          ],
+        ),
+      'Approved' => Text('$asked approved by the office$note', style: const TextStyle(color: AppColors.success)),
+      _ => Text('Office said no to $asked$note', style: const TextStyle(color: AppColors.danger)),
+    };
   }
 }

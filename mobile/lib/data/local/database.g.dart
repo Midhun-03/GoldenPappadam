@@ -2173,6 +2173,601 @@ class BranchesCompanion extends UpdateCompanion<CachedBranch> {
   }
 }
 
+class $RateRequestsTable extends RateRequests
+    with TableInfo<$RateRequestsTable, CachedRateRequest> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RateRequestsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _customerIdMeta = const VerificationMeta(
+    'customerId',
+  );
+  @override
+  late final GeneratedColumn<String> customerId = GeneratedColumn<String>(
+    'customer_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _productIdMeta = const VerificationMeta(
+    'productId',
+  );
+  @override
+  late final GeneratedColumn<String> productId = GeneratedColumn<String>(
+    'product_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestedPriceMeta = const VerificationMeta(
+    'requestedPrice',
+  );
+  @override
+  late final GeneratedColumn<double> requestedPrice = GeneratedColumn<double>(
+    'requested_price',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _priceWhenRequestedMeta =
+      const VerificationMeta('priceWhenRequested');
+  @override
+  late final GeneratedColumn<double> priceWhenRequested =
+      GeneratedColumn<double>(
+        'price_when_requested',
+        aliasedName,
+        true,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestedAtMeta = const VerificationMeta(
+    'requestedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> requestedAt = GeneratedColumn<DateTime>(
+    'requested_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _decidedAtMeta = const VerificationMeta(
+    'decidedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> decidedAt = GeneratedColumn<DateTime>(
+    'decided_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _decisionNoteMeta = const VerificationMeta(
+    'decisionNote',
+  );
+  @override
+  late final GeneratedColumn<String> decisionNote = GeneratedColumn<String>(
+    'decision_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    customerId,
+    productId,
+    requestedPrice,
+    priceWhenRequested,
+    status,
+    requestedAt,
+    decidedAt,
+    decisionNote,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'rate_requests';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedRateRequest> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('customer_id')) {
+      context.handle(
+        _customerIdMeta,
+        customerId.isAcceptableOrUnknown(data['customer_id']!, _customerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_customerIdMeta);
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(
+        _productIdMeta,
+        productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('requested_price')) {
+      context.handle(
+        _requestedPriceMeta,
+        requestedPrice.isAcceptableOrUnknown(
+          data['requested_price']!,
+          _requestedPriceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_requestedPriceMeta);
+    }
+    if (data.containsKey('price_when_requested')) {
+      context.handle(
+        _priceWhenRequestedMeta,
+        priceWhenRequested.isAcceptableOrUnknown(
+          data['price_when_requested']!,
+          _priceWhenRequestedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('requested_at')) {
+      context.handle(
+        _requestedAtMeta,
+        requestedAt.isAcceptableOrUnknown(
+          data['requested_at']!,
+          _requestedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_requestedAtMeta);
+    }
+    if (data.containsKey('decided_at')) {
+      context.handle(
+        _decidedAtMeta,
+        decidedAt.isAcceptableOrUnknown(data['decided_at']!, _decidedAtMeta),
+      );
+    }
+    if (data.containsKey('decision_note')) {
+      context.handle(
+        _decisionNoteMeta,
+        decisionNote.isAcceptableOrUnknown(
+          data['decision_note']!,
+          _decisionNoteMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CachedRateRequest map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedRateRequest(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      customerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}customer_id'],
+      )!,
+      productId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}product_id'],
+      )!,
+      requestedPrice: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}requested_price'],
+      )!,
+      priceWhenRequested: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}price_when_requested'],
+      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      requestedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}requested_at'],
+      )!,
+      decidedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}decided_at'],
+      ),
+      decisionNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}decision_note'],
+      ),
+    );
+  }
+
+  @override
+  $RateRequestsTable createAlias(String alias) {
+    return $RateRequestsTable(attachedDatabase, alias);
+  }
+}
+
+class CachedRateRequest extends DataClass
+    implements Insertable<CachedRateRequest> {
+  final String id;
+  final String customerId;
+  final String productId;
+  final double requestedPrice;
+
+  /// The shop's rate when the office received it; null = the standard price.
+  final double? priceWhenRequested;
+
+  /// Pending, Approved, Rejected or Cancelled, as the server names them.
+  final String status;
+  final DateTime requestedAt;
+  final DateTime? decidedAt;
+
+  /// What the office said, if anything.
+  final String? decisionNote;
+  const CachedRateRequest({
+    required this.id,
+    required this.customerId,
+    required this.productId,
+    required this.requestedPrice,
+    this.priceWhenRequested,
+    required this.status,
+    required this.requestedAt,
+    this.decidedAt,
+    this.decisionNote,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['customer_id'] = Variable<String>(customerId);
+    map['product_id'] = Variable<String>(productId);
+    map['requested_price'] = Variable<double>(requestedPrice);
+    if (!nullToAbsent || priceWhenRequested != null) {
+      map['price_when_requested'] = Variable<double>(priceWhenRequested);
+    }
+    map['status'] = Variable<String>(status);
+    map['requested_at'] = Variable<DateTime>(requestedAt);
+    if (!nullToAbsent || decidedAt != null) {
+      map['decided_at'] = Variable<DateTime>(decidedAt);
+    }
+    if (!nullToAbsent || decisionNote != null) {
+      map['decision_note'] = Variable<String>(decisionNote);
+    }
+    return map;
+  }
+
+  RateRequestsCompanion toCompanion(bool nullToAbsent) {
+    return RateRequestsCompanion(
+      id: Value(id),
+      customerId: Value(customerId),
+      productId: Value(productId),
+      requestedPrice: Value(requestedPrice),
+      priceWhenRequested: priceWhenRequested == null && nullToAbsent
+          ? const Value.absent()
+          : Value(priceWhenRequested),
+      status: Value(status),
+      requestedAt: Value(requestedAt),
+      decidedAt: decidedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(decidedAt),
+      decisionNote: decisionNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(decisionNote),
+    );
+  }
+
+  factory CachedRateRequest.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedRateRequest(
+      id: serializer.fromJson<String>(json['id']),
+      customerId: serializer.fromJson<String>(json['customerId']),
+      productId: serializer.fromJson<String>(json['productId']),
+      requestedPrice: serializer.fromJson<double>(json['requestedPrice']),
+      priceWhenRequested: serializer.fromJson<double?>(
+        json['priceWhenRequested'],
+      ),
+      status: serializer.fromJson<String>(json['status']),
+      requestedAt: serializer.fromJson<DateTime>(json['requestedAt']),
+      decidedAt: serializer.fromJson<DateTime?>(json['decidedAt']),
+      decisionNote: serializer.fromJson<String?>(json['decisionNote']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'customerId': serializer.toJson<String>(customerId),
+      'productId': serializer.toJson<String>(productId),
+      'requestedPrice': serializer.toJson<double>(requestedPrice),
+      'priceWhenRequested': serializer.toJson<double?>(priceWhenRequested),
+      'status': serializer.toJson<String>(status),
+      'requestedAt': serializer.toJson<DateTime>(requestedAt),
+      'decidedAt': serializer.toJson<DateTime?>(decidedAt),
+      'decisionNote': serializer.toJson<String?>(decisionNote),
+    };
+  }
+
+  CachedRateRequest copyWith({
+    String? id,
+    String? customerId,
+    String? productId,
+    double? requestedPrice,
+    Value<double?> priceWhenRequested = const Value.absent(),
+    String? status,
+    DateTime? requestedAt,
+    Value<DateTime?> decidedAt = const Value.absent(),
+    Value<String?> decisionNote = const Value.absent(),
+  }) => CachedRateRequest(
+    id: id ?? this.id,
+    customerId: customerId ?? this.customerId,
+    productId: productId ?? this.productId,
+    requestedPrice: requestedPrice ?? this.requestedPrice,
+    priceWhenRequested: priceWhenRequested.present
+        ? priceWhenRequested.value
+        : this.priceWhenRequested,
+    status: status ?? this.status,
+    requestedAt: requestedAt ?? this.requestedAt,
+    decidedAt: decidedAt.present ? decidedAt.value : this.decidedAt,
+    decisionNote: decisionNote.present ? decisionNote.value : this.decisionNote,
+  );
+  CachedRateRequest copyWithCompanion(RateRequestsCompanion data) {
+    return CachedRateRequest(
+      id: data.id.present ? data.id.value : this.id,
+      customerId: data.customerId.present
+          ? data.customerId.value
+          : this.customerId,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      requestedPrice: data.requestedPrice.present
+          ? data.requestedPrice.value
+          : this.requestedPrice,
+      priceWhenRequested: data.priceWhenRequested.present
+          ? data.priceWhenRequested.value
+          : this.priceWhenRequested,
+      status: data.status.present ? data.status.value : this.status,
+      requestedAt: data.requestedAt.present
+          ? data.requestedAt.value
+          : this.requestedAt,
+      decidedAt: data.decidedAt.present ? data.decidedAt.value : this.decidedAt,
+      decisionNote: data.decisionNote.present
+          ? data.decisionNote.value
+          : this.decisionNote,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedRateRequest(')
+          ..write('id: $id, ')
+          ..write('customerId: $customerId, ')
+          ..write('productId: $productId, ')
+          ..write('requestedPrice: $requestedPrice, ')
+          ..write('priceWhenRequested: $priceWhenRequested, ')
+          ..write('status: $status, ')
+          ..write('requestedAt: $requestedAt, ')
+          ..write('decidedAt: $decidedAt, ')
+          ..write('decisionNote: $decisionNote')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    customerId,
+    productId,
+    requestedPrice,
+    priceWhenRequested,
+    status,
+    requestedAt,
+    decidedAt,
+    decisionNote,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedRateRequest &&
+          other.id == this.id &&
+          other.customerId == this.customerId &&
+          other.productId == this.productId &&
+          other.requestedPrice == this.requestedPrice &&
+          other.priceWhenRequested == this.priceWhenRequested &&
+          other.status == this.status &&
+          other.requestedAt == this.requestedAt &&
+          other.decidedAt == this.decidedAt &&
+          other.decisionNote == this.decisionNote);
+}
+
+class RateRequestsCompanion extends UpdateCompanion<CachedRateRequest> {
+  final Value<String> id;
+  final Value<String> customerId;
+  final Value<String> productId;
+  final Value<double> requestedPrice;
+  final Value<double?> priceWhenRequested;
+  final Value<String> status;
+  final Value<DateTime> requestedAt;
+  final Value<DateTime?> decidedAt;
+  final Value<String?> decisionNote;
+  final Value<int> rowid;
+  const RateRequestsCompanion({
+    this.id = const Value.absent(),
+    this.customerId = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.requestedPrice = const Value.absent(),
+    this.priceWhenRequested = const Value.absent(),
+    this.status = const Value.absent(),
+    this.requestedAt = const Value.absent(),
+    this.decidedAt = const Value.absent(),
+    this.decisionNote = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RateRequestsCompanion.insert({
+    required String id,
+    required String customerId,
+    required String productId,
+    required double requestedPrice,
+    this.priceWhenRequested = const Value.absent(),
+    required String status,
+    required DateTime requestedAt,
+    this.decidedAt = const Value.absent(),
+    this.decisionNote = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       customerId = Value(customerId),
+       productId = Value(productId),
+       requestedPrice = Value(requestedPrice),
+       status = Value(status),
+       requestedAt = Value(requestedAt);
+  static Insertable<CachedRateRequest> custom({
+    Expression<String>? id,
+    Expression<String>? customerId,
+    Expression<String>? productId,
+    Expression<double>? requestedPrice,
+    Expression<double>? priceWhenRequested,
+    Expression<String>? status,
+    Expression<DateTime>? requestedAt,
+    Expression<DateTime>? decidedAt,
+    Expression<String>? decisionNote,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (customerId != null) 'customer_id': customerId,
+      if (productId != null) 'product_id': productId,
+      if (requestedPrice != null) 'requested_price': requestedPrice,
+      if (priceWhenRequested != null)
+        'price_when_requested': priceWhenRequested,
+      if (status != null) 'status': status,
+      if (requestedAt != null) 'requested_at': requestedAt,
+      if (decidedAt != null) 'decided_at': decidedAt,
+      if (decisionNote != null) 'decision_note': decisionNote,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RateRequestsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? customerId,
+    Value<String>? productId,
+    Value<double>? requestedPrice,
+    Value<double?>? priceWhenRequested,
+    Value<String>? status,
+    Value<DateTime>? requestedAt,
+    Value<DateTime?>? decidedAt,
+    Value<String?>? decisionNote,
+    Value<int>? rowid,
+  }) {
+    return RateRequestsCompanion(
+      id: id ?? this.id,
+      customerId: customerId ?? this.customerId,
+      productId: productId ?? this.productId,
+      requestedPrice: requestedPrice ?? this.requestedPrice,
+      priceWhenRequested: priceWhenRequested ?? this.priceWhenRequested,
+      status: status ?? this.status,
+      requestedAt: requestedAt ?? this.requestedAt,
+      decidedAt: decidedAt ?? this.decidedAt,
+      decisionNote: decisionNote ?? this.decisionNote,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (customerId.present) {
+      map['customer_id'] = Variable<String>(customerId.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<String>(productId.value);
+    }
+    if (requestedPrice.present) {
+      map['requested_price'] = Variable<double>(requestedPrice.value);
+    }
+    if (priceWhenRequested.present) {
+      map['price_when_requested'] = Variable<double>(priceWhenRequested.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (requestedAt.present) {
+      map['requested_at'] = Variable<DateTime>(requestedAt.value);
+    }
+    if (decidedAt.present) {
+      map['decided_at'] = Variable<DateTime>(decidedAt.value);
+    }
+    if (decisionNote.present) {
+      map['decision_note'] = Variable<String>(decisionNote.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RateRequestsCompanion(')
+          ..write('id: $id, ')
+          ..write('customerId: $customerId, ')
+          ..write('productId: $productId, ')
+          ..write('requestedPrice: $requestedPrice, ')
+          ..write('priceWhenRequested: $priceWhenRequested, ')
+          ..write('status: $status, ')
+          ..write('requestedAt: $requestedAt, ')
+          ..write('decidedAt: $decidedAt, ')
+          ..write('decisionNote: $decisionNote, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $MetaTable extends Meta with TableInfo<$MetaTable, MetaData> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -3093,6 +3688,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CustomerPricesTable customerPrices = $CustomerPricesTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
   late final $BranchesTable branches = $BranchesTable(this);
+  late final $RateRequestsTable rateRequests = $RateRequestsTable(this);
   late final $MetaTable meta = $MetaTable(this);
   late final $OutboxEntriesTable outboxEntries = $OutboxEntriesTable(this);
   @override
@@ -3105,6 +3701,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     customerPrices,
     payments,
     branches,
+    rateRequests,
     meta,
     outboxEntries,
   ];
@@ -4283,6 +4880,305 @@ typedef $$BranchesTableProcessedTableManager =
       CachedBranch,
       PrefetchHooks Function()
     >;
+typedef $$RateRequestsTableCreateCompanionBuilder =
+    RateRequestsCompanion Function({
+      required String id,
+      required String customerId,
+      required String productId,
+      required double requestedPrice,
+      Value<double?> priceWhenRequested,
+      required String status,
+      required DateTime requestedAt,
+      Value<DateTime?> decidedAt,
+      Value<String?> decisionNote,
+      Value<int> rowid,
+    });
+typedef $$RateRequestsTableUpdateCompanionBuilder =
+    RateRequestsCompanion Function({
+      Value<String> id,
+      Value<String> customerId,
+      Value<String> productId,
+      Value<double> requestedPrice,
+      Value<double?> priceWhenRequested,
+      Value<String> status,
+      Value<DateTime> requestedAt,
+      Value<DateTime?> decidedAt,
+      Value<String?> decisionNote,
+      Value<int> rowid,
+    });
+
+class $$RateRequestsTableFilterComposer
+    extends Composer<_$AppDatabase, $RateRequestsTable> {
+  $$RateRequestsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get productId => $composableBuilder(
+    column: $table.productId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get requestedPrice => $composableBuilder(
+    column: $table.requestedPrice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get priceWhenRequested => $composableBuilder(
+    column: $table.priceWhenRequested,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get decidedAt => $composableBuilder(
+    column: $table.decidedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get decisionNote => $composableBuilder(
+    column: $table.decisionNote,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RateRequestsTableOrderingComposer
+    extends Composer<_$AppDatabase, $RateRequestsTable> {
+  $$RateRequestsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get productId => $composableBuilder(
+    column: $table.productId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get requestedPrice => $composableBuilder(
+    column: $table.requestedPrice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get priceWhenRequested => $composableBuilder(
+    column: $table.priceWhenRequested,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get decidedAt => $composableBuilder(
+    column: $table.decidedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get decisionNote => $composableBuilder(
+    column: $table.decisionNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RateRequestsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RateRequestsTable> {
+  $$RateRequestsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get customerId => $composableBuilder(
+    column: $table.customerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get productId =>
+      $composableBuilder(column: $table.productId, builder: (column) => column);
+
+  GeneratedColumn<double> get requestedPrice => $composableBuilder(
+    column: $table.requestedPrice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get priceWhenRequested => $composableBuilder(
+    column: $table.priceWhenRequested,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get requestedAt => $composableBuilder(
+    column: $table.requestedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get decidedAt =>
+      $composableBuilder(column: $table.decidedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get decisionNote => $composableBuilder(
+    column: $table.decisionNote,
+    builder: (column) => column,
+  );
+}
+
+class $$RateRequestsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RateRequestsTable,
+          CachedRateRequest,
+          $$RateRequestsTableFilterComposer,
+          $$RateRequestsTableOrderingComposer,
+          $$RateRequestsTableAnnotationComposer,
+          $$RateRequestsTableCreateCompanionBuilder,
+          $$RateRequestsTableUpdateCompanionBuilder,
+          (
+            CachedRateRequest,
+            BaseReferences<
+              _$AppDatabase,
+              $RateRequestsTable,
+              CachedRateRequest
+            >,
+          ),
+          CachedRateRequest,
+          PrefetchHooks Function()
+        > {
+  $$RateRequestsTableTableManager(_$AppDatabase db, $RateRequestsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RateRequestsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RateRequestsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RateRequestsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> customerId = const Value.absent(),
+                Value<String> productId = const Value.absent(),
+                Value<double> requestedPrice = const Value.absent(),
+                Value<double?> priceWhenRequested = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> requestedAt = const Value.absent(),
+                Value<DateTime?> decidedAt = const Value.absent(),
+                Value<String?> decisionNote = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RateRequestsCompanion(
+                id: id,
+                customerId: customerId,
+                productId: productId,
+                requestedPrice: requestedPrice,
+                priceWhenRequested: priceWhenRequested,
+                status: status,
+                requestedAt: requestedAt,
+                decidedAt: decidedAt,
+                decisionNote: decisionNote,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String customerId,
+                required String productId,
+                required double requestedPrice,
+                Value<double?> priceWhenRequested = const Value.absent(),
+                required String status,
+                required DateTime requestedAt,
+                Value<DateTime?> decidedAt = const Value.absent(),
+                Value<String?> decisionNote = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RateRequestsCompanion.insert(
+                id: id,
+                customerId: customerId,
+                productId: productId,
+                requestedPrice: requestedPrice,
+                priceWhenRequested: priceWhenRequested,
+                status: status,
+                requestedAt: requestedAt,
+                decidedAt: decidedAt,
+                decisionNote: decisionNote,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$RateRequestsTable, CachedRateRequest>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $RateRequestsTable,
+                    CachedRateRequest
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RateRequestsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RateRequestsTable,
+      CachedRateRequest,
+      $$RateRequestsTableFilterComposer,
+      $$RateRequestsTableOrderingComposer,
+      $$RateRequestsTableAnnotationComposer,
+      $$RateRequestsTableCreateCompanionBuilder,
+      $$RateRequestsTableUpdateCompanionBuilder,
+      (
+        CachedRateRequest,
+        BaseReferences<_$AppDatabase, $RateRequestsTable, CachedRateRequest>,
+      ),
+      CachedRateRequest,
+      PrefetchHooks Function()
+    >;
 typedef $$MetaTableCreateCompanionBuilder = MetaCompanion Function({
   required String key,
   required String value,
@@ -4764,6 +5660,8 @@ class $AppDatabaseManager {
       $$PaymentsTableTableManager(_db, _db.payments);
   $$BranchesTableTableManager get branches =>
       $$BranchesTableTableManager(_db, _db.branches);
+  $$RateRequestsTableTableManager get rateRequests =>
+      $$RateRequestsTableTableManager(_db, _db.rateRequests);
   $$MetaTableTableManager get meta => $$MetaTableTableManager(_db, _db.meta);
   $$OutboxEntriesTableTableManager get outboxEntries =>
       $$OutboxEntriesTableTableManager(_db, _db.outboxEntries);

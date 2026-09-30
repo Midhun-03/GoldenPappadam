@@ -1,4 +1,5 @@
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
@@ -9,10 +10,15 @@ namespace GoldenPappadam.Api.Features.Sales.CustomerPrices;
 /// <summary>
 /// What each shop pays. The one rule worth stating plainly lives in <see cref="Resolve"/>:
 /// an explicit price on the bill line wins, then the shop's agreed price, then the product's own
-/// selling price. The office sets agreed prices here, and so does the phone's sync - both through
-/// <see cref="SetAsync"/>, which is why every change lands in the history exactly once.
+/// selling price. Every change goes through one method, so it lands in the history exactly once.
+///
+/// Who may change a rate is decided here, not only by the endpoints (CLAUDE.md §4 "Rate-change
+/// approval", 2026-09-30): the office changes rates directly through <see cref="SetAsync"/> and
+/// <see cref="RemoveAsync"/>, which refuse a salesperson whichever way they got in. A salesperson sets
+/// rates only through <see cref="SetInitialRatesAsync"/>, for a customer with no rate history yet; any
+/// later change is a request, applied by <see cref="ApplyApprovedRequestAsync"/> when an admin agrees.
 /// </summary>
-public class CustomerPriceService(AppDbContext db)
+public class CustomerPriceService(AppDbContext db, ICurrentUser currentUser)
 {
     /// <summary>
     /// The price list for one shop: every product it could be sold, with the agreed price where
@@ -60,10 +66,103 @@ public class CustomerPriceService(AppDbContext db)
     /// duplicated, and one that was removed earlier comes back rather than colliding with the
     /// unique index.
     /// </summary>
+    /// <summary>The office changing a rate. Refused for a salesperson: theirs is a request to the office.</summary>
     public async Task<CustomerPriceDto> SetAsync(
         Guid customerId,
         Guid productId,
         decimal unitPrice,
+        CancellationToken ct)
+    {
+        EnsureOffice();
+        var product = await SetCoreAsync(customerId, productId, unitPrice, null, ct);
+        await db.SaveChangesAsync(ct);
+
+        return new CustomerPriceDto(
+            product.Id,
+            product.ProductCode,
+            product.Name,
+            await UnitCodeAsync(product.UnitOfMeasureId, ct),
+            product.SellingPrice,
+            unitPrice,
+            unitPrice);
+    }
+
+    /// <summary>
+    /// A new customer's first rates, as the salesperson who found the shop agreed them. Allowed only while
+    /// the customer has no rate history at all - that is, as it is being created, in the same transaction
+    /// - so it can never be used to change a rate the customer already has. Not saved here.
+    /// </summary>
+    public async Task SetInitialRatesAsync(
+        Guid customerId,
+        IReadOnlyList<(Guid ProductId, decimal UnitPrice)> rates,
+        CancellationToken ct)
+    {
+        if (rates.Count == 0)
+        {
+            return;
+        }
+
+        if (await db.CustomerPriceChanges.AnyAsync(c => c.CustomerId == customerId, ct) ||
+            db.ChangeTracker.Entries<CustomerPriceChange>().Any(e => e.Entity.CustomerId == customerId))
+        {
+            throw new DomainException(
+                "This shop's rates are already set. To change one, send the office a rate-change request.");
+        }
+
+        await EnsureInitialRatesValidAsync(rates, ct);
+
+        foreach (var (productId, unitPrice) in rates)
+        {
+            await SetCoreAsync(customerId, productId, unitPrice, null, ct);
+        }
+    }
+
+    /// <summary>
+    /// Checks a new shop's rates on their own - each product once, active, and priced above zero - so a
+    /// caller can refuse them before it creates the shop, rather than half way through.
+    /// </summary>
+    public async Task EnsureInitialRatesValidAsync(
+        IReadOnlyList<(Guid ProductId, decimal UnitPrice)> rates,
+        CancellationToken ct)
+    {
+        if (rates.Select(r => r.ProductId).Distinct().Count() != rates.Count)
+        {
+            throw new DomainException("A product is on the new shop's rates twice.");
+        }
+
+        if (rates.Any(r => r.UnitPrice <= 0m))
+        {
+            throw new DomainException("A rate must be more than zero.");
+        }
+
+        var ids = rates.Select(r => r.ProductId).ToList();
+        var active = await db.Products.CountAsync(p => ids.Contains(p.Id) && p.IsActive, ct);
+
+        if (active != ids.Count)
+        {
+            throw new DomainException("One of the new shop's rates is for a product that is not sold any more.");
+        }
+    }
+
+    /// <summary>
+    /// Applies a request an admin has just approved: the rate becomes what was asked for, and the change
+    /// is recorded with the admin as the changer and the request that led to it. Not saved here.
+    /// </summary>
+    public async Task ApplyApprovedRequestAsync(CustomerRateRequest request, CancellationToken ct)
+    {
+        EnsureOffice();
+        await SetCoreAsync(request.CustomerId, request.ProductId, request.RequestedPrice, request.Id, ct);
+    }
+
+    /// <summary>
+    /// The one place a rate changes. Checks the customer and product, writes the new rate and its history
+    /// entry, and leaves saving to the caller so it can join the caller's transaction.
+    /// </summary>
+    private async Task<Product> SetCoreAsync(
+        Guid customerId,
+        Guid productId,
+        decimal unitPrice,
+        Guid? rateRequestId,
         CancellationToken ct)
     {
         if (unitPrice < 0m)
@@ -109,18 +208,23 @@ public class CustomerPriceService(AppDbContext db)
                 existing.IsActive = true;
             }
 
-            RecordChange(customerId, productId, previous, unitPrice);
-            await db.SaveChangesAsync(ct);
+            RecordChange(customerId, productId, previous, unitPrice, rateRequestId);
         }
 
-        return new CustomerPriceDto(
-            product.Id,
-            product.ProductCode,
-            product.Name,
-            await UnitCodeAsync(product.UnitOfMeasureId, ct),
-            product.SellingPrice,
-            unitPrice,
-            unitPrice);
+        return product;
+    }
+
+    /// <summary>
+    /// Rates are the office's to change directly. A salesperson's route is a request (or, for a customer
+    /// being created, its first rates), so refusing here closes every other door at once.
+    /// </summary>
+    private void EnsureOffice()
+    {
+        if (currentUser.IsInRole(Roles.Salesperson))
+        {
+            throw new DomainException(
+                "A salesperson cannot change a customer's rate directly. Send the office a rate-change request.");
+        }
     }
 
     /// <summary>
@@ -129,6 +233,8 @@ public class CustomerPriceService(AppDbContext db)
     /// </summary>
     public async Task RemoveAsync(Guid customerId, Guid productId, CancellationToken ct)
     {
+        EnsureOffice();
+
         var price = await db.CustomerPrices
                         .FirstOrDefaultAsync(cp => cp.CustomerId == customerId && cp.ProductId == productId, ct)
                     ?? throw new NotFoundException("Customer price");
@@ -178,17 +284,21 @@ public class CustomerPriceService(AppDbContext db)
                 c.CreatedAt,
                 db.Users.Where(u => u.Id == c.CreatedBy).Select(u => u.FullName).FirstOrDefault(),
                 db.UserRoles.Any(ur =>
-                    ur.UserId == c.CreatedBy && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson))))
+                    ur.UserId == c.CreatedBy && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Salesperson)),
+                c.RateRequestId == null
+                    ? null
+                    : db.Users.Where(u => u.Id == c.RateRequest!.CreatedBy).Select(u => u.FullName).FirstOrDefault()))
             .ToListAsync(ct);
     }
 
-    private void RecordChange(Guid customerId, Guid productId, decimal? previous, decimal? next) =>
+    private void RecordChange(Guid customerId, Guid productId, decimal? previous, decimal? next, Guid? rateRequestId = null) =>
         db.CustomerPriceChanges.Add(new CustomerPriceChange
         {
             CustomerId = customerId,
             ProductId = productId,
             PreviousPrice = previous,
-            NewPrice = next
+            NewPrice = next,
+            RateRequestId = rateRequestId
         });
 
     /// <summary>

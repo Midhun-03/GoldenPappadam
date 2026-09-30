@@ -24,4 +24,11 @@ public class CustomerPriceChange : Entity
 
     /// <summary>Null when the agreed rate was removed and the customer went back to the standard price.</summary>
     public decimal? NewPrice { get; set; }
+
+    /// <summary>
+    /// Set when the change is an approved salesperson request: <see cref="Entity.CreatedBy"/> is then the
+    /// admin who approved it, and the request names the salesperson who asked.
+    /// </summary>
+    public Guid? RateRequestId { get; set; }
+    public CustomerRateRequest? RateRequest { get; set; }
 }

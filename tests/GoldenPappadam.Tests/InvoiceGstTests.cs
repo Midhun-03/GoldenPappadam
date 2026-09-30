@@ -23,7 +23,7 @@ public class InvoiceGstTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _database = new TestDatabase();
-        _invoices = new InvoiceService(_database.Db, new StockService(_database.Db), new CustomerPriceService(_database.Db));
+        _invoices = new InvoiceService(_database.Db, new StockService(_database.Db), new CustomerPriceService(_database.Db, _database.CurrentUser));
 
         (_, _packet) = await _database.SeedProductsAsync();
         _packet.SellingPrice = 100m;

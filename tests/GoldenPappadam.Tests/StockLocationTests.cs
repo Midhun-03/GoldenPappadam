@@ -27,7 +27,7 @@ public class StockLocationTests : IAsyncLifetime
     {
         _database = new TestDatabase();
         _stock = new StockService(_database.Db);
-        _invoices = new InvoiceService(_database.Db, _stock, new CustomerPriceService(_database.Db));
+        _invoices = new InvoiceService(_database.Db, _stock, new CustomerPriceService(_database.Db, _database.CurrentUser));
         _packing = new PackingService(_database.Db, _stock);
 
         var (loose, packet) = await _database.SeedProductsAsync();

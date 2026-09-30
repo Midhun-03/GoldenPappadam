@@ -12,6 +12,7 @@ import { NewInvoicePage } from './pages/NewInvoicePage'
 import { NewReturnPage } from './pages/NewReturnPage'
 import { ReturnDetailPage } from './pages/ReturnDetailPage'
 import { ReturnsPage } from './pages/ReturnsPage'
+import { RateRequestsPage } from './pages/RateRequestsPage'
 import { PackingPage } from './pages/PackingPage'
 import { RepackingPage } from './pages/RepackingPage'
 import { StockAgePage } from './pages/StockAgePage'
@@ -83,6 +84,7 @@ export function App() {
           <Route path="/invoices/:invoiceId" element={<InvoiceDetailPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/returns" element={<ReturnsPage />} />
+          <Route path="/rate-requests" element={<RateRequestsPage />} />
           <Route path="/returns/new" element={<NewReturnPage />} />
           <Route path="/returns/:returnId" element={<ReturnDetailPage />} />
           <Route path="/reports/sales" element={<SalesReportPage />} />

@@ -28,6 +28,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<CustomerBranch> CustomerBranches => Set<CustomerBranch>();
     public DbSet<CustomerPrice> CustomerPrices => Set<CustomerPrice>();
     public DbSet<CustomerPriceChange> CustomerPriceChanges => Set<CustomerPriceChange>();
+    public DbSet<CustomerRateRequest> CustomerRateRequests => Set<CustomerRateRequest>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<InvoiceSettings> InvoiceSettings => Set<InvoiceSettings>();
@@ -131,6 +132,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
                     else if (entry.Entity is ReturnNote)
                     {
                         EnsureOnlyAllowedChanges(entry, ReturnNote.PropertiesEditableAfterRecording, "recorded return");
+                    }
+                    else if (entry.Entity is CustomerRateRequest)
+                    {
+                        EnsureOnlyAllowedChanges(entry, CustomerRateRequest.DecisionProperties, "rate-change request");
                     }
                     else if (entry.Entity is WagePayment)
                     {

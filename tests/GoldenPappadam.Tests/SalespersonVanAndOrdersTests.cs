@@ -9,6 +9,7 @@ using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Payments;
 using GoldenPappadam.Api.Features.Sales.Returns;
+using GoldenPappadam.Api.Features.Sales.RateRequests;
 using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
@@ -47,14 +48,15 @@ public class SalespersonVanAndOrdersTests : IAsyncLifetime
         _sync = new MobileSyncService(
             _database.Db,
             _database.CurrentUser,
-            new InvoiceService(_database.Db, _stock, new CustomerPriceService(_database.Db)),
+            new InvoiceService(_database.Db, _stock, new CustomerPriceService(_database.Db, _database.CurrentUser)),
             new PaymentService(_database.Db),
-            new CustomerPriceService(_database.Db),
+            new CustomerPriceService(_database.Db, _database.CurrentUser),
             _vanLoads,
             _requests,
             new CustomerService(_database.Db),
             new CustomerBranchService(_database.Db),
-            new ReturnService(_database.Db, _stock, new CustomerPriceService(_database.Db), new PaymentService(_database.Db)));
+            new ReturnService(_database.Db, _stock, new CustomerPriceService(_database.Db, _database.CurrentUser), new PaymentService(_database.Db)),
+            new RateRequestService(_database.Db, new CustomerPriceService(_database.Db, _database.CurrentUser), _database.CurrentUser));
 
         var (_, packet) = await _database.SeedProductsAsync();
         packet.SellingPrice = 45m;

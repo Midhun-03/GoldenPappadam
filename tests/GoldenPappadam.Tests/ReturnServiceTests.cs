@@ -31,7 +31,7 @@ public class ReturnServiceTests : IAsyncLifetime
     {
         _database = new TestDatabase();
         _stock = new StockService(_database.Db);
-        var prices = new CustomerPriceService(_database.Db);
+        var prices = new CustomerPriceService(_database.Db, _database.CurrentUser);
         _invoices = new InvoiceService(_database.Db, _stock, prices);
         _payments = new PaymentService(_database.Db);
         _returns = new ReturnService(_database.Db, _stock, prices, _payments);
@@ -83,7 +83,7 @@ public class ReturnServiceTests : IAsyncLifetime
     public async Task A_credit_is_valued_at_the_shops_own_rate_and_settles_the_oldest_bill()
     {
         var customer = await SetUpAsync();
-        await new CustomerPriceService(_database.Db).SetAsync(customer.Id, _productId, 25m, default);
+        await new CustomerPriceService(_database.Db, _database.CurrentUser).SetAsync(customer.Id, _productId, 25m, default);
         var older = await BillAsync(customer.Id, 4m, 25m, Day.AddDays(-5));
         var newer = await BillAsync(customer.Id, 4m, 25m, Day.AddDays(-1));
 
@@ -230,7 +230,7 @@ public class ReturnServiceTests : IAsyncLifetime
         var customer = await _database.SeedCustomerAsync();
 
         // The shop's agreed rate, which is what returned packets are worth.
-        await new CustomerPriceService(_database.Db).SetAsync(customer.Id, _productId, 30m, default);
+        await new CustomerPriceService(_database.Db, _database.CurrentUser).SetAsync(customer.Id, _productId, 30m, default);
         return customer;
     }
 

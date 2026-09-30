@@ -26,5 +26,10 @@ public class CustomerPriceChangeConfiguration : IEntityTypeConfiguration<Custome
             .WithMany()
             .HasForeignKey(x => x.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.RateRequest)
+            .WithMany()
+            .HasForeignKey(x => x.RateRequestId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

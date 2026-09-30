@@ -11,8 +11,8 @@ function describe(change: CustomerPriceChange) {
 }
 
 /**
- * Rate changes, newest first. Salesmen set rates from the phone, so each row says who made the
- * change - which is what lets the office spot one and correct it.
+ * Rate changes, newest first, each saying who made it. Salesmen set a new shop's first rates from the
+ * phone; a later change is theirs only as a request the office approved, shown as "asked by".
  */
 export function PriceChangesTable({
   changes,
@@ -55,6 +55,9 @@ export function PriceChangesTable({
               <div className="flex items-center gap-2">
                 <span className="truncate text-muted-foreground">{change.changedBy ?? 'Unknown'}</span>
                 {change.changedBySalesperson && <Badge variant="secondary">Sales team</Badge>}
+                {change.requestedBy && (
+                  <span className="truncate text-xs text-muted-foreground">asked by {change.requestedBy}</span>
+                )}
               </div>
             </TableCell>
           </TableRow>

@@ -10,4 +10,6 @@ public class CurrentUser(IHttpContextAccessor httpContextAccessor) : ICurrentUse
         Guid.TryParse(httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
             ? id
             : null;
+
+    public bool IsInRole(string role) => httpContextAccessor.HttpContext?.User.IsInRole(role) ?? false;
 }

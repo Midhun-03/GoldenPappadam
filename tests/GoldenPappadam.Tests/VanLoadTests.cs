@@ -29,7 +29,7 @@ public class VanLoadTests : IAsyncLifetime
         _database = new TestDatabase();
         _stock = new StockService(_database.Db);
         _vanLoads = new VanLoadService(_database.Db, _stock);
-        _invoices = new InvoiceService(_database.Db, _stock, new CustomerPriceService(_database.Db));
+        _invoices = new InvoiceService(_database.Db, _stock, new CustomerPriceService(_database.Db, _database.CurrentUser));
 
         var (_, packet) = await _database.SeedProductsAsync();
         packet.SellingPrice = 45m;

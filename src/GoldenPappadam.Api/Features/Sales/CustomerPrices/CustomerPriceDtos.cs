@@ -34,4 +34,5 @@ public record CustomerPriceChangeDto(
     decimal? NewPrice,
     DateTime ChangedAt,
     string? ChangedBy,
-    bool ChangedBySalesperson);
+    bool ChangedBySalesperson,
+    string? RequestedBy = null);

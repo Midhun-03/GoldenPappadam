@@ -191,6 +191,6 @@ public class InvoiceNumberingTests : IAsyncLifetime
     private CreateInvoiceRequest Request(DateOnly date) =>
         new(_customerId, date, 0m, null, [new InvoiceLineRequest(_productId, 2m, null)]);
 
-    private static InvoiceService NewService(AppDbContext db) =>
-        new(db, new StockService(db), new CustomerPriceService(db));
+    private InvoiceService NewService(AppDbContext db) =>
+        new(db, new StockService(db), new CustomerPriceService(db, _database.CurrentUser));
 }

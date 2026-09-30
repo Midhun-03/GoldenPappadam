@@ -9,6 +9,7 @@ using GoldenPappadam.Api.Features.Sales.Customers;
 using GoldenPappadam.Api.Features.Sales.Invoices;
 using GoldenPappadam.Api.Features.Sales.Payments;
 using GoldenPappadam.Api.Features.Sales.Returns;
+using GoldenPappadam.Api.Features.Sales.RateRequests;
 using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
@@ -35,7 +36,7 @@ public class MobileSyncTests : IAsyncLifetime
         _database = new TestDatabase();
         _database.CurrentUser.UserId = Guid.NewGuid();
         _stock = new StockService(_database.Db);
-        _prices = new CustomerPriceService(_database.Db);
+        _prices = new CustomerPriceService(_database.Db, _database.CurrentUser);
 
         _sync = new MobileSyncService(
             _database.Db,
@@ -47,7 +48,8 @@ public class MobileSyncTests : IAsyncLifetime
             new StockRequestService(_database.Db),
             new CustomerService(_database.Db),
             new CustomerBranchService(_database.Db),
-            new ReturnService(_database.Db, _stock, _prices, new PaymentService(_database.Db)));
+            new ReturnService(_database.Db, _stock, _prices, new PaymentService(_database.Db)),
+            new RateRequestService(_database.Db, new CustomerPriceService(_database.Db, _database.CurrentUser), _database.CurrentUser));
 
         var (_, packet) = await _database.SeedProductsAsync();
         packet.SellingPrice = 45m;

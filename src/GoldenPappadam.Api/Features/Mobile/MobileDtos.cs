@@ -45,6 +45,21 @@ public record SnapshotProductDto(
 public record SnapshotPriceDto(Guid CustomerId, Guid ProductId, decimal UnitPrice);
 
 /// <summary>
+/// One of this salesperson's own rate-change requests: pending, or decided lately, so the shop page can
+/// say "₹38 requested - with the office", or what the office said.
+/// </summary>
+public record SnapshotRateRequestDto(
+    Guid Id,
+    Guid CustomerId,
+    Guid ProductId,
+    decimal RequestedPrice,
+    decimal? PriceWhenRequested,
+    string Status,
+    DateTime RequestedAt,
+    DateTime? DecidedAt,
+    string? DecisionNote);
+
+/// <summary>
 /// Money already received from a shop, so the salesperson can answer "when did I last collect from
 /// you?" standing in the doorway with no signal. Recent only: the phone is not an archive.
 /// </summary>
@@ -75,7 +90,8 @@ public record SnapshotDto(
     IReadOnlyList<SnapshotPriceDto> Prices,
     IReadOnlyList<SnapshotPaymentDto> Payments,
     IReadOnlyList<string> PaymentMethods,
-    IReadOnlyList<SnapshotBranchDto> Branches);
+    IReadOnlyList<SnapshotBranchDto> Branches,
+    IReadOnlyList<SnapshotRateRequestDto>? RateRequests = null);
 
 // ---------- what the phone sends back ----------
 
@@ -161,7 +177,26 @@ public record MobileCustomerRequest(
     [MaxLength(100)] string? ContactPerson,
     [MaxLength(20)] string? Phone,
     [MaxLength(300)] string? Address,
-    bool HasMultipleBranches);
+    bool HasMultipleBranches,
+    List<MobileRateLine>? InitialRates = null);
+
+/// <summary>
+/// One of a new shop's first rates. Honoured only when the submission creates the shop: after that a
+/// rate changes only through a request the office approves (CLAUDE.md §4 "Rate-change approval").
+/// </summary>
+public record MobileRateLine(
+    [Required] Guid ProductId,
+    [Range(typeof(decimal), "0.01", "79228162514264337593543950335")] decimal UnitPrice);
+
+/// <summary>A request for the office to change what a customer pays. Id is the phone's.</summary>
+public record MobileRateRequest(
+    [Required] Guid Id,
+    [Required] Guid CustomerId,
+    [Required] Guid ProductId,
+    [Range(typeof(decimal), "0.01", "79228162514264337593543950335")] decimal RequestedPrice,
+    [MaxLength(300)] string? Reason);
+
+public record MobileRateRequestCancel([Required] Guid Id);
 
 /// <summary>
 /// A branch under an existing customer, new or edited. Id is the phone's, create-or-update like the
@@ -221,7 +256,9 @@ public record SubmissionItemRequest(
     MobileCustomerRequest? Customer = null,
     MobileBranchRequest? Branch = null,
     MobileCustomerPriceRequest? CustomerPrice = null,
-    MobileReturnRequest? Return = null);
+    MobileReturnRequest? Return = null,
+    MobileRateRequest? RateRequest = null,
+    MobileRateRequestCancel? RateRequestCancel = null);
 
 public record SubmissionBatchRequest(
     [Required] Guid DeviceId,

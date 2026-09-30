@@ -285,15 +285,31 @@ class SyncEngine {
             ))
         .toList();
 
+    final rateRequests = (body['rateRequests'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map((r) => RateRequestsCompanion.insert(
+              id: r['id'] as String,
+              customerId: r['customerId'] as String,
+              productId: r['productId'] as String,
+              requestedPrice: (r['requestedPrice'] as num).toDouble(),
+              priceWhenRequested: Value((r['priceWhenRequested'] as num?)?.toDouble()),
+              status: r['status'] as String,
+              requestedAt: DateTime.parse(r['requestedAt'] as String),
+              decidedAt: Value(r['decidedAt'] == null ? null : DateTime.parse(r['decidedAt'] as String)),
+              decisionNote: Value(r['decisionNote'] as String?),
+            ))
+        .toList();
+
     // One transaction, so no screen ever sees the office's list without the shops, branches and
-    // rates this phone has made but not yet sent.
+    // requests this phone has made but not yet sent.
     await _db.transaction(() async {
       await _db.replaceSnapshot(
           customers: customers,
           products: products,
           prices: prices,
           payments: payments,
-          branches: branches);
+          branches: branches,
+          rateRequests: rateRequests);
       await _db.reapplyPendingShopChanges();
     });
 

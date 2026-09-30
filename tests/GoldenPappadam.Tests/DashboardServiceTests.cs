@@ -21,7 +21,7 @@ public class DashboardServiceTests : IAsyncLifetime
     {
         _database = new TestDatabase();
         var stock = new StockService(_database.Db);
-        _invoices = new InvoiceService(_database.Db, stock, new CustomerPriceService(_database.Db));
+        _invoices = new InvoiceService(_database.Db, stock, new CustomerPriceService(_database.Db, _database.CurrentUser));
         _dashboard = new DashboardService(_database.Db, stock);
         return Task.CompletedTask;
     }

@@ -234,6 +234,8 @@ export type CustomerPriceChange = {
   changedAt: string
   changedBy: string | null
   changedBySalesperson: boolean
+  /** The salesperson whose request the office approved, when the change came from one. */
+  requestedBy: string | null
 }
 
 export type SaveCustomer = {

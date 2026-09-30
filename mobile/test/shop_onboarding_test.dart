@@ -142,30 +142,64 @@ void main() {
     expect(find.text('₹38.00'), findsOneWidget);
     expect(find.text('₹14.00'), findsOneWidget);
 
+    // The shop and its rates in one submission, so the office creates both or neither.
     final entries = await outbox(tester);
-    expect(entries.map((e) => e.type), ['Customer', 'CustomerPrice', 'CustomerPrice']);
-    expect((jsonDecode(entries.first.payload)['customer'] as Map)['phone'], '9847012345');
+    expect(entries.map((e) => e.type), ['Customer']);
+    final customer = jsonDecode(entries.single.payload)['customer'] as Map;
+    expect(customer['phone'], '9847012345');
+    expect(customer['initialRates'], [
+      {'productId': 'p1', 'unitPrice': 38.0},
+      {'productId': 'p2', 'unitPrice': 14.0},
+    ]);
 
     await unmount(tester);
   });
 
-  testWidgets('a rate is changed on a product card from the shop page, and applies from the next bill',
+  testWidgets('a rate change is sent to the office on a product card, and the shop keeps its rate meanwhile',
       (tester) async {
     await open(tester, const ShopScreen(shopId: 'kumar'));
 
-    // Tapping the shop's rate opens the rates screen with that product already on the card.
+    // Tapping the shop's rate opens a request with that product already on the card.
     await tap(tester, find.byKey(const ValueKey('rate-row-p1')));
     expect(find.text('Now ₹35.00'), findsOneWidget);
 
     await type(tester, find.byKey(const ValueKey('rate-value-0')), '36');
-    await tap(tester, find.byKey(const ValueKey('save-rates')));
+    await type(tester, find.byKey(const ValueKey('rate-request-reason')), 'Bigger order from Monday');
+    await tap(tester, find.byKey(const ValueKey('send-rate-request')));
 
-    expect(find.text('₹36.00'), findsOneWidget);
-    expect((await tester.runAsync(() => db.pricesFor('kumar')))!['p1'], 36);
+    // Back on the shop page: still ₹35, with the request shown waiting.
+    expect(find.text('₹35.00'), findsOneWidget);
+    expect(find.text('₹36.00 requested · with the office'), findsOneWidget);
+    expect((await tester.runAsync(() => db.pricesFor('kumar')))!['p1'], 35);
 
     final entry = (await outbox(tester)).single;
-    expect(entry.type, 'CustomerPrice');
-    expect(jsonDecode(entry.payload)['customerPrice'], {'customerId': 'kumar', 'productId': 'p1', 'unitPrice': 36.0});
+    expect(entry.type, 'RateRequest');
+    final request = jsonDecode(entry.payload)['rateRequest'] as Map;
+    expect((request['customerId'], request['productId'], request['requestedPrice'], request['reason']),
+        ('kumar', 'p1', 36.0, 'Bigger order from Monday'));
+
+    // And it can be withdrawn while the office has not decided.
+    await tap(tester, find.byKey(ValueKey('withdraw-${request['id']}')));
+    expect(find.text('₹36.00 requested · with the office'), findsNothing);
+    expect((await outbox(tester)).last.type, 'RateRequestCancel');
+
+    await unmount(tester);
+  });
+
+  testWidgets("the office's answer shows under the rate", (tester) async {
+    await tester.runAsync(() => db.into(db.rateRequests).insert(RateRequestsCompanion.insert(
+          id: 'r1',
+          customerId: 'kumar',
+          productId: 'p1',
+          requestedPrice: 30,
+          status: 'Rejected',
+          requestedAt: DateTime.utc(2026, 9, 29),
+          decisionNote: const Value('Too low'),
+        )));
+
+    await open(tester, const ShopScreen(shopId: 'kumar'));
+
+    expect(find.text('Office said no to ₹30.00 - Too low'), findsOneWidget);
 
     await unmount(tester);
   });
@@ -173,7 +207,7 @@ void main() {
   testWidgets('a product already on a rate card is not offered on another', (tester) async {
     await open(tester, const ShopScreen(shopId: 'kumar'));
 
-    await tap(tester, find.byKey(const ValueKey('set-rate')));
+    await tap(tester, find.byKey(const ValueKey('request-rate')));
     await chooseRateProduct(tester, '20 piece packet');
     await tap(tester, find.byKey(const ValueKey('rate-add-item')));
 

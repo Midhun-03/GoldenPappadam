@@ -18,9 +18,18 @@ public enum SubmissionType
     /// <summary>A branch under a customer, new or edited. The id is the phone's.</summary>
     CustomerBranch,
 
-    /// <summary>What a customer pays for a product, set or changed by the salesperson.</summary>
+    /// <summary>
+    /// What a customer pays for a product. From 2026-09-30 a phone cannot change a rate: this is kept for
+    /// older app versions and is recorded as a rate-change request.
+    /// </summary>
     CustomerPrice,
 
     /// <summary>Expired or damaged packets collected from a shop, and any fresh ones handed over.</summary>
-    Return
+    Return,
+
+    /// <summary>A request for the office to change a customer's rate. The id is the phone's.</summary>
+    RateRequest,
+
+    /// <summary>The salesperson withdrawing their own pending rate-change request.</summary>
+    RateRequestCancel
 }
