@@ -3,6 +3,7 @@ using GoldenPappadam.Domain.Accounting;
 using GoldenPappadam.Domain.Common;
 using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Inventory;
+using GoldenPappadam.Domain.OwnShop;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Domain.Staff;
 using GoldenPappadam.Infrastructure.Identity;
@@ -58,6 +59,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<ExpenseChange> ExpenseChanges => Set<ExpenseChange>();
+
+    public DbSet<ShopTransfer> ShopTransfers => Set<ShopTransfer>();
+    public DbSet<ShopSale> ShopSales => Set<ShopSale>();
+    public DbSet<ShopSaleLine> ShopSaleLines => Set<ShopSaleLine>();
 
     /// <summary>
     /// SQL Server's datetime2 does not remember that a value is UTC, so EF hands it back as
@@ -137,6 +142,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
                     {
                         EnsureOnlyAllowedChanges(entry, CustomerRateRequest.DecisionProperties, "rate-change request");
                     }
+                    else if (entry.Entity is ShopSale)
+                    {
+                        EnsureOnlyAllowedChanges(entry, ShopSale.PropertiesEditableAfterSale, "shop sale");
+                    }
                     else if (entry.Entity is WagePayment)
                     {
                         EnsureOnlyAllowedChanges(entry, WagePayment.PropertiesEditableAfterPayment, "wage payment");
@@ -166,7 +175,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     }
 
     /// <summary>
-    /// Invoices, return notes and wage payments are documents. The only changes they may ever receive
+    /// Invoices, return notes, shop sales and wage payments are documents. The only changes they may ever receive
     /// are the ones their type allows - being cancelled, or a pending return being settled; anything else, an
     /// amount, a customer, a date, is refused here, whichever code path tried it, rather than
     /// trusting every service to remember.

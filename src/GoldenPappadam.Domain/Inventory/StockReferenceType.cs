@@ -11,5 +11,7 @@ public enum StockReferenceType
     Invoice,
     VanLoad,
     RepackEntry,
-    ReturnNote
+    ReturnNote,
+    ShopTransfer,
+    ShopSale
 }

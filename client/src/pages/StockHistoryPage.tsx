@@ -25,6 +25,9 @@ const movements: Record<StockMovementType, { label: string; variant: BadgeVarian
   SaleReversal: { label: 'Bill cancelled', variant: 'info' },
   Damage: { label: 'Damage', variant: 'destructive' },
   Adjustment: { label: 'Adjustment', variant: 'warning' },
+  Repacking: { label: 'Repacked', variant: 'info' },
+  Replacement: { label: 'Replaced free', variant: 'secondary' },
+  ShopTransfer: { label: 'Sent to own shop', variant: 'info' },
 }
 
 /** The record behind a movement, when there is one to point at. */
@@ -40,7 +43,19 @@ function Reference({ movement }: { movement: StockMovement }) {
     )
   }
 
+  if (movement.referenceType === 'ShopSale' && movement.referenceId) {
+    return (
+      <Link
+        to={`/own-shop/sales/${movement.referenceId}`}
+        className="font-medium underline-offset-4 hover:underline"
+      >
+        View the shop sale
+      </Link>
+    )
+  }
+
   if (movement.referenceType === 'PackingEntry') return <>From packing</>
+  if (movement.referenceType === 'ShopTransfer') return <>Factory to own shop</>
 
   return <>—</>
 }
@@ -113,7 +128,10 @@ export function StockHistoryPage() {
               </TableHeader>
               <TableBody>
                 {rows.map((movement) => {
-                  const kind = movements[movement.movementType]
+                  const kind =
+                    movement.movementType === 'SaleReversal' && movement.referenceType === 'ShopSale'
+                      ? { label: 'Shop sale cancelled', variant: 'info' as const }
+                      : movements[movement.movementType]
 
                   return (
                     <TableRow key={movement.id}>

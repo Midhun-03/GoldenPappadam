@@ -9,6 +9,7 @@ using GoldenPappadam.Api.Features.Sales.Payments;
 using GoldenPappadam.Api.Features.Sales.RateRequests;
 using GoldenPappadam.Api.Features.Sales.Returns;
 using GoldenPappadam.Domain.FieldSales;
+using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
@@ -105,15 +106,16 @@ public class MobileSyncService(
                 b.Id, b.CustomerId, b.Name, b.Location, b.Address, b.Phone, b.ContactPerson))
             .ToListAsync(ct);
 
+        // The own shop's pieces are sold only over its counter, never from the van.
         var products = await db.Products
-            .Where(p => p.IsActive)
+            .Where(p => p.IsActive && p.Kind != ProductKind.Pieces)
             .OrderBy(p => p.Name)
             .Select(p => new SnapshotProductDto(
                 p.Id, p.ProductCode, p.Name, p.UnitOfMeasure!.Code, p.SellingPrice))
             .ToListAsync(ct);
 
         var priceRows = await db.CustomerPrices
-            .Where(cp => cp.IsActive)
+            .Where(cp => cp.IsActive && cp.Product!.Kind != ProductKind.Pieces)
             .Select(cp => new SnapshotPriceDto(cp.CustomerId, cp.ProductId, cp.UnitPrice))
             .ToListAsync(ct);
 

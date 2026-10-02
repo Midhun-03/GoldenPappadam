@@ -1,4 +1,5 @@
-export type ProductKind = 'Loose' | 'Packed'
+/** Pieces: the own shop's pappadam by the piece, one per loose variety, sold only over its counter. */
+export type ProductKind = 'Loose' | 'Packed' | 'Pieces'
 
 /** How GST applies to a product. Null on a product means nobody has decided yet. */
 export type TaxTreatment = 'Taxable' | 'NilRated' | 'Exempt' | 'NonGst'
@@ -12,6 +13,9 @@ export type StockMovementType =
   | 'SaleReversal'
   | 'Damage'
   | 'Adjustment'
+  | 'Repacking'
+  | 'Replacement'
+  | 'ShopTransfer'
 
 export type Role = 'Admin' | 'Salesperson'
 
@@ -82,6 +86,8 @@ export type Product = {
   piecesPerKg: number | null
   /** What one pack uses of its source, worked out by the server: 0.1 kg for 20 pieces at 200/kg. */
   sourcePerPack: number | null
+  /** Own-shop pieces products only: the lowest rate per piece; null means no lower than sellingPrice. */
+  minimumSellingPrice: number | null
 }
 
 export type SaveProduct = {
@@ -100,6 +106,7 @@ export type SaveProduct = {
   shelfLifeDays: number | null
   piecesPerPack: number | null
   piecesPerKg: number | null
+  minimumSellingPrice: number | null
 }
 
 export type StockOnHand = {
@@ -114,7 +121,7 @@ export type StockOnHand = {
   isActive: boolean
 }
 
-export type StockLocationKind = 'Warehouse' | 'Van'
+export type StockLocationKind = 'Warehouse' | 'Van' | 'Shop'
 
 export type StockLocation = {
   id: string

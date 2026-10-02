@@ -267,7 +267,7 @@ export function NewInvoicePage() {
                           <SelectValue placeholder="Choose a product" />
                         </SelectTrigger>
                         <SelectContent>
-                          {(products.data ?? []).map((product) => (
+                          {(products.data ?? []).filter((product) => product.kind !== 'Pieces').map((product) => (
                             <SelectItem key={product.id} value={product.id}>
                               {product.name} ({product.unitCode})
                             </SelectItem>

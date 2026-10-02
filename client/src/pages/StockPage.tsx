@@ -275,11 +275,13 @@ export function StockPage() {
         open={entryProduct !== null}
         onOpenChange={(open) => !open && setEntryProduct(null)}
         product={entryProduct}
+        locationId={filters.locationId}
       />
       <StockAdjustDialog
         open={adjustProduct !== null}
         onOpenChange={(open) => !open && setAdjustProduct(null)}
         product={adjustProduct}
+        locationId={filters.locationId}
       />
     </>
   )

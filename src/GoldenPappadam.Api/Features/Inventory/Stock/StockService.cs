@@ -13,6 +13,9 @@ namespace GoldenPappadam.Api.Features.Inventory.Stock;
 /// what the business owns; passing a location means what is actually in that place, which is what
 /// packing and loading care about. Callers say which they mean rather than inheriting a default,
 /// because the two answers differ the moment the van is loaded.
+///
+/// The own shop is the exception to "warn, never block" (CLAUDE.md §4 "Own shop"): it holds only its
+/// pieces products, which are kept nowhere else, counted whole, and never taken below zero.
 /// </summary>
 public class StockService(AppDbContext db)
 {
@@ -23,6 +26,26 @@ public class StockService(AppDbContext db)
         StockMovementType.Production,
         StockMovementType.Damage
     ];
+
+    /// <summary>
+    /// Holds these products' rows until the caller's transaction ends, so two operations that both check
+    /// "is there enough?" before taking stock queue up rather than both passing. Locked in id order, so
+    /// two callers locking several products can never deadlock each other.
+    /// </summary>
+    public async Task LockProductsAsync(IEnumerable<Guid> productIds, CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("Stock can only be locked inside a transaction.");
+        }
+
+        foreach (var id in productIds.Distinct().Order())
+        {
+            await db.Database
+                .SqlQuery<Guid>($"SELECT Id AS Value FROM inventory.Products WITH (UPDLOCK, HOLDLOCK) WHERE Id = {id}")
+                .ToListAsync(ct);
+        }
+    }
 
     public async Task<decimal> GetQuantityOnHandAsync(Guid productId, Guid? locationId, CancellationToken ct) =>
         await db.StockMovements
@@ -39,11 +62,16 @@ public class StockService(AppDbContext db)
     {
         await EnsureLocationExistsAsync(locationId, ct);
 
+        // The own shop holds only its pieces products, and they are kept nowhere else - so a warehouse
+        // list never shows them as zero and low, and the shop's list shows nothing else.
+        bool? shop = locationId is { } id ? await IsShopAsync(id, ct) : null;
+
         // One correlated subquery per product: products are counted in tens, not millions,
         // and it keeps the low-stock rule in a single place below.
         var rows = await db.Products
             .Where(p => includeInactive || p.IsActive)
             .Where(p => categoryId == null || p.CategoryId == categoryId)
+            .Where(p => shop == null || (p.Kind == ProductKind.Pieces) == shop)
             .OrderBy(p => p.Name)
             .Select(p => new
             {
@@ -181,6 +209,7 @@ public class StockService(AppDbContext db)
 
         var product = await FindActiveProductAsync(request.ProductId, ct);
         var locationId = await ResolveLocationAsync(request.LocationId, ct);
+        await EnsureKeptHereAsync(product, locationId, request.Quantity, ct);
 
         if (request.MovementType == StockMovementType.Opening &&
             await db.StockMovements.AnyAsync(m => m.ProductId == product.Id && m.LocationId == locationId, ct))
@@ -197,14 +226,36 @@ public class StockService(AppDbContext db)
 
         var quantity = request.MovementType == StockMovementType.Damage ? -request.Quantity : request.Quantity;
 
-        return await SaveMovementAsync(
+        if (request.MovementType != StockMovementType.Damage || product.Kind != ProductKind.Pieces)
+        {
+            return await SaveMovementAsync(
+                product.Id, locationId, request.MovementType, quantity, request.OccurredAt, request.Notes, ct);
+        }
+
+        // Pieces broken or spoilt at the shop: never more than the shop has, checked under the same lock a
+        // sale takes, so the two cannot both use the last pieces.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await LockProductsAsync([product.Id], ct);
+
+        var onHand = await GetQuantityOnHandAsync(product.Id, locationId, ct);
+        if (request.Quantity > onHand)
+        {
+            throw new DomainException(
+                $"The shop has {onHand:0.###} pieces of {product.Name}, so {request.Quantity:0.###} cannot be written off.");
+        }
+
+        var response = await SaveMovementAsync(
             product.Id, locationId, request.MovementType, quantity, request.OccurredAt, request.Notes, ct);
+        await transaction.CommitAsync(ct);
+
+        return response;
     }
 
     public async Task<StockEntryResponse> AdjustToCountAsync(AdjustStockRequest request, CancellationToken ct)
     {
         var product = await FindActiveProductAsync(request.ProductId, ct);
         var locationId = await ResolveLocationAsync(request.LocationId, ct);
+        await EnsureKeptHereAsync(product, locationId, request.CountedQuantity, ct);
         var onHand = await GetQuantityOnHandAsync(product.Id, locationId, ct);
         var difference = request.CountedQuantity - onHand;
 
@@ -286,6 +337,35 @@ public class StockService(AppDbContext db)
             throw new NotFoundException("Stock location");
         }
     }
+
+    /// <summary>
+    /// The own shop keeps only its pieces products, counted whole, and they are kept nowhere else: kg
+    /// reach the shop only through a transfer, which is what turns them into pieces.
+    /// </summary>
+    private async Task EnsureKeptHereAsync(Product product, Guid locationId, decimal quantity, CancellationToken ct)
+    {
+        var atShop = await IsShopAsync(locationId, ct);
+
+        if (atShop && product.Kind != ProductKind.Pieces)
+        {
+            throw new DomainException(
+                $"The own shop keeps pappadam by the piece only, so '{product.Name}' cannot be recorded there. " +
+                "Loose pappadam reaches the shop through a transfer.");
+        }
+
+        if (!atShop && product.Kind == ProductKind.Pieces)
+        {
+            throw new DomainException($"'{product.Name}' is the own shop's pieces, which are only kept at the shop.");
+        }
+
+        if (product.Kind == ProductKind.Pieces && quantity != decimal.Truncate(quantity))
+        {
+            throw new DomainException("Pieces are counted whole.");
+        }
+    }
+
+    internal async Task<bool> IsShopAsync(Guid locationId, CancellationToken ct) =>
+        await db.StockLocations.AnyAsync(l => l.Id == locationId && l.Kind == StockLocationKind.Shop, ct);
 
     private async Task<bool> IsWarehouseAsync(Guid locationId, CancellationToken ct) =>
         await db.StockLocations

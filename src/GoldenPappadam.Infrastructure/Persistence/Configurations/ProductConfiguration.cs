@@ -11,14 +11,23 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.ToTable("Products", Schemas.Inventory, table =>
         {
             // A packed product says what it is packed from and how much one pack holds - a quantity of
-            // the source, or a number of pieces - never both. A loose product says neither.
+            // the source, or a number of pieces - never both. A loose product says neither. An own-shop
+            // pieces product names its loose variety and nothing else: one piece is one piece.
             table.HasCheckConstraint(
                 "CK_Products_Source",
                 "([Kind] = 'Packed' AND [SourceProductId] IS NOT NULL AND " +
                 "(([SourceQuantityPerPack] > 0 AND [PiecesPerPack] IS NULL) OR " +
                 "([SourceQuantityPerPack] IS NULL AND [PiecesPerPack] > 0))) " +
                 "OR ([Kind] = 'Loose' AND [SourceProductId] IS NULL AND [SourceQuantityPerPack] IS NULL " +
+                "AND [PiecesPerPack] IS NULL) " +
+                "OR ([Kind] = 'Pieces' AND [SourceProductId] IS NOT NULL AND [SourceQuantityPerPack] IS NULL " +
                 "AND [PiecesPerPack] IS NULL)");
+
+            // The own shop's rate band: minimum up to the standard rate, on pieces products only.
+            table.HasCheckConstraint(
+                "CK_Products_MinimumSellingPrice",
+                "[MinimumSellingPrice] IS NULL OR ([Kind] = 'Pieces' AND [MinimumSellingPrice] > 0 " +
+                "AND [SellingPrice] IS NOT NULL AND [MinimumSellingPrice] <= [SellingPrice])");
 
             // Pieces per kg describes a loose variety.
             table.HasCheckConstraint(
@@ -45,12 +54,21 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.SourceQuantityPerPack).HasPrecision(18, 3);
         builder.Property(x => x.PiecesPerKg).HasPrecision(18, 3);
         builder.Property(x => x.SellingPrice).HasPrecision(18, 2);
+        builder.Property(x => x.MinimumSellingPrice).HasPrecision(18, 2);
         builder.Property(x => x.LowStockThreshold).HasPrecision(18, 3);
         builder.Property(x => x.HsnCode).HasMaxLength(8);
         builder.Property(x => x.TaxTreatment).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.GstRate).HasPrecision(5, 2);
 
         builder.HasIndex(x => x.ProductCode).IsUnique();
+
+        // The foreign key's own index, kept by name: the filtered index below would otherwise replace it.
+        builder.HasIndex(x => x.SourceProductId, "IX_Products_SourceProductId");
+
+        // One active pieces product per loose variety, so a transfer knows which one the kg become.
+        builder.HasIndex(x => x.SourceProductId, "IX_Products_SourceProductId_ActivePieces")
+            .IsUnique()
+            .HasFilter("[Kind] = 'Pieces' AND [IsActive] = 1");
 
         builder.HasOne(x => x.Category)
             .WithMany()

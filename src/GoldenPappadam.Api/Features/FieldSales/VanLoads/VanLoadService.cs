@@ -1,5 +1,6 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.OwnShop;
 using GoldenPappadam.Domain.FieldSales;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Infrastructure.Persistence;
@@ -223,7 +224,7 @@ public class VanLoadService(AppDbContext db, StockService stock)
         var ids = lines.Select(l => l.ProductId).ToList();
         var products = await db.Products
             .Where(p => ids.Contains(p.Id))
-            .Select(p => new { p.Id, p.Name, p.IsActive })
+            .Select(p => new { p.Id, p.Name, p.IsActive, p.Kind })
             .ToListAsync(ct);
 
         foreach (var line in lines)
@@ -234,6 +235,11 @@ public class VanLoadService(AppDbContext db, StockService stock)
             if (!product.IsActive)
             {
                 throw new DomainException($"Product '{product.Name}' is not active.");
+            }
+
+            if (product.Kind == ProductKind.Pieces)
+            {
+                throw ShopRates.OnlyAtTheShop(product.Name);
             }
 
             if (line.Quantity <= 0m)

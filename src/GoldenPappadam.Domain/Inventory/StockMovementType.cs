@@ -43,5 +43,13 @@ public enum StockMovementType
     /// Fresh packets given free in place of expired or damaged ones a shop returned. Negative; a
     /// cancelled return puts them back. See <see cref="Sales.ReturnNote"/>.
     /// </summary>
-    Replacement
+    Replacement,
+
+    /// <summary>
+    /// Loose pappadam sent from the factory to the own shop: negative in kg on the loose variety at the
+    /// warehouse, positive in pieces on its pieces product at the shop. Not a <see cref="Transfer"/>,
+    /// whose two halves are the same product and cancel out; this one changes product and unit. See
+    /// <see cref="OwnShop.ShopTransfer"/>.
+    /// </summary>
+    ShopTransfer
 }

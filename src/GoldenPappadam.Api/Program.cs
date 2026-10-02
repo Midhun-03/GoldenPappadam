@@ -8,6 +8,8 @@ using GoldenPappadam.Api.Features.FieldSales.VanLoads;
 using GoldenPappadam.Api.Features.Inventory.Packing;
 using GoldenPappadam.Api.Features.Inventory.Repacking;
 using GoldenPappadam.Api.Features.Mobile;
+using GoldenPappadam.Api.Features.OwnShop.Sales;
+using GoldenPappadam.Api.Features.OwnShop.Transfers;
 using GoldenPappadam.Api.Features.Reports;
 using GoldenPappadam.Api.Features.Inventory.Products;
 using GoldenPappadam.Api.Features.Inventory.Stock;
@@ -135,6 +137,8 @@ builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<WageCalculator>();
 builder.Services.AddScoped<WagePaymentService>();
 builder.Services.AddScoped<ExpenseService>();
+builder.Services.AddScoped<ShopTransferService>();
+builder.Services.AddScoped<ShopSaleService>();
 
 // Invoice PDFs go through an abstraction, so moving them to Supabase Storage (or any object store)
 // later is one registration here. Relative paths resolve against the app, never a fixed drive.

@@ -1,5 +1,6 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.OwnShop;
 using GoldenPappadam.Api.Features.Sales.CustomerBranches;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Domain.Inventory;
@@ -390,6 +391,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
                 p.Id,
                 p.Name,
                 p.IsActive,
+                p.Kind,
                 p.SellingPrice,
                 p.HsnCode,
                 p.TaxTreatment,
@@ -410,6 +412,11 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             if (!product.IsActive)
             {
                 throw new DomainException($"Product '{product.Name}' is not active.");
+            }
+
+            if (product.Kind == ProductKind.Pieces)
+            {
+                throw ShopRates.OnlyAtTheShop(product.Name);
             }
 
             if (line.Quantity <= 0m)

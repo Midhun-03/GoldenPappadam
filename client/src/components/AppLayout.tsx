@@ -20,6 +20,8 @@ import {
   ReceiptIndianRupee,
   Route,
   Settings,
+  ShoppingBasket,
+  ShoppingCart,
   Store,
   Truck,
   Undo2,
@@ -78,6 +80,15 @@ const navigation: NavGroup[] = [
       { to: '/field-sales', label: 'Today on the road', icon: Route },
       { to: '/van', label: 'Van', icon: Truck },
       { to: '/stock-requests', label: 'Stock requests', icon: ClipboardList },
+    ],
+  },
+  {
+    label: 'Own shop',
+    items: [
+      { to: '/own-shop', label: 'Shop stock', icon: ShoppingBasket, end: true },
+      { to: '/own-shop/sales/new', label: 'New shop sale', icon: ShoppingCart },
+      { to: '/own-shop/sales', label: 'Shop sales', icon: ReceiptIndianRupee, end: true },
+      { to: '/own-shop/transfers', label: 'Receive from factory', icon: Truck },
     ],
   },
   {

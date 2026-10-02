@@ -34,5 +34,6 @@ public static class ProductQueries
                 ? p.SourceProduct!.PiecesPerKg != null && p.SourceProduct.PiecesPerKg > 0
                     ? (decimal)p.PiecesPerPack / p.SourceProduct.PiecesPerKg
                     : null
-                : p.SourceQuantityPerPack));
+                : p.SourceQuantityPerPack,
+            p.MinimumSellingPrice));
 }

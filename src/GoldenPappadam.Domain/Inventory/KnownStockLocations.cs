@@ -15,4 +15,7 @@ public static class KnownStockLocations
 
     /// <summary>The one van the business runs today.</summary>
     public static readonly Guid FirstVanId = Guid.Parse("3b0a4a0f-1002-4b2f-8a6b-1c2b1b000002");
+
+    /// <summary>The business's own retail shop, which sells pappadam by the piece.</summary>
+    public static readonly Guid OwnShopId = Guid.Parse("3b0a4a0f-1002-4b2f-8a6b-1c2b1b000003");
 }

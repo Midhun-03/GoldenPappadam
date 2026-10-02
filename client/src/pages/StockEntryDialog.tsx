@@ -32,24 +32,28 @@ export function StockEntryDialog({
   open,
   onOpenChange,
   product,
+  locationId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   product: StockOnHand | null
+  /** Where the stock is. Left out means the main warehouse, the only place production is recorded. */
+  locationId?: string
 }) {
   const queryClient = useQueryClient()
-  const [movementType, setMovementType] = useState<EntryType>('Production')
+  const types = locationId ? entryTypes.filter((type) => type.value !== 'Production') : entryTypes
+  const [movementType, setMovementType] = useState<EntryType>(types[0].value)
   const [quantity, setQuantity] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
-    setMovementType('Production')
+    setMovementType(locationId ? 'Opening' : 'Production')
     setQuantity('')
     setNotes('')
     setError(null)
-  }, [open])
+  }, [open, locationId])
 
   const save = useMutation({
     mutationFn: (entry: StockEntry) => stockApi.addEntry(entry),
@@ -72,6 +76,7 @@ export function StockEntryDialog({
       movementType,
       quantity: Number(quantity),
       notes: notes.trim() || undefined,
+      locationId,
     })
   }
 
@@ -95,7 +100,7 @@ export function StockEntryDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {entryTypes.map((type) => (
+                {types.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
                     {type.label}
                   </SelectItem>
@@ -112,8 +117,8 @@ export function StockEntryDialog({
             <Input
               id="quantity"
               type="number"
-              step="0.001"
-              min="0.001"
+              step={product?.unitCode === 'PCS' ? '1' : '0.001'}
+              min={product?.unitCode === 'PCS' ? '1' : '0.001'}
               required
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}

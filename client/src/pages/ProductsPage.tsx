@@ -124,6 +124,7 @@ export function ProductsPage() {
               <SelectItem value={ALL}>All types</SelectItem>
               <SelectItem value="Loose">Loose</SelectItem>
               <SelectItem value="Packed">Packed</SelectItem>
+              <SelectItem value="Pieces">Shop pieces</SelectItem>
             </SelectContent>
           </Select>
         </FilterField>
@@ -193,13 +194,19 @@ export function ProductsPage() {
                     </TableCell>
 
                     <TableCell className="hidden sm:table-cell">
-                      <Badge variant={product.kind === 'Packed' ? 'secondary' : 'outline'}>{product.kind}</Badge>
+                      <Badge variant={product.kind === 'Loose' ? 'outline' : 'secondary'}>
+                        {product.kind === 'Pieces' ? 'Shop pieces' : product.kind}
+                      </Badge>
                     </TableCell>
 
                     <TableCell className="hidden max-w-[14rem] truncate text-muted-foreground xl:table-cell">
-                      {product.sourceProductName
-                        ? `${product.sourceProductName} · ${formatQuantity(product.sourceQuantityPerPack ?? 0)} per pack`
-                        : '—'}
+                      {product.sourceProductName === null
+                        ? '—'
+                        : product.kind === 'Pieces'
+                          ? `${product.sourceProductName} · by the piece`
+                          : product.piecesPerPack !== null
+                            ? `${product.sourceProductName} · ${product.piecesPerPack} pieces per pack`
+                            : `${product.sourceProductName} · ${formatQuantity(product.sourceQuantityPerPack ?? 0)} per pack`}
                     </TableCell>
 
                     <TableCell className="text-right tabular-nums">

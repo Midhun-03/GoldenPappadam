@@ -10,6 +10,11 @@ import { InvoicesPage } from './pages/InvoicesPage'
 import { LoginPage } from './pages/LoginPage'
 import { NewInvoicePage } from './pages/NewInvoicePage'
 import { NewReturnPage } from './pages/NewReturnPage'
+import { NewShopSalePage } from './pages/NewShopSalePage'
+import { OwnShopStockPage } from './pages/OwnShopStockPage'
+import { ShopSaleDetailPage } from './pages/ShopSaleDetailPage'
+import { ShopSalesPage } from './pages/ShopSalesPage'
+import { ShopTransfersPage } from './pages/ShopTransfersPage'
 import { ReturnDetailPage } from './pages/ReturnDetailPage'
 import { ReturnsPage } from './pages/ReturnsPage'
 import { RateRequestsPage } from './pages/RateRequestsPage'
@@ -76,6 +81,12 @@ export function App() {
           <Route path="/van" element={<VanPage />} />
           <Route path="/field-sales" element={<FieldSalesDayPage />} />
           <Route path="/stock-requests" element={<StockRequestsPage />} />
+
+          <Route path="/own-shop" element={<OwnShopStockPage />} />
+          <Route path="/own-shop/transfers" element={<ShopTransfersPage />} />
+          <Route path="/own-shop/sales" element={<ShopSalesPage />} />
+          <Route path="/own-shop/sales/new" element={<NewShopSalePage />} />
+          <Route path="/own-shop/sales/:saleId" element={<ShopSaleDetailPage />} />
 
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/:customerId" element={<CustomerLedgerPage />} />

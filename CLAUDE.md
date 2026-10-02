@@ -64,6 +64,7 @@ A small, usable, **admin-side only** MVP. Scope set 2026-09-11; target completio
 
 **Out of phase 1** unless explicitly added: production/raw-material management, salesperson/route/visit/delivery management, full accounting, a salesperson-facing app.
 _Added 2026-09-28: employees, daily wages and expenses (§4 "Employees, wages and expenses"). Full accounting - payables, ledgers, double entry - is still out._
+_Added 2026-09-30: the business's own retail shop - stock received from the factory and sales by the piece (§4 "Own shop"), admin only._
 Keep payments simple and practical — not a full enterprise accounting system. Push back on scope creep.
 
 ## 4. Inventory design requirements
@@ -305,9 +306,31 @@ rate-change approval).
   200 pieces/kg makes them 0.100 kg and 0.030 kg. The correction applies to packing from then on; the 5
   packing entries already made keep the quantities they recorded.
 
+### Confirmed requirements (2026-09-30, own shop)
+
+Built 2026-09-30, admin only - `docs/08-own-shop-design.md`. Nothing for the salesperson; no shop-user role yet.
+
+- **The own shop is a stock location** (`SHOP`, kind `Shop`), not a second inventory. The factory records what
+  it sends in **kg**; the shop holds and sells **pieces**. A transfer converts with the loose variety's own
+  pieces per kg (standard 4-inch = 200): 30 kg → 6,000 pieces, **rounded to the nearest whole piece**. Kg out
+  of the warehouse and pieces into the shop are one transaction, and the transfer keeps the conversion it used.
+- Each loose variety the shop sells has **one pieces product** (`Kind = Pieces`, unit PCS). The shop holds only
+  pieces products, and they are kept nowhere else - never invoiced, loaded on a van, returned, requested from
+  the phone or packed. The 15/30/50/100-piece **bundles are not products** and move no stock; a sale does.
+- **Pricing:** the pieces product's rate per piece (₹1.60 today) is the default **and the maximum**; its
+  **minimum** (₹1.30 today) is set by the admin on the product. Both are data, never code. The admin may lower
+  the rate on a sale down to the minimum, never below it and never above the rate - enforced in the service.
+  A known customer's agreed per-piece rate (`CustomerPrices`) is where their sale starts and must lie in the band.
+- **Everyone pays at the counter** (owner): walk-in and known customers (caterers, other shops) alike. A shop
+  sale (`OS/26-27/000001`) is not an invoice - no credit, no customer balance, no GST document. The customer is
+  optional.
+- **Blocks, not warns:** a transfer larger than the warehouse's kg, a sale or damage larger than the shop's
+  pieces, fractional pieces, and a rate outside the band are refused - the second exception to "warn, never
+  block", after packing. A shop sale is cancelled, never edited; cancelling puts the pieces back.
+
 **Rule for anything unconfirmed:** mark it TBD / business decision required (§10) instead of assuming.
 
-The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`; reports, shelf life and returns in `docs/05-reports-returns-design.md`; employees, wages and expenses in `docs/06-staff-expenses-design.md`; rate-change approval and packing conversion in `docs/07-rate-approval-packing-design.md`.
+The full inventory design is in `docs/01-inventory-design.md`; invoice management in `docs/04-invoice-design.md`; reports, shelf life and returns in `docs/05-reports-returns-design.md`; employees, wages and expenses in `docs/06-staff-expenses-design.md`; rate-change approval and packing conversion in `docs/07-rate-approval-packing-design.md`; the own shop in `docs/08-own-shop-design.md`.
 
 ## 5. Technology stack
 
@@ -410,7 +433,19 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-09-28_
+_Last updated: 2026-09-30_
+
+**Own shop done (2026-09-30)**, rules in §4, design `docs/08-own-shop-design.md`. `SHOP` location,
+`ProductKind.Pieces`, `Product.MinimumSellingPrice`, movement type `ShopTransfer`, and the `ownshop` schema
+(`ShopTransfers`, `ShopSales`, `ShopSaleLines`). `ShopTransferService` and `ShopSaleService` block short stock
+under `StockService.LockProductsAsync` (packing now uses it too); `ShopRates` is the one place the rate band is
+checked. Pieces products are fenced out of invoices, van loads, returns, stock and rate requests, the phone
+snapshot and the warehouse stock list. Admin screens under **Own shop**: Shop stock, New shop sale, Shop sales
+(+ detail with Cancel), Receive from factory; the product dialog's "Shop pieces" type. Migration `AddOwnShop`
+(new tables and columns; `CK_Products_Source` widened). 45 new tests; the stock screen's count/add dialogs now
+act on the location being viewed (they always used the warehouse). **To do by the office:** apply the
+migration, then add a "Shop pieces" product per variety the shop sells (₹1.60, lowest ₹1.30 for the standard).
+**Not built:** dashboard tile, shop reports, printed receipt - see the design's §9.
 
 **Employees, wages and expenses done (2026-09-28)**, rules in §4, design in `docs/06-staff-expenses-design.md`.
 Migration `AddStaffAndExpenses` (new `staff` and `accounting` schemas, new tables only). Admin screens:
@@ -652,7 +687,7 @@ Decisions made:
 - Target framework: .NET 10 (SDK 10.0.301 installed). Local SQL Server available: LocalDB (`MSSQLLocalDB`) and SQL Express. Do not touch the `BARTENDER` SQL instance on the owner's laptop.
 
 - 2026-09-14 — Phase-1 requirement answers recorded in §4 "Confirmed requirements" and the build order in §3.
-- 2026-09-14 — Inventory design approved: `docs/01-inventory-design.md`. Current stock is computed from the movement ledger (no cache column in phase 1). Stock shortfalls **warn, never block**, so stock may go negative. _Except packing, from 2026-09-30: refused when loose stock does not cover it (§4 "Packing conversion")._ A packed product's source may be a loose product or another packed product (`SourceProductId`), with no cycles allowed.
+- 2026-09-14 — Inventory design approved: `docs/01-inventory-design.md`. Current stock is computed from the movement ledger (no cache column in phase 1). Stock shortfalls **warn, never block**, so stock may go negative. _Except packing, from 2026-09-30: refused when loose stock does not cover it (§4 "Packing conversion"); and the own shop's transfers, sales and damage (§4 "Own shop")._ A packed product's source may be a loose product or another packed product (`SourceProductId`), with no cycles allowed.
 
 - 2026-09-14 — Solution structure (3 projects + tests, feature folders, controllers) and cookie-based login with ASP.NET Core Identity.
 - 2026-09-14 — Development database: **SQL Express (`.\SQLEXPRESS`), database `GoldenPappadam`**. Moved off LocalDB, which kept failing to auto-start on this machine; SQL Express runs as a service. Tests use the same instance.

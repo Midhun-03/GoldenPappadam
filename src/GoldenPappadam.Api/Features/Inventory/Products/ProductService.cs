@@ -8,7 +8,8 @@ namespace GoldenPappadam.Api.Features.Inventory.Products;
 
 /// <summary>
 /// Product rules that the database cannot express on its own: unique codes, references that
-/// must exist and be active, and packing chains that must not loop.
+/// must exist and be active, packing chains that must not loop, and the own shop's pieces products
+/// (one per loose variety, counted in pieces, with a rate band).
 /// </summary>
 public class ProductService(AppDbContext db)
 {
@@ -23,8 +24,14 @@ public class ProductService(AppDbContext db)
         // A brand new product cannot be part of a cycle, because nothing can point at it yet.
         var (sourceProductId, sourceQuantityPerPack, piecesPerPack) = await ResolveSourceAsync(Guid.Empty, request, ct);
         var piecesPerKg = await ResolvePiecesPerKgAsync(null, request, ct);
+        var minimumSellingPrice = ResolveMinimumSellingPrice(request);
         var tax = ResolveTax(request);
         await EnsureTreatmentWhileGstIsOnAsync(tax.Treatment, ct);
+
+        if (request.Kind == ProductKind.Pieces)
+        {
+            await EnsureOnePiecesProductPerVarietyAsync(null, sourceProductId, ct);
+        }
 
         var product = new Product
         {
@@ -34,6 +41,7 @@ public class ProductService(AppDbContext db)
             Kind = request.Kind,
             UnitOfMeasureId = request.UnitOfMeasureId,
             SellingPrice = request.SellingPrice,
+            MinimumSellingPrice = minimumSellingPrice,
             LowStockThreshold = request.LowStockThreshold,
             SourceProductId = sourceProductId,
             SourceQuantityPerPack = sourceQuantityPerPack,
@@ -59,7 +67,7 @@ public class ProductService(AppDbContext db)
         if (product.Kind != request.Kind)
         {
             throw new DomainException(
-                "A product cannot change between loose and packed. Create a new product instead.");
+                "A product cannot change between loose, packed and shop pieces. Create a new product instead.");
         }
 
         await EnsureCodeIsFree(request.ProductCode, id, ct);
@@ -77,14 +85,22 @@ public class ProductService(AppDbContext db)
         var (sourceProductId, sourceQuantityPerPack, piecesPerPack) = await ResolveSourceAsync(product.Id, request, ct);
         await EnsureNoCycleAsync(product.Id, sourceProductId, ct);
         var piecesPerKg = await ResolvePiecesPerKgAsync(product.Id, request, ct);
+        var minimumSellingPrice = ResolveMinimumSellingPrice(request);
         var tax = ResolveTax(request);
         await EnsureTreatmentWhileGstIsOnAsync(tax.Treatment, ct);
+
+        if (product.IsActive && product.Kind == ProductKind.Pieces)
+        {
+            await EnsureOnePiecesProductPerVarietyAsync(product.Id, sourceProductId, ct);
+        }
 
         product.ProductCode = request.ProductCode.Trim();
         product.Name = request.Name.Trim();
         product.CategoryId = request.CategoryId;
         product.UnitOfMeasureId = request.UnitOfMeasureId;
+        // A new rate band applies from the next shop sale; sales already made keep the rates they recorded.
         product.SellingPrice = request.SellingPrice;
+        product.MinimumSellingPrice = minimumSellingPrice;
         product.LowStockThreshold = request.LowStockThreshold;
         product.SourceProductId = sourceProductId;
         product.SourceQuantityPerPack = sourceQuantityPerPack;
@@ -113,7 +129,14 @@ public class ProductService(AppDbContext db)
 
         if (!isActive && await db.Products.AnyAsync(p => p.SourceProductId == id && p.IsActive, ct))
         {
-            throw new DomainException("Active packed products are still packed from this product.");
+            throw new DomainException(
+                "Active products are still made from this product - packets packed from it, or the pieces the own " +
+                "shop sells of it. Deactivate those first.");
+        }
+
+        if (isActive && !product.IsActive && product.Kind == ProductKind.Pieces)
+        {
+            await EnsureOnePiecesProductPerVarietyAsync(product.Id, product.SourceProductId, ct);
         }
 
         product.IsActive = isActive;
@@ -175,10 +198,11 @@ public class ProductService(AppDbContext db)
         }
 
         if (request.PiecesPerKg is null && productId is { } id &&
-            await db.Products.AnyAsync(p => p.SourceProductId == id && p.PiecesPerPack != null && p.IsActive, ct))
+            await db.Products.AnyAsync(
+                p => p.SourceProductId == id && (p.PiecesPerPack != null || p.Kind == ProductKind.Pieces) && p.IsActive, ct))
         {
             throw new DomainException(
-                "Packets counted in pieces are packed from this pappadam, so it needs its pieces per kg.");
+                "Packets counted in pieces, or the own shop's pieces, come from this pappadam, so it needs its pieces per kg.");
         }
 
         return request.PiecesPerKg;
@@ -190,6 +214,11 @@ public class ProductService(AppDbContext db)
         SaveProductRequest request,
         CancellationToken ct)
     {
+        if (request.Kind == ProductKind.Pieces)
+        {
+            return (await ResolvePiecesSourceAsync(request, ct), null, null);
+        }
+
         if (request.Kind != ProductKind.Packed)
         {
             return (null, null, null);
@@ -224,6 +253,14 @@ public class ProductService(AppDbContext db)
             throw new DomainException($"The source product '{source.Name}' is not active.");
         }
 
+        // The shop's pieces are sold loose by the piece; a bundle of them is still pieces, never a product.
+        if (source.Kind == ProductKind.Pieces)
+        {
+            throw new DomainException(
+                $"'{source.Name}' is the own shop's pieces, which are sold loose and never packed. " +
+                "Pack from the loose pappadam instead.");
+        }
+
         if (byPieces && (source.Kind != ProductKind.Loose || source.UnitOfMeasureId != KnownUnits.KilogramId))
         {
             throw new DomainException(
@@ -234,6 +271,96 @@ public class ProductService(AppDbContext db)
         return byPieces
             ? (source.Id, null, request.PiecesPerPack)
             : (source.Id, request.SourceQuantityPerPack, null);
+    }
+
+    /// <summary>
+    /// An own-shop pieces product: counted in pieces, and made from a loose variety counted in kg that
+    /// knows its pieces per kg - which is how a transfer turns the factory's kg into the shop's pieces.
+    /// </summary>
+    private async Task<Guid> ResolvePiecesSourceAsync(SaveProductRequest request, CancellationToken ct)
+    {
+        if (request.UnitOfMeasureId != KnownUnits.PieceId)
+        {
+            throw new DomainException("The own shop's pappadam is counted in pieces. Choose the PCS unit.");
+        }
+
+        if (request.SellingPrice is not > 0m)
+        {
+            throw new DomainException("Enter the shop's rate per piece.");
+        }
+
+        if (request.SourceProductId is not { } sourceId)
+        {
+            throw new DomainException("Choose the loose pappadam these pieces come from.");
+        }
+
+        var source = await db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == sourceId, ct)
+                     ?? throw new NotFoundException("Source product");
+
+        if (source.Kind != ProductKind.Loose || source.UnitOfMeasureId != KnownUnits.KilogramId)
+        {
+            throw new DomainException(
+                $"'{source.Name}' is not loose pappadam counted in kg. The shop's pieces come from a loose variety.");
+        }
+
+        if (!source.IsActive)
+        {
+            throw new DomainException($"The source product '{source.Name}' is not active.");
+        }
+
+        if (source.PiecesPerKg is null)
+        {
+            throw new DomainException(
+                $"'{source.Name}' has no pieces per kg, so its kg cannot be turned into pieces. Set it on that product first.");
+        }
+
+        return source.Id;
+    }
+
+    /// <summary>
+    /// The own shop's rate band. The rate per piece is also the most a piece may be sold for (owner,
+    /// 2026-09-30), so the minimum cannot be above it.
+    /// </summary>
+    private static decimal? ResolveMinimumSellingPrice(SaveProductRequest request)
+    {
+        if (request.MinimumSellingPrice is not { } minimum)
+        {
+            return null;
+        }
+
+        if (request.Kind != ProductKind.Pieces)
+        {
+            throw new DomainException("A minimum rate belongs to the own shop's pieces products only.");
+        }
+
+        if (minimum <= 0m)
+        {
+            throw new DomainException("The minimum rate must be more than zero.");
+        }
+
+        if (request.SellingPrice is { } rate && minimum > rate)
+        {
+            throw new DomainException(
+                $"The minimum rate ({minimum:0.00}) cannot be above the rate per piece ({rate:0.00}).");
+        }
+
+        return minimum;
+    }
+
+    /// <summary>One active pieces product per loose variety, so a transfer never has to guess which.</summary>
+    private async Task EnsureOnePiecesProductPerVarietyAsync(Guid? exceptId, Guid? sourceProductId, CancellationToken ct)
+    {
+        var other = await db.Products
+            .Where(p => p.Kind == ProductKind.Pieces && p.IsActive && p.SourceProductId == sourceProductId)
+            .Where(p => exceptId == null || p.Id != exceptId)
+            .Select(p => p.Name)
+            .FirstOrDefaultAsync(ct);
+
+        if (other is not null)
+        {
+            throw new DomainException(
+                $"'{other}' already holds the own shop's pieces of that pappadam. One variety has one pieces product.");
+        }
     }
 
     /// <summary>Walks up the packing chain so a product can never end up packed from itself.</summary>

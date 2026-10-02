@@ -1,5 +1,6 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.OwnShop;
 using GoldenPappadam.Api.Features.Sales.CustomerBranches;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
 using GoldenPappadam.Api.Features.Sales.Invoices;
@@ -250,12 +251,17 @@ public class ReturnService(
         var agreed = await prices.GetAgreedPricesAsync(customerId, productIds, ct);
         var products = await db.Products
             .Where(p => productIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.Name, p.SellingPrice, UnitCode = p.UnitOfMeasure!.Code })
+            .Select(p => new { p.Id, p.Name, p.Kind, p.SellingPrice, UnitCode = p.UnitOfMeasure!.Code })
             .ToDictionaryAsync(p => p.Id, ct);
 
         return requested.Select((line, index) =>
         {
             var product = products.GetValueOrDefault(line.ProductId) ?? throw new NotFoundException("Product");
+
+            if (product.Kind == ProductKind.Pieces)
+            {
+                throw ShopRates.OnlyAtTheShop(product.Name);
+            }
 
             if (line.Quantity <= 0m)
             {

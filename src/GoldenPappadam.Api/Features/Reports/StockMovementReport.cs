@@ -18,8 +18,9 @@ public class StockMovementReport(AppDbContext db)
         ("packedOut", "Used for packing", t => t == StockMovementType.Packing, -1),
         ("repackedIn", "Repacked in", t => t == StockMovementType.Repacking, 1),
         ("repackedOut", "Repacked out", t => t == StockMovementType.Repacking, -1),
-        ("movedIn", "Moved in", t => t == StockMovementType.Transfer, 1),
-        ("movedOut", "Moved out", t => t == StockMovementType.Transfer, -1),
+        // Sent to the own shop counts too: kg out of the warehouse, pieces into the shop.
+        ("movedIn", "Moved in", t => t is StockMovementType.Transfer or StockMovementType.ShopTransfer, 1),
+        ("movedOut", "Moved out", t => t is StockMovementType.Transfer or StockMovementType.ShopTransfer, -1),
         ("sold", "Sold", t => t is StockMovementType.Sale or StockMovementType.SaleReversal, 0),
         ("replaced", "Replaced free", t => t == StockMovementType.Replacement, 0),
         ("damaged", "Damaged / expired", t => t == StockMovementType.Damage, 0),

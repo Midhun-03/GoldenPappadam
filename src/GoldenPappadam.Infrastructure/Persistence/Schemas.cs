@@ -14,5 +14,8 @@ public static class Schemas
 
     /// <summary>Money spent: expenses and their categories. Not a ledger or double entry.</summary>
     public const string Accounting = "accounting";
+
+    /// <summary>The business's own retail shop: transfers from the factory and sales by the piece.</summary>
+    public const string OwnShop = "ownshop";
     public const string Identity = "identity";
 }

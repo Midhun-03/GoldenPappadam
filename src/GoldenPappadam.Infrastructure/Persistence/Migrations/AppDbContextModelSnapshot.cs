@@ -676,6 +676,10 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
+                    b.Property<decimal?>("MinimumSellingPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -727,19 +731,25 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProductCode")
                         .IsUnique();
 
-                    b.HasIndex("SourceProductId");
-
                     b.HasIndex("UnitOfMeasureId");
+
+                    b.HasIndex(new[] { "SourceProductId" }, "IX_Products_SourceProductId");
+
+                    b.HasIndex(new[] { "SourceProductId" }, "IX_Products_SourceProductId_ActivePieces")
+                        .IsUnique()
+                        .HasFilter("[Kind] = 'Pieces' AND [IsActive] = 1");
 
                     b.ToTable("Products", "inventory", t =>
                         {
                             t.HasCheckConstraint("CK_Products_GstRate", "([TaxTreatment] = 'Taxable' AND [GstRate] > 0 AND [GstRate] <= 100) OR (([TaxTreatment] IS NULL OR [TaxTreatment] <> 'Taxable') AND [GstRate] IS NULL)");
 
+                            t.HasCheckConstraint("CK_Products_MinimumSellingPrice", "[MinimumSellingPrice] IS NULL OR ([Kind] = 'Pieces' AND [MinimumSellingPrice] > 0 AND [SellingPrice] IS NOT NULL AND [MinimumSellingPrice] <= [SellingPrice])");
+
                             t.HasCheckConstraint("CK_Products_PiecesPerKg", "[PiecesPerKg] IS NULL OR ([Kind] = 'Loose' AND [PiecesPerKg] > 0)");
 
                             t.HasCheckConstraint("CK_Products_ShelfLifeDays", "[ShelfLifeDays] IS NULL OR [ShelfLifeDays] > 0");
 
-                            t.HasCheckConstraint("CK_Products_Source", "([Kind] = 'Packed' AND [SourceProductId] IS NOT NULL AND (([SourceQuantityPerPack] > 0 AND [PiecesPerPack] IS NULL) OR ([SourceQuantityPerPack] IS NULL AND [PiecesPerPack] > 0))) OR ([Kind] = 'Loose' AND [SourceProductId] IS NULL AND [SourceQuantityPerPack] IS NULL AND [PiecesPerPack] IS NULL)");
+                            t.HasCheckConstraint("CK_Products_Source", "([Kind] = 'Packed' AND [SourceProductId] IS NOT NULL AND (([SourceQuantityPerPack] > 0 AND [PiecesPerPack] IS NULL) OR ([SourceQuantityPerPack] IS NULL AND [PiecesPerPack] > 0))) OR ([Kind] = 'Loose' AND [SourceProductId] IS NULL AND [SourceQuantityPerPack] IS NULL AND [PiecesPerPack] IS NULL) OR ([Kind] = 'Pieces' AND [SourceProductId] IS NOT NULL AND [SourceQuantityPerPack] IS NULL AND [PiecesPerPack] IS NULL)");
 
                             t.HasCheckConstraint("CK_Products_SourceNotSelf", "[SourceProductId] IS NULL OR [SourceProductId] <> [Id]");
                         });
@@ -900,6 +910,15 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                             IsActive = true,
                             Kind = "Van",
                             Name = "Sales van 1"
+                        },
+                        new
+                        {
+                            Id = new Guid("3b0a4a0f-1002-4b2f-8a6b-1c2b1b000003"),
+                            Code = "SHOP",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Kind = "Shop",
+                            Name = "Own shop"
                         });
                 });
 
@@ -1028,6 +1047,256 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "Box"
+                        });
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.OwnShop.ShopSale", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("FinancialYear")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateOnly>("SaleDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("SaleNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SeriesCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique()
+                        .HasFilter("[ClientRequestId] IS NOT NULL");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("SaleDate");
+
+                    b.HasIndex("SaleNumber")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId", "SaleDate");
+
+                    b.HasIndex("SeriesCode", "FinancialYear", "SequenceNumber")
+                        .IsUnique();
+
+                    b.ToTable("ShopSales", "ownshop", t =>
+                        {
+                            t.HasCheckConstraint("CK_ShopSales_PaymentMethod", "[PaymentMethod] <> 'ReturnCredit'");
+
+                            t.HasCheckConstraint("CK_ShopSales_Sequence", "[SequenceNumber] > 0");
+
+                            t.HasCheckConstraint("CK_ShopSales_TotalAmount", "[TotalAmount] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.OwnShop.ShopSaleLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("DefaultPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("MinimumPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("ShopSaleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ShopSaleId", "LineNumber")
+                        .IsUnique();
+
+                    b.ToTable("ShopSaleLines", "ownshop", t =>
+                        {
+                            t.HasCheckConstraint("CK_ShopSaleLines_Quantity", "[Quantity] > 0");
+
+                            t.HasCheckConstraint("CK_ShopSaleLines_UnitPrice", "[MinimumPrice] > 0 AND [UnitPrice] >= [MinimumPrice] AND [UnitPrice] <= [DefaultPrice]");
+                        });
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.OwnShop.ShopTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FromLocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("PiecesPerKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("PiecesProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("PiecesReceived")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("QuantityKg")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("ShopOnHandBefore")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("SourceOnHandBefore")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<Guid>("SourceProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ToLocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientRequestId")
+                        .IsUnique()
+                        .HasFilter("[ClientRequestId] IS NOT NULL");
+
+                    b.HasIndex("FromLocationId");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("PiecesProductId");
+
+                    b.HasIndex("SourceProductId");
+
+                    b.HasIndex("ToLocationId");
+
+                    b.ToTable("ShopTransfers", "ownshop", t =>
+                        {
+                            t.HasCheckConstraint("CK_ShopTransfers_DifferentLocations", "[FromLocationId] <> [ToLocationId]");
+
+                            t.HasCheckConstraint("CK_ShopTransfers_DifferentProducts", "[SourceProductId] <> [PiecesProductId]");
+
+                            t.HasCheckConstraint("CK_ShopTransfers_PiecesPerKg", "[PiecesPerKg] > 0");
+
+                            t.HasCheckConstraint("CK_ShopTransfers_PiecesReceived", "[PiecesReceived] > 0");
+
+                            t.HasCheckConstraint("CK_ShopTransfers_QuantityKg", "[QuantityKg] > 0");
                         });
                 });
 
@@ -2918,6 +3187,78 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("GoldenPappadam.Domain.OwnShop.ShopSale", b =>
+                {
+                    b.HasOne("GoldenPappadam.Domain.Sales.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("GoldenPappadam.Domain.Inventory.StockLocation", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Location");
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.OwnShop.ShopSaleLine", b =>
+                {
+                    b.HasOne("GoldenPappadam.Domain.Inventory.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GoldenPappadam.Domain.OwnShop.ShopSale", "ShopSale")
+                        .WithMany("Lines")
+                        .HasForeignKey("ShopSaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("ShopSale");
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.OwnShop.ShopTransfer", b =>
+                {
+                    b.HasOne("GoldenPappadam.Domain.Inventory.StockLocation", "FromLocation")
+                        .WithMany()
+                        .HasForeignKey("FromLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GoldenPappadam.Domain.Inventory.Product", "PiecesProduct")
+                        .WithMany()
+                        .HasForeignKey("PiecesProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GoldenPappadam.Domain.Inventory.Product", "SourceProduct")
+                        .WithMany()
+                        .HasForeignKey("SourceProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GoldenPappadam.Domain.Inventory.StockLocation", "ToLocation")
+                        .WithMany()
+                        .HasForeignKey("ToLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FromLocation");
+
+                    b.Navigation("PiecesProduct");
+
+                    b.Navigation("SourceProduct");
+
+                    b.Navigation("ToLocation");
+                });
+
             modelBuilder.Entity("GoldenPappadam.Domain.Sales.CustomerBranch", b =>
                 {
                     b.HasOne("GoldenPappadam.Domain.Sales.Customer", "Customer")
@@ -3247,6 +3588,11 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("GoldenPappadam.Domain.FieldSales.VanLoad", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.OwnShop.ShopSale", b =>
                 {
                     b.Navigation("Lines");
                 });

@@ -6,5 +6,11 @@ public enum StockLocationKind
     Warehouse = 0,
 
     /// <summary>A sales vehicle. Loaded in the morning, sold from during the day, emptied in the evening.</summary>
-    Van = 1
+    Van = 1,
+
+    /// <summary>
+    /// The business's own retail shop. Holds only pieces products, received from the factory in kg and
+    /// sold by the piece.
+    /// </summary>
+    Shop = 2
 }

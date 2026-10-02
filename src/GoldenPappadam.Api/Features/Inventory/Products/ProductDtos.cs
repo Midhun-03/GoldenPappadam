@@ -25,7 +25,8 @@ public record ProductDto(
     int? ShelfLifeDays,
     int? PiecesPerPack = null,
     decimal? PiecesPerKg = null,
-    decimal? SourcePerPack = null);
+    decimal? SourcePerPack = null,
+    decimal? MinimumSellingPrice = null);
 
 /// <summary>
 /// A packed product needs its source and exactly one of SourceQuantityPerPack (a quantity of the source:
@@ -35,6 +36,10 @@ public record ProductDto(
 ///
 /// SourcePerPack on the DTO is what one pack uses of its source, worked out: 0.100 kg for 20 pieces
 /// at 200 per kg.
+///
+/// An own-shop pieces product (Kind Pieces) is counted in PCS, names the loose-kg variety it comes from
+/// in SourceProductId, and needs its SellingPrice - the rate per piece, which is also the most a piece
+/// may be sold for. MinimumSellingPrice is the lowest rate allowed; it belongs to pieces products only.
 /// </summary>
 public record SaveProductRequest(
     [Required, MaxLength(30)] string ProductCode,
@@ -51,4 +56,5 @@ public record SaveProductRequest(
     decimal? GstRate = null,
     [Range(1, 3650)] int? ShelfLifeDays = null,
     [Range(1, 100000)] int? PiecesPerPack = null,
-    [Range(typeof(decimal), "0.001", "1000000")] decimal? PiecesPerKg = null);
+    [Range(typeof(decimal), "0.001", "1000000")] decimal? PiecesPerKg = null,
+    decimal? MinimumSellingPrice = null);

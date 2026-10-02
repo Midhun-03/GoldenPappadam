@@ -50,8 +50,17 @@ public class Product : AuditableEntity
     /// </summary>
     public decimal? PiecesPerKg { get; set; }
 
-    /// <summary>Default selling price. Null means the product is not normally sold as it is.</summary>
+    /// <summary>
+    /// Default selling price. Null means the product is not normally sold as it is. For an own-shop
+    /// pieces product it is the rate per piece, and also the most a piece may be sold for.
+    /// </summary>
     public decimal? SellingPrice { get; set; }
+
+    /// <summary>
+    /// Own-shop pieces products only: the lowest rate per piece a sale may charge, set by the office.
+    /// Null means the rate cannot go below <see cref="SellingPrice"/> at all.
+    /// </summary>
+    public decimal? MinimumSellingPrice { get; set; }
 
     /// <summary>Null means no low-stock alert for this product.</summary>
     public decimal? LowStockThreshold { get; set; }

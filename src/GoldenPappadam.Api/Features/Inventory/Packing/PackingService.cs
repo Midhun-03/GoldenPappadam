@@ -47,11 +47,11 @@ public class PackingService(AppDbContext db, StockService stock)
 
         // Two packings of the same pappadam at once must not both pass the stock check below: the
         // second waits here until the first has written its movements.
+        // A transfer to the own shop takes the same lock, so packing and a transfer cannot both take the
+        // last kilogram either.
         if (packed.SourceProductId is { } sourceId)
         {
-            await db.Database
-                .SqlQuery<Guid>($"SELECT Id AS Value FROM inventory.Products WITH (UPDLOCK, HOLDLOCK) WHERE Id = {sourceId}")
-                .ToListAsync(ct);
+            await stock.LockProductsAsync([sourceId], ct);
         }
 
         var plan = await PlanAsync(request.PackedProductId, request.PacksProduced, ct);

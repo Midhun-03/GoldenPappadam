@@ -1,5 +1,7 @@
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Api.Features.OwnShop;
 using GoldenPappadam.Api.Features.Sales.CustomerPrices;
+using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
@@ -54,6 +56,11 @@ public class RateRequestService(AppDbContext db, CustomerPriceService prices, IC
         if (!product.IsActive)
         {
             throw new DomainException($"Product '{product.Name}' is not active.");
+        }
+
+        if (product.Kind == ProductKind.Pieces)
+        {
+            throw ShopRates.OnlyAtTheShop(product.Name);
         }
 
         var current = await db.CustomerPrices

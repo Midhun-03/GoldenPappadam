@@ -1,4 +1,5 @@
 using GoldenPappadam.Api.Common;
+using GoldenPappadam.Api.Features.OwnShop;
 using GoldenPappadam.Domain.Inventory;
 using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
@@ -142,6 +143,12 @@ public class CustomerPriceService(AppDbContext db, ICurrentUser currentUser)
         {
             throw new DomainException("One of the new shop's rates is for a product that is not sold any more.");
         }
+
+        if (await db.Products.Where(p => ids.Contains(p.Id) && p.Kind == ProductKind.Pieces).Select(p => p.Name)
+                .FirstOrDefaultAsync(ct) is { } pieces)
+        {
+            throw ShopRates.OnlyAtTheShop(pieces);
+        }
     }
 
     /// <summary>
@@ -183,6 +190,12 @@ public class CustomerPriceService(AppDbContext db, ICurrentUser currentUser)
         if (!product.IsActive)
         {
             throw new DomainException($"Product '{product.Name}' is not active.");
+        }
+
+        // A caterer's agreed rate per piece at the own shop is still inside the shop's band.
+        if (product.Kind == ProductKind.Pieces)
+        {
+            ShopRates.EnsureAllowed(product.Name, unitPrice, product.SellingPrice, product.MinimumSellingPrice);
         }
 
         var existing = await db.CustomerPrices

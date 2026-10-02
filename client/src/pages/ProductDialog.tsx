@@ -43,6 +43,8 @@ const empty = {
   // The standard pappadam's average (owner, 2026-09-30); a larger variety is changed to its own.
   piecesPerKg: '200',
   sellingPrice: '',
+  /** Own-shop pieces only: the lowest rate per piece. */
+  minimumSellingPrice: '',
   lowStockThreshold: '',
   hsnCode: '',
   taxTreatment: '' as TaxTreatment | '',
@@ -84,6 +86,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             piecesPerPack: product.piecesPerPack?.toString() ?? '',
             piecesPerKg: product.piecesPerKg?.toString() ?? '',
             sellingPrice: product.sellingPrice?.toString() ?? '',
+            minimumSellingPrice: product.minimumSellingPrice?.toString() ?? '',
             lowStockThreshold: product.lowStockThreshold?.toString() ?? '',
             hsnCode: product.hsnCode ?? '',
             taxTreatment: product.taxTreatment ?? '',
@@ -111,7 +114,25 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
     setError(null)
 
     const isPacked = form.kind === 'Packed'
+    const isPieces = form.kind === 'Pieces'
     const byPieces = isPacked && sourceIsLooseKg && form.contents === 'pieces'
+
+    // The dropdowns are not native inputs, so "required" does not stop an empty one being sent.
+    const missing =
+      form.categoryId === ''
+        ? 'Choose a category.'
+        : form.unitOfMeasureId === ''
+          ? 'Choose the unit this product is counted in.'
+          : isPieces && form.sourceProductId === ''
+            ? 'Choose the loose pappadam these pieces come from.'
+            : isPacked && form.sourceProductId === ''
+              ? 'Choose what this pack is packed from.'
+              : null
+
+    if (missing) {
+      setError(missing)
+      return
+    }
 
     save.mutate({
       productCode: form.productCode,
@@ -119,11 +140,12 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
       categoryId: form.categoryId,
       kind: form.kind,
       unitOfMeasureId: form.unitOfMeasureId,
-      sourceProductId: isPacked ? form.sourceProductId || null : null,
+      sourceProductId: isPacked || isPieces ? form.sourceProductId || null : null,
       sourceQuantityPerPack: isPacked && !byPieces ? toNumber(form.sourceQuantityPerPack) : null,
       piecesPerPack: byPieces ? toNumber(form.piecesPerPack) : null,
       piecesPerKg: form.kind === 'Loose' && unitIsKg ? toNumber(form.piecesPerKg) : null,
       sellingPrice: toNumber(form.sellingPrice),
+      minimumSellingPrice: isPieces ? toNumber(form.minimumSellingPrice) : null,
       lowStockThreshold: toNumber(form.lowStockThreshold),
       hsnCode: form.hsnCode.trim() || null,
       taxTreatment: form.taxTreatment || null,
@@ -137,6 +159,12 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
   const source = sourceOptions.find((candidate) => candidate.id === form.sourceProductId)
   const sourceUnit = units.find((unit) => unit.id === source?.unitOfMeasureId)
   const unitIsKg = units.find((unit) => unit.id === form.unitOfMeasureId)?.code === 'KG'
+  const pieceUnit = units.find((unit) => unit.code === 'PCS')
+
+  // The own shop's pieces come from a loose variety counted in kg, which knows its pieces per kg.
+  const looseKgOptions = sourceOptions.filter(
+    (candidate) => candidate.kind === 'Loose' && units.find((unit) => unit.id === candidate.unitOfMeasureId)?.code === 'KG',
+  )
 
   // Only a packet of loose pappadam counted in kg can say what it holds in pieces.
   const sourceIsLooseKg = source?.kind === 'Loose' && sourceUnit?.code === 'KG'
@@ -157,7 +185,8 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
           <DialogDescription>
             {product
               ? 'Loose or packed cannot be changed after a product is created.'
-              : 'Loose products are bulk stock. Packed products are made from another product.'}
+              : 'Loose products are bulk stock. Packed products are made from another product. Shop pieces are a ' +
+                'loose pappadam as the own shop sells it, by the piece.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -208,7 +237,14 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
               <Select
                 value={form.kind}
                 disabled={product !== null}
-                onValueChange={(value) => setForm({ ...form, kind: value as ProductKind })}
+                onValueChange={(value) =>
+                  setForm({
+                    ...form,
+                    kind: value as ProductKind,
+                    // Shop pieces are always counted in pieces.
+                    unitOfMeasureId: value === 'Pieces' && pieceUnit ? pieceUnit.id : form.unitOfMeasureId,
+                  })
+                }
               >
                 <SelectTrigger id="product-kind-field" className="w-full">
                   <SelectValue />
@@ -216,6 +252,7 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
                 <SelectContent>
                   <SelectItem value="Loose">Loose</SelectItem>
                   <SelectItem value="Packed">Packed</SelectItem>
+                  <SelectItem value="Pieces">Shop pieces</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -316,6 +353,66 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             </div>
           )}
 
+          {form.kind === 'Pieces' && (
+            <div className="grid gap-4 rounded-lg border bg-muted/40 p-3 sm:grid-cols-2">
+              <div className="grid gap-1.5 sm:col-span-2">
+                <Label htmlFor="product-pieces-source">
+                  Pieces of <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={form.sourceProductId}
+                  onValueChange={(value) => setForm({ ...form, sourceProductId: value })}
+                >
+                  <SelectTrigger id="product-pieces-source" className="w-full">
+                    <SelectValue placeholder="Choose the loose pappadam" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {looseKgOptions.map((candidate) => (
+                      <SelectItem key={candidate.id} value={candidate.id}>
+                        {candidate.name}
+                        {candidate.piecesPerKg !== null && ` · ${formatQuantity(candidate.piecesPerKg)} pieces per kg`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Sent from the factory in kg and turned into pieces with that pappadam's pieces per kg. The
+                  15/30/50-piece bundles the shop makes up are still these pieces, not products.
+                </p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="piecesRate">
+                  Rate per piece <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="piecesRate"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  value={form.sellingPrice}
+                  onChange={(event) => setForm({ ...form, sellingPrice: event.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Also the most a piece may be sold for.</p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="minimumSellingPrice">Lowest rate per piece</Label>
+                <Input
+                  id="minimumSellingPrice"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="No lower than the rate"
+                  value={form.minimumSellingPrice}
+                  onChange={(event) => setForm({ ...form, minimumSellingPrice: event.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">For caterers and other shops.</p>
+              </div>
+            </div>
+          )}
+
           {form.kind === 'Loose' && unitIsKg && (
             <div className="grid gap-1.5 rounded-lg border bg-muted/40 p-3">
               <Label htmlFor="piecesPerKg">Pieces per kg</Label>
@@ -337,18 +434,20 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
           )}
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="sellingPrice">Selling price</Label>
-              <Input
-                id="sellingPrice"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Not sold directly"
-                value={form.sellingPrice}
-                onChange={(event) => setForm({ ...form, sellingPrice: event.target.value })}
-              />
-            </div>
+            {form.kind !== 'Pieces' && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="sellingPrice">Selling price</Label>
+                <Input
+                  id="sellingPrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Not sold directly"
+                  value={form.sellingPrice}
+                  onChange={(event) => setForm({ ...form, sellingPrice: event.target.value })}
+                />
+              </div>
+            )}
 
             <div className="grid gap-1.5">
               <Label htmlFor="shelfLifeDays">Shelf life (days)</Label>

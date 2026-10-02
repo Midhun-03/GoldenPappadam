@@ -17,6 +17,9 @@ public partial class InvoiceSettingsService(AppDbContext db)
     /// <summary>The numbering series of return notes, which invoices must never share.</summary>
     public const string ReturnSeries = "RN";
 
+    /// <summary>The numbering series of the own shop's counter sales, "OS/26-27/000001".</summary>
+    public const string OwnShopSeries = "OS";
+
     [GeneratedRegex("^[A-Z0-9]{1,3}$")]
     private static partial Regex SeriesShape();
 
@@ -50,6 +53,11 @@ public partial class InvoiceSettingsService(AppDbContext db)
         if (seriesCode == ReturnSeries)
         {
             throw new DomainException($"'{ReturnSeries}' numbers return notes. Choose another prefix for invoices.");
+        }
+
+        if (seriesCode == OwnShopSeries)
+        {
+            throw new DomainException($"'{OwnShopSeries}' numbers the own shop's sales. Choose another prefix for invoices.");
         }
 
         // Switching GST on with a product still undecided would stop every bill for it, the phone's

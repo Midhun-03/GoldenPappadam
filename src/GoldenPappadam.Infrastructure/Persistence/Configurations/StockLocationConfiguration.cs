@@ -35,6 +35,14 @@ public class StockLocationConfiguration : IEntityTypeConfiguration<StockLocation
                 Name = "Sales van 1",
                 Kind = StockLocationKind.Van,
                 CreatedAt = SeededAt
+            },
+            new StockLocation
+            {
+                Id = KnownStockLocations.OwnShopId,
+                Code = "SHOP",
+                Name = "Own shop",
+                Kind = StockLocationKind.Shop,
+                CreatedAt = SeededAt
             });
     }
 }

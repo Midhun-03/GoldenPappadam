@@ -10,4 +10,7 @@ public static class KnownUnits
     /// packet (20 pieces) into the loose stock it uses.
     /// </summary>
     public static readonly Guid KilogramId = Guid.Parse("2a9f3f9e-0f01-4a1e-9f7a-0b1a0a000001");
+
+    /// <summary>What the own shop counts and sells pappadam in.</summary>
+    public static readonly Guid PieceId = Guid.Parse("2a9f3f9e-0f01-4a1e-9f7a-0b1a0a000002");
 }

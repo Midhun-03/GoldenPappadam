@@ -23,10 +23,13 @@ export function StockAdjustDialog({
   open,
   onOpenChange,
   product,
+  locationId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   product: StockOnHand | null
+  /** Where the count was made. Left out means the main warehouse. */
+  locationId?: string
 }) {
   const queryClient = useQueryClient()
   const [countedQuantity, setCountedQuantity] = useState('')
@@ -46,6 +49,7 @@ export function StockAdjustDialog({
         productId: product!.productId,
         countedQuantity: Number(countedQuantity),
         notes: notes.trim(),
+        locationId,
       }),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ['stock'] })
@@ -83,7 +87,7 @@ export function StockAdjustDialog({
             <Input
               id="counted"
               type="number"
-              step="0.001"
+              step={product?.unitCode === 'PCS' ? '1' : '0.001'}
               min="0"
               required
               value={countedQuantity}
