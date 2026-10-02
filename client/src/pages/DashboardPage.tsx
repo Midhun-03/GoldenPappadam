@@ -31,6 +31,7 @@ import {
   dailySeries,
   earliestDayNeeded,
   paymentMix,
+  previousRange,
   rangeLabels,
   rangeStart,
   startOfMonth,
@@ -146,6 +147,8 @@ export function DashboardPage() {
   const yesterdayTotal = totalBetween(invoices, yesterday, yesterday)
   const monthToDate = totalBetween(invoices, startOfMonth(today), today)
   const lastMonthToSameDay = totalBetween(invoices, previousMonthStart, previousMonthSameDay)
+  const before = previousRange(range, today)
+  const beforeTotal = before ? totalBetween(invoices, before.from, before.to) : null
 
   const health = stockHealth(stock.data ?? [])
   const mix = paymentMix(invoices, from, today)
@@ -168,17 +171,31 @@ export function DashboardPage() {
       change: bills.isPending ? null : changeAgainst(todayTotal.total, yesterdayTotal.total),
       changeLabel: 'against yesterday',
     },
-    {
-      key: 'month',
-      label: 'This month',
-      value: summary.data?.monthSales ?? 0,
-      kind: 'money',
-      hint: `${summary.data?.monthInvoiceCount ?? 0} bills this month`,
-      icon: FileText,
-      to: '/invoices',
-      change: bills.isPending ? null : changeAgainst(monthToDate.total, lastMonthToSameDay.total),
-      changeLabel: 'against the same days last month',
-    },
+    // Follows the range picked above, so "Last 30 days" shows the last 30 days here too - not only
+    // in the charts. This month keeps the server's own figure.
+    before && beforeTotal
+      ? {
+          key: 'range',
+          label: rangeLabels[range],
+          value: inRange.total,
+          kind: 'money',
+          hint: `${inRange.count} bills since ${formatDay(from)}`,
+          icon: FileText,
+          to: '/invoices',
+          change: bills.isPending ? null : changeAgainst(inRange.total, beforeTotal.total),
+          changeLabel: `against the ${before.days} days before`,
+        }
+      : {
+          key: 'month',
+          label: 'This month',
+          value: summary.data?.monthSales ?? 0,
+          kind: 'money',
+          hint: `${summary.data?.monthInvoiceCount ?? 0} bills this month`,
+          icon: FileText,
+          to: '/invoices',
+          change: bills.isPending ? null : changeAgainst(monthToDate.total, lastMonthToSameDay.total),
+          changeLabel: 'against the same days last month',
+        },
     {
       key: 'outstanding',
       label: 'Outstanding',

@@ -27,14 +27,30 @@ export function rangeStart(range: RangeKey, today: string) {
   return startOfMonth(today)
 }
 
+/** How many days a rolling range covers; null for "this month", which is a calendar period. */
+export function rangeDays(range: RangeKey) {
+  if (range === '7d') return 7
+  if (range === '30d') return 30
+  return null
+}
+
+/** The same number of days just before a rolling range, to compare it against. */
+export function previousRange(range: RangeKey, today: string) {
+  const days = rangeDays(range)
+  if (days === null) return null
+
+  const from = rangeStart(range, today)
+  return { from: shiftDay(from, -days), to: shiftDay(from, -1), days }
+}
+
 /**
  * The earliest day the dashboard needs in one request: far enough back to cover the widest
- * range the user can pick and the previous month it compares against.
+ * range the user can pick, the 30 days before it, and the previous month it compares against.
  */
 export function earliestDayNeeded(today: string) {
-  const thirtyDays = shiftDay(today, -29)
+  const sixtyDays = shiftDay(today, -59)
   const previousMonth = startOfPreviousMonth(today)
-  return previousMonth < thirtyDays ? previousMonth : thirtyDays
+  return previousMonth < sixtyDays ? previousMonth : sixtyDays
 }
 
 const isSale = (invoice: InvoiceListItem) => invoice.status === 'Issued'
