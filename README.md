@@ -8,6 +8,10 @@ company's own retail shop.
 The office uses it on real data. Most of the business is sold on credit and paid partly, bill to bill, and
 the sales team works in places with no mobile signal. Those two facts shaped most of the design.
 
+![Dashboard](docs/screenshots/dashboard.png)
+
+<sub>Screenshots are taken from a demo database with fictional shops and figures.</sub>
+
 ## What it does
 
 **Office (React admin panel)**
@@ -37,6 +41,17 @@ the sales team works in places with no mobile signal. Those two facts shaped mos
   a second bill.
 - The phone never sets a price. Prices come from the office, and changing a rate goes through an
   office-approved request.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Bills with paid, part-paid and unpaid status](docs/screenshots/invoices.png) | ![An invoice with its stored PDF, payments and the snapshot printed on it](docs/screenshots/invoice.png) |
+| **Bills** — credit, partial payments and outstanding per bill | **Invoice** — immutable once finalized, PDF stored and fingerprinted |
+| ![Customer account statement with running balance](docs/screenshots/customer.png) | ![Stock on hand derived from the movement ledger](docs/screenshots/stock.png) |
+| **Customer** — account statement with a running balance, multiple branches | **Stock** — every balance is the sum of its movement history |
+| ![Packing loose stock into packets](docs/screenshots/packing.png) | <img src="docs/screenshots/dashboard-mobile.png" alt="Dashboard on a phone" width="260"> |
+| **Packing** — loose kg converted to packets with a pieces-per-kg snapshot | **Responsive** — the admin panel on a phone |
 
 ## Tech stack
 
@@ -125,4 +140,4 @@ The connection string is in `src/GoldenPappadam.Api/appsettings.json`; override 
 
 ## Author
 
-Built by Midhu, a full-stack .NET developer. <!-- TODO: your full name and LinkedIn / portfolio link -->
+Built by [Midhun-03](https://github.com/Midhun-03), a full-stack .NET developer. <!-- TODO: your full name and LinkedIn / portfolio link -->
