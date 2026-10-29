@@ -433,7 +433,7 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-10-29_
 
 **Own shop done (2026-09-30)**, rules in §4, design `docs/08-own-shop-design.md`. `SHOP` location,
 `ProductKind.Pieces`, `Product.MinimumSellingPrice`, movement type `ShopTransfer`, and the `ownshop` schema
@@ -527,10 +527,13 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   unique index on `SyncSubmissions.ClientRequestId`, generated once on the device and never regenerated, so a
   retry returns the original bill instead of making a second one. The batch answers per item, so one rejected
   sale does not stop the nine behind it, and a rejection writes nothing, leaving the client id free to succeed
-  later. A price changed while the phone was offline is **flagged, not rewritten**. Known gap, commented at
-  `RecordSubmissionAsync`: the submission row is committed just after the record rather than inside the same
-  transaction, because `InvoiceService` rolls back and retries its own transaction when two bills race for an
-  invoice number. A dropped connection is fully covered; a process crash between the two commits is not.
+  later. A price changed while the phone was offline is **flagged, not rewritten**. _Fixed 2026-10-29:_ each
+  item now runs in one transaction that also writes its `SyncSubmissions` row, so a crash between the two can
+  no longer leave a record a retry would duplicate. The services on the phone's path join that transaction
+  (`ServiceTransaction`, `BeginOrJoinTransactionAsync`) instead of starting their own; from the office they
+  still own theirs. A refused item is rolled back and forgotten (it used to leak a half-built return into the
+  next item's save), and a unique-index clash that is not a repeat of the same client id is refused rather
+  than reported as already accepted. Covered by the crash and clash tests in `MobileSyncTests`.
 - **M9 done (phase 3):** "Today on the road" - sales, shops visited, cash collected, sold on credit and
   outstanding created today, then the bills with **recorded-on-the-phone against received-by-the-server**,
   which is what makes offline legible rather than mysterious, plus the visits that sold nothing.
@@ -706,6 +709,25 @@ Decisions made:
   off until a GSTIN is entered; PDF by QuestPDF, stored once behind `IInvoiceDocumentStorage`; email via
   MailKit behind `IEmailSender`, credentials only in user-secrets / environment.
 
+- 2026-10-27 — **Data reset before real use** (owner): every transaction, product, customer and employee
+  was deleted; only the user accounts, the phone's device row and the seeded defaults (units, locations,
+  expense categories, attendance statuses) remain, and invoice settings are back to their defaults (no
+  GSTIN). Numbering restarts at `GP/26-27/000001`. Backups from just before: `GoldenPappadam_before_reset_20261027.bak`
+  (everything) and `GoldenPappadam_before_master_reset_20261027.bak`; the deleted bills' PDFs are in
+  `App_Data/archive-before-reset`.
+- 2026-10-29 — **Price on a bill from the phone** (owner): the server accepts a line price only if it is the
+  shop's current rate or the rate the phone last received in its snapshot (a rate the office changed while
+  the phone was offline); any other price, ₹0 included, is refused. Replaces "accept and flag" for
+  mismatches - a bill priced at the last-known rate is still flagged for the office. Not built yet.
+- 2026-10-29 — **Hosting** (owner): production runs on the existing **Windows 11 office PC**, on during working
+  hours including the Sundays staff work, with phones syncing over the office Wi-Fi. Network, security and
+  reliability requirements are to be identified before anything is changed. Not set up yet.
+- 2026-10-29 — **Backups** (owner): all four databases on the instance are backed up - `GoldenPappadam`,
+  `GoldenPappadamDemo`, `Golden_ERP` (empty, no project uses it) and `GoldenProductsDB` (the separate
+  `source/repos/GoldenProducts` project) - none deleted until its purpose is confirmed. Encrypted, the password
+  kept separately, integrity verified, restores tested into separate databases. Off-site copy in a separate
+  business Google account; local copy on the existing 8 GB USB drive if it fits. Planning only until approved.
+
 Pending decisions:
 
 - None blocking. Open business questions remain in §10.
@@ -834,9 +856,9 @@ Never design around an assumption for these; ask, or keep the design open.
 |---|---|---|---|
 | ~~1~~ | ~~Do different shops pay different prices?~~ | **Answered 2026-09-15: yes.** See §4 "Confirmed requirements" | sales pricing |
 | ~~2~~ | ~~Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded?~~ | **Answered 2026-09-25:** only expired or damaged packets come back, never resold; replacement, credit or nothing, decided by the office per shop. Pappadam lasts 20 days from packing; unsold packets are repacked (any size, no loss, fresh 20 days) when the office decides. Built in the office 2026-09-26; phone next - `docs/05-reports-returns-design.md` | inventory + sales |
-| 3 | Are discounts given, and at bill level or item level? | TBD — owner to confirm | invoice totals |
+| ~~3~~ | ~~Are discounts given, and at bill level or item level?~~ | **Answered 2026-10-29:** bill-level only, given from the office **and from the phone** (the phone sends 0 today). No item-level discounts. A salesman may give **any amount, with no limit and no office approval** (owner, 2026-10-29). Not built on the phone yet | invoice totals, phone sale |
 | 4 | GST: the exact HSN code, that pappadam is exempt rather than nil-rated, and the "Bill of Supply" heading on GST bills for exempt goods | **Partly answered 2026-09-23:** one HSN, no GST today, GST bills only for GST-registered shops. Accountant to confirm the three details | invoices |
-| 5 | Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now? | TBD — owner / accountant | invoice numbering |
+| ~~5~~ | ~~Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now?~~ | **Answered 2026-10-27:** start at 1. No bill had gone to a real customer; all test bills were deleted in the data reset | invoice numbering |
 | ~~6~~ | ~~Which days does a Saturday's wage cover? Is Sunday a working day?~~ | **Answered 2026-09-28:** Sunday to Saturday, Saturday included; Sunday is worked by some employees in turn | weekly wages |
 | ~~7~~ | ~~A wage changed mid-week?~~ | **Answered 2026-09-28:** each day at its own rate | weekly wages |
 | ~~8~~ | ~~Attendance found wrong after a week is paid?~~ | **Answered 2026-09-28:** carry the difference to the next week | weekly wages |
@@ -846,5 +868,6 @@ Never design around an assumption for these; ask, or keep the design open.
 | ~~12~~ | ~~200 pieces/kg for every variety? Weight-based packets?~~ | **Answered 2026-09-30:** per loose variety - 200 for the standard 4-inch, its own figure for a larger one (4.5-inch); a weight-based packet consumes its weight (100 × 250 g = 25 kg) | packing |
 | ~~13~~ | ~~Products say 0.250 kg / 0.080 kg per packet - which is right?~~ | **Answered 2026-09-30:** 200 pieces/kg is correct for the standard pappadam these are packed from; the product settings are corrected when built, recorded packing entries stay as they are | packing, stock age, repacking |
 | ~~14~~ | ~~Rate approval: onboarding = same save? Newer request replaces a pending one?~~ | **Answered 2026-09-30:** yes to both | rate approval |
+| 15 | How long must invoices, GST records, books of account and related records be kept? (Backups proposed: yearly copies for 8 years.) | TBD — accountant; the 8-year proposal is **not approved** | backup retention |
 
 Answered on 2026-09-14 and now part of the design: stock shortfall warns instead of blocking; one loose variety can be packed into many packet sizes; a pack can occasionally be made from another pack.
