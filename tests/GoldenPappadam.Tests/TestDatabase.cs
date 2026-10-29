@@ -3,6 +3,7 @@ using GoldenPappadam.Domain.Sales;
 using GoldenPappadam.Infrastructure.Identity;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace GoldenPappadam.Tests;
 
@@ -39,6 +40,10 @@ public sealed class TestDatabase : IAsyncDisposable
     /// Concurrency tests give each simulated device its own.
     /// </summary>
     public AppDbContext NewContext() => new(_options, CurrentUser);
+
+    /// <summary>Another connection whose commands pass through these interceptors - to simulate a crash, say.</summary>
+    public AppDbContext NewContext(params IInterceptor[] interceptors) =>
+        new(new DbContextOptionsBuilder<AppDbContext>(_options).AddInterceptors(interceptors).Options, CurrentUser);
 
     /// <summary>Switches GST on (or off, with a null GSTIN) the way the settings screen does.</summary>
     public async Task ConfigureGstAsync(

@@ -223,7 +223,13 @@ public class MobileSyncService(
 
         try
         {
-            return item.Type switch
+            // The record and the row saying it arrived commit together or not at all. Neither a dropped
+            // connection nor the server dying in between can leave a bill without its submission row,
+            // which is what would let the phone's retry make a second one. The services called below
+            // join this transaction rather than starting their own.
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            var result = item.Type switch
             {
                 SubmissionType.Invoice => await AcceptSaleAsync(device, item, ct),
                 SubmissionType.Payment => await AcceptPaymentAsync(device, item, ct),
@@ -238,23 +244,48 @@ public class MobileSyncService(
                 SubmissionType.RateRequestCancel => await AcceptRateRequestCancelAsync(device, item, ct),
                 _ => Rejected(item, $"{item.Type} is not something this device can send.")
             };
+
+            await transaction.CommitAsync(ct);
+
+            return result;
         }
         catch (DomainException exception)
         {
             // NotFoundException is a DomainException, so this covers "no such shop" too. Either
             // way the phone keeps the row and shows the salesperson what the server objected to.
+            // The transaction is rolled back; anything the refused item had added is forgotten too,
+            // or the next item's save would write it.
+            Forget(device);
             return Rejected(item, exception.Message);
         }
         catch (DbUpdateException exception) when (IsDuplicate(exception))
         {
-            // Two syncs raced. The unique index settled it; report whichever won.
-            db.ChangeTracker.Clear();
+            Forget(device);
             var winner = await FindSubmissionAsync(item.ClientRequestId, ct);
 
+            // Two syncs of the same item raced, and the unique index on the client id settled it: report
+            // the one that won. Any other clash is not a repeat - calling it accepted would make the phone
+            // mark it sent and lose it - so it is refused and stays on the phone.
+            if (winner is null)
+            {
+                return Rejected(item,
+                    "This could not be saved because it clashes with a record already on file. Ask the office to look at it.");
+            }
+
             return new SubmissionResultDto(
-                item.ClientRequestId, SubmissionOutcome.AlreadyAccepted, winner?.CreatedRecordId,
-                null, winner?.PriceMismatch ?? false, [], await DocumentNumberAsync(winner, ct));
+                item.ClientRequestId, SubmissionOutcome.AlreadyAccepted, winner.CreatedRecordId,
+                null, winner.PriceMismatch, [], await DocumentNumberAsync(winner, ct));
         }
+    }
+
+    /// <summary>
+    /// Drops whatever a failed item left in the change tracker - its transaction is already rolled back -
+    /// and keeps the device, which the rest of the batch still uses.
+    /// </summary>
+    private void Forget(Device device)
+    {
+        db.ChangeTracker.Clear();
+        db.Devices.Attach(device);
     }
 
     /// <summary>
@@ -461,9 +492,8 @@ public class MobileSyncService(
             // The shop and the rates the salesperson agreed with it, together or not at all. This is the
             // only moment a salesperson sets a rate (CLAUDE.md §4 "Rate-change approval"). The rates are
             // checked first, so a bad one refuses the shop before anything is written.
+            // Both inside the item's transaction (SubmitOneAsync), so a refused rate refuses the shop too.
             await prices.EnsureInitialRatesValidAsync(initialRates, ct);
-
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
             await customers.CreateAsync(
                 new SaveCustomerRequest(
@@ -473,8 +503,6 @@ public class MobileSyncService(
                 request.Id);
             await prices.SetInitialRatesAsync(request.Id, initialRates, ct);
             await db.SaveChangesAsync(ct);
-
-            await transaction.CommitAsync(ct);
         }
         else
         {
@@ -715,16 +743,9 @@ public class MobileSyncService(
     }
 
     /// <summary>
-    /// Marks the client request as done. This is written just after the record it describes rather
-    /// than inside the same transaction, because InvoiceService owns a transaction of its own that
-    /// it rolls back and retries when two bills race for an invoice number, and nesting the two
-    /// would make that retry tear down the outer one.
-    ///
-    /// The window that leaves is a process crash between the two commits, which would let a retry
-    /// make a second bill. A dropped connection - the failure that actually happens on the road -
-    /// is fully covered, because the submission row is committed before the phone is answered.
-    /// Closing the crash window properly means letting the sales services join a caller's
-    /// transaction, which is worth doing if it ever bites.
+    /// Marks the client request as done, in the same transaction as the record it describes (opened by
+    /// <see cref="SubmitOneAsync"/>), so the two are committed together and a retry can never find the
+    /// record without the row - the gap that once let a crash between two commits produce a second bill.
     /// </summary>
     private async Task RecordSubmissionAsync(
         Device device,

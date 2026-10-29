@@ -297,18 +297,19 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             : customer.StateCode ?? (customer.Gstin is null ? null : Gstin.StateCodeOf(customer.Gstin));
 
     /// <summary>
-    /// Numbers and saves the invoice in one transaction. A unique-index clash means the counter has
-    /// fallen behind the invoices on file - it cannot happen while every number comes from
-    /// <see cref="InvoiceNumbering"/> - so the counter is repaired and the save tried again rather
-    /// than showing the person an error they cannot fix.
+    /// Numbers and saves the invoice in one transaction - its own, or the caller's when the phone's sync
+    /// has one open. A number already on file means the counter has fallen behind the invoices (a restored
+    /// backup, a hand edit; it cannot happen while every number comes from <see cref="InvoiceNumbering"/>),
+    /// so the counter is repaired and the next number taken rather than showing the person an error they
+    /// cannot fix.
     /// </summary>
     private async Task SaveAsync(Invoice invoice, string seriesCode, Guid locationId, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await using var transaction = await db.Database.BeginOrJoinTransactionAsync(ct);
 
-            var number = await InvoiceNumbering.ReserveAsync(db, seriesCode, invoice.InvoiceDate, ct);
+            var number = await ReserveFreeNumberAsync(seriesCode, invoice.InvoiceDate, ct);
             invoice.InvoiceNumber = number.InvoiceNumber;
             invoice.SeriesCode = number.SeriesCode;
             invoice.FinancialYear = number.FinancialYear;
@@ -335,7 +336,9 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
                 await transaction.CommitAsync(ct);
                 return;
             }
-            catch (DbUpdateException exception) when (IsUniqueViolation(exception) && attempt < SaveAttempts)
+            // Retried only in a transaction of its own: rolling back a joined one would undo the caller's work,
+            // so there the failure goes to the caller, which rolls the whole item back.
+            catch (DbUpdateException exception) when (IsUniqueViolation(exception) && transaction.IsOwned && attempt < SaveAttempts)
             {
                 await transaction.RollbackAsync(ct);
 
@@ -357,6 +360,24 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
                 await InvoiceNumbering.RepairAsync(db, number.SeriesCode, number.FinancialYear, ct);
             }
         }
+    }
+
+    /// <summary>
+    /// The next number, checked against the invoices on file before it is used. Inside the transaction, so the
+    /// counter's row lock still keeps two bills from taking the same number.
+    /// </summary>
+    private async Task<InvoiceNumbering.Reserved> ReserveFreeNumberAsync(string seriesCode, DateOnly invoiceDate, CancellationToken ct)
+    {
+        var number = await InvoiceNumbering.ReserveAsync(db, seriesCode, invoiceDate, ct);
+
+        if (!await db.Invoices.AnyAsync(i => i.InvoiceNumber == number.InvoiceNumber, ct))
+        {
+            return number;
+        }
+
+        await InvoiceNumbering.RepairAsync(db, number.SeriesCode, number.FinancialYear, ct);
+
+        return await InvoiceNumbering.ReserveAsync(db, seriesCode, invoiceDate, ct);
     }
 
     private sealed record ProductForBill(

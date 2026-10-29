@@ -58,7 +58,7 @@ public class ReturnService(
             Lines = lines
         };
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = await db.Database.BeginOrJoinTransactionAsync(ct);
 
         var number = await InvoiceNumbering.ReserveAsync(db, InvoiceSettingsService.ReturnSeries, note.ReturnDate, ct);
         note.ReturnNumber = number.InvoiceNumber;

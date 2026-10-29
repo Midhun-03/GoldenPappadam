@@ -42,7 +42,7 @@ public class PaymentService(AppDbContext db)
             ? await BuildRequestedAllocationsAsync(customer.Id, request, ct)
             : await BuildOldestFirstAllocationsAsync(customer.Id, request.Amount, ct);
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = await db.Database.BeginOrJoinTransactionAsync(ct);
         db.Payments.Add(payment);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

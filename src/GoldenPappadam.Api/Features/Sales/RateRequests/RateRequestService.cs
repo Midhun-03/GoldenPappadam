@@ -79,7 +79,7 @@ public class RateRequestService(AppDbContext db, CustomerPriceService prices, IC
             Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim()
         };
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = await db.Database.BeginOrJoinTransactionAsync(ct);
 
         // The older pending request steps aside first: only one may be waiting per customer and product.
         var older = await db.CustomerRateRequests

@@ -41,7 +41,7 @@ public class VanLoadService(AppDbContext db, StockService stock)
 
         var occurredAt = request.OccurredAt?.ToUniversalTime() ?? DateTime.UtcNow;
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await using var transaction = await db.Database.BeginOrJoinTransactionAsync(ct);
 
         var load = new VanLoad
         {
