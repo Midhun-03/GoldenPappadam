@@ -196,7 +196,7 @@ export function CustomerDialog({
 
             <div className="grid gap-4 sm:grid-cols-2">
               {form.isGstRegistered && (
-                <div className="grid gap-1.5">
+                <div className="grid animate-arrive gap-1.5">
                   <Label htmlFor="gstin">
                     GSTIN <span className="text-destructive">*</span>
                   </Label>

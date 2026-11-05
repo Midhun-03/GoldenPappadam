@@ -30,8 +30,10 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
-import { useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { rateRequestsApi } from '@/api/rateRequests'
 import { useAuth } from '@/auth/auth-context'
 import { Button } from '@/components/ui/button'
 import {
@@ -44,6 +46,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { ChangePasswordDialog } from './ChangePasswordDialog'
+import { Logo } from './Logo'
 
 type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean }
 type NavGroup = { label: string | null; items: NavItem[] }
@@ -119,66 +122,129 @@ const navigation: NavGroup[] = [
   },
 ]
 
-function Logo({ className }: { className?: string }) {
+/** The name and mark. Also the way home: it leads to the dashboard, and the pappadam puffs as you reach for it. */
+function Brand({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <svg viewBox="0 0 32 32" aria-hidden="true" className={cn('size-7 shrink-0', className)}>
-      <rect width="32" height="32" rx="7" className="fill-primary" />
-      <circle cx="16" cy="16" r="9" className="fill-brand" />
-      <circle cx="12.6" cy="13.6" r="1.1" className="fill-brand-deep" />
-      <circle cx="18.8" cy="15.2" r="0.9" className="fill-brand-deep" />
-      <circle cx="15.1" cy="19" r="1" className="fill-brand-deep" />
-    </svg>
-  )
-}
-
-function Brand() {
-  return (
-    <div className="flex items-center gap-2.5">
+    <Link
+      to="/"
+      onClick={onNavigate}
+      aria-label="Golden Pappadam, go to the dashboard"
+      className="gp-home -mx-1.5 flex items-center gap-2.5 rounded-lg px-1.5 py-1 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+    >
       <Logo />
       <span className="font-heading text-sm font-semibold tracking-tight">Golden Pappadam</span>
-    </div>
+    </Link>
   )
 }
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const { pathname } = useLocation()
+  const navRef = useRef<HTMLElement>(null)
+  const markerRef = useRef<HTMLSpanElement>(null)
+  const hasPlaced = useRef(false)
+
+  // Shares its cache with the Rate requests page's default view, so approving one there updates this count.
+  const pendingRates = useQuery({
+    queryKey: ['rate-requests', { status: 'Pending' }],
+    queryFn: () => rateRequestsApi.list({ status: 'Pending' }),
+  })
+  const waiting: Record<string, number | undefined> = { '/rate-requests': pendingRates.data?.length }
+
+  // One marker for the whole list, moved to the active link, so changing page shows where you went
+  // from and to. It is placed without travel the first time, so a fresh load does not sweep.
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    const marker = markerRef.current
+    if (!nav || !marker) return
+
+    const place = (travel: boolean) => {
+      const active = nav.querySelector<HTMLElement>('a[aria-current="page"]')
+      // No active link, or the list is hidden (the desktop sidebar on a phone): nothing to point at.
+      if (!active || active.offsetHeight === 0) {
+        marker.style.opacity = '0'
+        hasPlaced.current = false
+        return
+      }
+
+      const top = active.getBoundingClientRect().top - nav.getBoundingClientRect().top
+      marker.style.transition = travel && hasPlaced.current ? '' : 'none'
+      marker.style.transform = `translateY(${top + 6}px)`
+      marker.style.height = `${active.offsetHeight - 12}px`
+      marker.style.opacity = '1'
+      hasPlaced.current = true
+    }
+
+    place(true)
+
+    // The list can appear or reflow without a page change (a window crossing the sidebar
+    // breakpoint, a font loading late); the marker follows without travelling.
+    // Its first call only reports the size just measured, and would cut the travel short.
+    let isFirst = true
+    const observer = new ResizeObserver(() => {
+      if (isFirst) {
+        isFirst = false
+        return
+      }
+      place(false)
+    })
+    observer.observe(nav)
+    return () => observer.disconnect()
+  }, [pathname])
+
   return (
-    <nav className="flex flex-col gap-5" aria-label="Main">
+    <nav ref={navRef} className="relative flex flex-col gap-5" aria-label="Main">
+      <span
+        ref={markerRef}
+        aria-hidden="true"
+        className="nav-marker pointer-events-none absolute top-0 -left-2 w-0.5 rounded-full bg-primary opacity-0"
+      />
       {navigation.map((group, index) => (
         <div key={group.label ?? `group-${index}`} className="flex flex-col gap-0.5">
           {group.label && (
             <div className="mb-1 px-3 text-xs font-medium tracking-wide text-muted-foreground">{group.label}</div>
           )}
-          {group.items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                cn(
-                  'relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  'focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
-                  isActive
-                    ? 'bg-secondary text-foreground'
-                    : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'absolute top-1.5 bottom-1.5 -left-2 w-0.5 rounded-full bg-primary transition-opacity',
-                      isActive ? 'opacity-100' : 'opacity-0',
+          {group.items.map((item) => {
+            const count = waiting[item.to]
+
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    'group/nav flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    'focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+                    isActive
+                      ? 'bg-secondary text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <item.icon
+                      className={cn(
+                        'size-4 shrink-0 transition-transform duration-150 group-hover/nav:-translate-y-px',
+                        isActive && 'text-foreground',
+                      )}
+                    />
+                    {item.label}
+                    {count !== undefined && count > 0 && (
+                      <span
+                        key={count}
+                        className="ml-auto animate-pop rounded-full bg-primary px-1.5 py-px text-[0.6875rem] leading-4 font-semibold text-primary-foreground tabular-nums"
+                      >
+                        {count}
+                        <span className="sr-only"> waiting</span>
+                      </span>
                     )}
-                  />
-                  <item.icon className={cn('size-4 shrink-0', isActive && 'text-foreground')} />
-                  {item.label}
-                </>
-              )}
-            </NavLink>
-          ))}
+                  </>
+                )}
+              </NavLink>
+            )
+          })}
         </div>
       ))}
     </nav>
@@ -270,7 +336,7 @@ export function AppLayout() {
             <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-card shadow-xl duration-200 outline-none data-open:animate-in data-open:slide-in-from-left data-closed:animate-out data-closed:slide-out-to-left">
               <DialogPrimitive.Title className="sr-only">Menu</DialogPrimitive.Title>
               <div className="flex h-14 items-center px-5">
-                <Brand />
+                <Brand onNavigate={() => setIsDrawerOpen(false)} />
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-4">
                 <NavLinks onNavigate={() => setIsDrawerOpen(false)} />

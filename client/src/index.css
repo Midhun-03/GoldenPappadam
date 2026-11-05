@@ -37,7 +37,7 @@
     --color-info-surface: var(--info-surface);
     --color-destructive-surface: var(--destructive-surface);
 
-    /* The Golden Pappadam mark. Deliberately used nowhere else. */
+    /* The Golden Pappadam mark, and the dashboard's lead tile. Used nowhere else. */
     --color-brand: var(--brand);
     --color-brand-deep: var(--brand-deep);
 
@@ -67,7 +67,7 @@
  *   warning      low stock, money left on account
  *   destructive  errors, out of stock, money owed
  *   info         neutral notices
- *   brand        the logo mark only
+ *   brand        the logo mark, and the dashboard's lead tile (today's sales)
  *
  * Nothing else may introduce a colour. Reach for a token or stay neutral.
  */
@@ -166,6 +166,127 @@
 
 @utility animate-enter {
     animation: gp-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/*
+ * Something that appeared because of what the user just did: a bill line they added, a field a
+ * choice revealed. It drops in from where it was asked for, so the eye follows cause to result.
+ */
+@keyframes gp-arrive {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@utility animate-arrive {
+    animation: gp-arrive 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/*
+ * A proportion bar (how much of a bill a payment covers, a shop's share of what is owed) grows
+ * from nothing to its value on arrival, then follows later changes with the same curve. The
+ * keyframe has no end, so it lands on whatever the inline transform says.
+ */
+@keyframes gp-fill {
+    from {
+        transform: scaleX(0);
+    }
+}
+
+@utility animate-fill {
+    animation: gp-fill 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+ * The mark is a pappadam, so it behaves like one. Dropped in oil a pappadam swells past its
+ * size and settles, then its blisters rise: `data-arrive` plays that once (the sign-in screen),
+ * `data-frying` keeps the blisters bubbling only while work is really in flight, and a home link
+ * wrapping the mark (`.gp-home`) gives it a small puff on hover.
+ */
+.gp-mark-disc,
+.gp-mark-blister {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes gp-puff {
+    0% {
+        transform: scale(0.6);
+    }
+    55% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: none;
+    }
+}
+
+@keyframes gp-blister {
+    from {
+        opacity: 0;
+        transform: scale(0);
+    }
+}
+
+@keyframes gp-bubble {
+    0%,
+    100% {
+        transform: none;
+    }
+    50% {
+        transform: scale(1.7);
+    }
+}
+
+.gp-mark[data-arrive] .gp-mark-disc {
+    animation: gp-puff 640ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.gp-mark[data-arrive] .gp-mark-blister {
+    animation: gp-blister 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(340ms + var(--i) * 110ms);
+}
+
+.gp-mark[data-frying] .gp-mark-blister {
+    animation: gp-bubble 720ms ease-in-out infinite;
+    animation-delay: calc(var(--i) * 160ms);
+}
+
+.gp-home:hover .gp-mark-disc,
+.gp-home:focus-visible .gp-mark-disc {
+    transform: scale(1.08);
+}
+
+.gp-home:hover .gp-mark-blister,
+.gp-home:focus-visible .gp-mark-blister {
+    transform: scale(1.35);
+}
+
+/* A count that changed: it pops in, so a new arrival is noticed without demanding anything. */
+@keyframes gp-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+}
+
+@utility animate-pop {
+    animation: gp-pop 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* The sidebar's one active marker travels from the page you left to the page you opened. */
+@utility nav-marker {
+    transition:
+        transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+        height 320ms cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 150ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

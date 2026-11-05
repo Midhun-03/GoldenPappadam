@@ -14,6 +14,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ApiError } from '@/lib/api'
 import { formatMoney, todayInIndia } from '@/lib/format'
+import { useCountUp } from '@/lib/useCountUp'
+import { cn } from '@/lib/utils'
 import { ReturnSettlementFields } from './ReturnSettlementFields'
 
 type Line = { key: number; productId: string; quantity: string; reason: ReturnReason; unitRate: string }
@@ -67,6 +69,7 @@ export function NewReturnPage() {
   })
   const filled = rows.filter((row) => row.line.productId !== '' && row.quantity > 0)
   const total = filled.reduce((sum, row) => sum + row.value, 0)
+  const countedTotal = useCountUp(total, 380)
 
   const create = useMutation({
     mutationFn: () =>
@@ -161,7 +164,7 @@ export function NewReturnPage() {
               </div>
 
               {needsBranch && (
-                <div className="grid gap-1.5 sm:col-span-2">
+                <div className="grid animate-arrive gap-1.5 sm:col-span-2">
                   <Label htmlFor="return-branch">
                     Branch <span className="text-destructive">*</span>
                   </Label>
@@ -199,7 +202,11 @@ export function NewReturnPage() {
               {rows.map((row, index) => (
                 <div
                   key={row.line.key}
-                  className="grid gap-3 rounded-lg border p-3 @xl:grid-cols-[minmax(0,1fr)_6rem_7rem_6rem_6rem_2.25rem] @xl:items-start @xl:rounded-none @xl:border-0 @xl:border-b @xl:p-0 @xl:pb-3 @xl:last:border-0"
+                  className={cn(
+                    // A line the user added drops in under the one before; the first arrives with the page.
+                    row.line.key > 1 && 'animate-arrive',
+                    'grid gap-3 rounded-lg border p-3 @xl:grid-cols-[minmax(0,1fr)_6rem_7rem_6rem_6rem_2.25rem] @xl:items-start @xl:rounded-none @xl:border-0 @xl:border-b @xl:p-0 @xl:pb-3 @xl:last:border-0',
+                  )}
                 >
                   <div className="grid gap-1.5">
                     <Label htmlFor={`return-product-${row.line.key}`} className="text-xs @xl:sr-only">
@@ -330,9 +337,18 @@ export function NewReturnPage() {
             <CardTitle>What the shop gets</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Value of packets</span>
-              <span className="font-medium tabular-nums">{formatMoney(total)}</span>
+            {/* What the settlement below is decided against, so it leads, in ink, and counts as lines change. */}
+            <div className="-mx-(--card-spacing) bg-primary px-(--card-spacing) py-4 text-primary-foreground">
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-medium text-primary-foreground/85">Value of packets</span>
+                <span className="text-xs text-primary-foreground/70 tabular-nums">
+                  {filled.length} {filled.length === 1 ? 'line' : 'lines'}
+                </span>
+              </div>
+              <div className="mt-1 font-heading text-4xl font-semibold tracking-tight tabular-nums">
+                {formatMoney(countedTotal)}
+              </div>
+              <p className="mt-1.5 text-xs text-primary-foreground/75">These packets never go back into stock.</p>
             </div>
 
             <ReturnSettlementFields value={settlement} onChange={setSettlement} packetsValue={total} allowPending />

@@ -51,7 +51,7 @@ export function ReturnSettlementFields({
       <p className="text-xs text-muted-foreground">{hints[value.settlement]}</p>
 
       {value.settlement === 'Credit' && (
-        <div className="grid gap-1.5">
+        <div className="grid animate-arrive gap-1.5">
           <Label htmlFor="return-credit">Credit amount</Label>
           <Input
             id="return-credit"
@@ -71,7 +71,7 @@ export function ReturnSettlementFields({
       )}
 
       {value.settlement === 'Replacement' && (
-        <div className="grid gap-1.5">
+        <div className="grid animate-arrive gap-1.5">
           <Label htmlFor="return-location">Fresh packets from</Label>
           <Select value={value.locationId} onValueChange={(locationId) => onChange({ ...value, locationId })}>
             <SelectTrigger id="return-location" className="w-full">

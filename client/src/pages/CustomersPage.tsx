@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApiError } from '@/lib/api'
 import { formatMoney } from '@/lib/format'
+import { useCountUp } from '@/lib/useCountUp'
 import { cn } from '@/lib/utils'
 import { CustomerDialog } from './CustomerDialog'
 
@@ -49,6 +50,9 @@ export function CustomersPage() {
 
   const rows = customers.data ?? []
   const totalOwed = rows.reduce((sum, customer) => sum + Math.max(customer.balance, 0), 0)
+  const countedOwed = useCountUp(totalOwed)
+  // Each balance is drawn against the largest one shown, so who owes most reads without sorting.
+  const largestOwed = rows.reduce((largest, customer) => Math.max(largest, customer.balance), 0)
   const isFiltered = search !== '' || withBalanceOnly || addedBySales
 
   function openDialog(customer: Customer | null) {
@@ -65,7 +69,7 @@ export function CustomersPage() {
             <span className="tabular-nums">
               {rows.length} shown ·{' '}
               <span className={cn(totalOwed > 0 && 'font-medium text-destructive')}>
-                {formatMoney(totalOwed)} outstanding
+                {formatMoney(countedOwed)} outstanding
               </span>
             </span>
           )
@@ -141,8 +145,13 @@ export function CustomersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((customer) => (
-                  <TableRow key={customer.id} className={customer.isActive ? undefined : 'opacity-60'}>
+                {rows.map((customer, index) => (
+                  <TableRow
+                    key={customer.id}
+                    // The list arrives as a list; the stagger stops after a screenful so it never makes anyone wait.
+                    style={{ animationDelay: `${Math.min(index, 10) * 22}ms` }}
+                    className={cn('animate-enter', !customer.isActive && 'opacity-60')}
+                  >
                     <TableCell className="max-w-[16rem]">
                       <div className="flex items-center gap-2">
                         <Link
@@ -203,6 +212,17 @@ export function CustomersPage() {
                       {formatMoney(customer.balance)}
                       {customer.balance < 0 && (
                         <div className="text-xs font-normal text-muted-foreground">in advance</div>
+                      )}
+                      {customer.balance > 0 && largestOwed > 0 && (
+                        <div className="mt-1.5 ml-auto h-1 w-20 overflow-hidden rounded-full bg-destructive/10" aria-hidden>
+                          <div
+                            className="h-full origin-right animate-fill rounded-full bg-destructive/70"
+                            style={{
+                              transform: `scaleX(${customer.balance / largestOwed})`,
+                              animationDelay: `${Math.min(index, 10) * 22 + 120}ms`,
+                            }}
+                          />
+                        </div>
                       )}
                     </TableCell>
 

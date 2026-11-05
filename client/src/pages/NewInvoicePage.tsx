@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ApiError } from '@/lib/api'
 import { formatMoney, formatQuantity, todayInIndia } from '@/lib/format'
+import { useCountUp } from '@/lib/useCountUp'
 import { cn } from '@/lib/utils'
 
 type Line = { key: number; productId: string; quantity: string; unitPrice: string }
@@ -112,6 +113,7 @@ export function NewInvoicePage() {
   const subTotal = shown?.subTotal ?? priced.reduce((sum, row) => sum + row.total, 0)
   const total = shown?.totalAmount ?? subTotal - discountValue
   const taxed = shown?.documentType === 'TaxInvoice'
+  const countedTotal = useCountUp(total, 380)
 
   const create = useMutation({
     mutationFn: () => invoicesApi.create(request),
@@ -206,7 +208,7 @@ export function NewInvoicePage() {
               </div>
 
               {needsBranch && (
-                <div className="grid gap-1.5 sm:col-span-2">
+                <div className="grid animate-arrive gap-1.5 sm:col-span-2">
                   <Label htmlFor="bill-branch">
                     Branch <span className="text-destructive">*</span>
                   </Label>
@@ -253,7 +255,11 @@ export function NewInvoicePage() {
                 return (
                   <div
                     key={row.line.key}
-                    className="grid gap-3 rounded-lg border p-3 @xl:grid-cols-[minmax(0,1fr)_6rem_6rem_6rem_2.25rem] @xl:items-start @xl:rounded-none @xl:border-0 @xl:border-b @xl:p-0 @xl:pb-3 @xl:last:border-0"
+                    className={cn(
+                      // A line the user added drops in under the one before; the first arrives with the page.
+                      row.line.key > 1 && 'animate-arrive',
+                      'grid gap-3 rounded-lg border p-3 @xl:grid-cols-[minmax(0,1fr)_6rem_6rem_6rem_2.25rem] @xl:items-start @xl:rounded-none @xl:border-0 @xl:border-b @xl:p-0 @xl:pb-3 @xl:last:border-0',
+                    )}
                   >
                     <div className="grid gap-1.5">
                       <Label htmlFor={`line-product-${row.line.key}`} className="text-xs @xl:sr-only">
@@ -423,11 +429,31 @@ export function NewInvoicePage() {
               </div>
             )}
 
-            <div className="mt-1 flex items-baseline justify-between border-t pt-3">
-              <span className="text-sm font-medium">Total</span>
-              <span className={cn('font-heading text-2xl font-semibold tabular-nums', total < 0 && 'text-destructive')}>
-                {formatMoney(total)}
-              </span>
+            {/*
+              The figure this screen exists to produce, so it is the one thing set in ink. It
+              counts to each new total as lines change, and dims while the server is re-working it.
+            */}
+            <div className="-mx-(--card-spacing) mt-1 bg-primary px-(--card-spacing) py-4 text-primary-foreground">
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-medium text-primary-foreground/85">Bill total</span>
+                <span className="text-xs text-primary-foreground/70 tabular-nums">
+                  {filled.length} {filled.length === 1 ? 'line' : 'lines'}
+                </span>
+              </div>
+              <div
+                className={cn(
+                  'mt-1 font-heading text-4xl font-semibold tracking-tight tabular-nums transition-opacity duration-150',
+                  total < 0 && 'text-destructive-surface',
+                  preview.isFetching && 'opacity-70',
+                )}
+              >
+                {formatMoney(countedTotal)}
+              </div>
+              {customer && (
+                <p className="mt-1.5 text-xs text-primary-foreground/75 tabular-nums">
+                  Shop's balance after this bill: {formatMoney(customer.balance + Math.max(total, 0))}
+                </p>
+              )}
             </div>
 
             {canPreview && preview.isError && !error && (
