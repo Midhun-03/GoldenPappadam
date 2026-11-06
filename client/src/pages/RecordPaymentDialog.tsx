@@ -121,17 +121,21 @@ export function RecordPaymentDialog({
 
   // What this payment would cover on each bill: oldest first (the list is already in the order
   // the server settles them), or what is typed against each bill when choosing by hand.
-  let remaining = Number.isFinite(entered) ? Math.max(entered, 0) : 0
-  const applied = bills.map((bill) => {
-    if (chooseBills) {
-      const typed = Number(allocations[bill.invoiceId] ?? '')
-      return { bill, amount: Number.isFinite(typed) ? Math.min(Math.max(typed, 0), bill.outstanding) : 0 }
-    }
-
-    const amount = Math.min(bill.outstanding, remaining)
-    remaining = Math.round((remaining - amount) * 100) / 100
-    return { bill, amount }
-  })
+  const applied = chooseBills
+    ? bills.map((bill) => {
+        const typed = Number(allocations[bill.invoiceId] ?? '')
+        return { bill, amount: Number.isFinite(typed) ? Math.min(Math.max(typed, 0), bill.outstanding) : 0 }
+      })
+    : bills.reduce<{ rows: { bill: (typeof bills)[number]; amount: number }[]; remaining: number }>(
+        (acc, bill) => {
+          const amount = Math.min(bill.outstanding, acc.remaining)
+          return {
+            rows: [...acc.rows, { bill, amount }],
+            remaining: Math.round((acc.remaining - amount) * 100) / 100,
+          }
+        },
+        { rows: [], remaining: Number.isFinite(entered) ? Math.max(entered, 0) : 0 },
+      ).rows
   const leftUnpaid = Math.max(totalOutstanding - applied.reduce((sum, row) => sum + row.amount, 0), 0)
   const countedLeft = useCountUp(leftUnpaid, 300)
 
