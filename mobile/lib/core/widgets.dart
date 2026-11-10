@@ -290,6 +290,144 @@ class _PressableState extends State<Pressable> {
       );
 }
 
+/// The bar at the foot of a screen that records something: the figure being recorded on the left,
+/// the one action that records it on the right. It goes in a Scaffold's `bottomNavigationBar` and
+/// lifts itself above the keyboard, so the figure and the button stay in view while an amount is
+/// typed - and a snackbar still floats above it rather than over it.
+///
+/// The button is the screen's one use of gold, with charcoal text - white on this gold is about
+/// 2:1 and washes out in sunlight. It closes while [busy]: two taps would be two records.
+class BottomActionBar extends StatelessWidget {
+  const BottomActionBar({
+    required this.label,
+    required this.amount,
+    required this.actionLabel,
+    required this.onPressed,
+    this.busy = false,
+    this.icon = Icons.check,
+    super.key,
+  });
+
+  final String label;
+  final String amount;
+  final String actionLabel;
+  final IconData icon;
+  final bool busy;
+
+  /// Null while there is nothing valid to record yet.
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        // The keyboard's height, so the bar rides on top of it.
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 16, 10),
+            child: Row(
+              children: [
+                // The figure always keeps two fifths of the bar, however long the button's label
+                // or however large the phone's font size: it shrinks to fit, it is never pushed out.
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                      ),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: AnimatedAmount(
+                          amount,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            height: 1.25,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                            color: AppColors.charcoal,
+                            fontFeatures: kTabularFigures,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  flex: 3,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    // Without this the Align would take all the height it is offered, and the bar
+                    // is offered the whole screen.
+                    heightFactor: 1,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.gold,
+                        foregroundColor: AppColors.charcoal,
+                        minimumSize: const Size(152, 56),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                      ),
+                      onPressed: busy ? null : onPressed,
+                      icon: busy
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: AppColors.textMuted),
+                            )
+                          : Icon(icon, size: 20),
+                      label: Text(actionLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+/// A short tinted note inside a form - a balance already owed, an amount larger than expected -
+/// where the colour says how much it matters and the icon says it again without colour.
+class InlineNotice extends StatelessWidget {
+  const InlineNotice(this.message, {this.tone = Tone.warning, this.icon = Icons.info_outline, super.key});
+
+  final String message;
+  final Tone tone;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final (background, foreground) = _toneColors(tone);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(AppRadius.md)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: foreground),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message, style: TextStyle(fontSize: 13.5, height: 1.35, color: foreground)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// One product with a quantity stepper beside it - the row a stock request and a van load sheet
 /// both build a whole screen out of. No price here on purpose: neither screen is selling
 /// anything, only counting it.

@@ -124,6 +124,11 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     });
   }
 
+  /// A dropdown keeps the cursor, and the keyboard, after something is picked from it. Letting go
+  /// puts the keyboard away so the next step is in view, and lets the part-payment amount take
+  /// the cursor when it appears.
+  void _doneTyping() => FocusManager.instance.primaryFocus?.unfocus();
+
   bool get _needsBranch => _shop?.hasMultipleBranches ?? false;
 
   bool get _branchIsValid => !_needsBranch || _branch != null;
@@ -197,10 +202,12 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
         ),
       ),
       body: !_loaded
-          ? const Center(child: CircularProgressIndicator())
+          ? const SizedBox.expand()
+          // One short entrance for the page, not one per card: this page is opened dozens of
+          // times a day, and anything longer would be in the way.
           : FadeIn(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
                 children: [
                   const NumberedStepHeader(1, 'Select shop'),
                   _shopCard(context),
@@ -213,8 +220,16 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
                 ],
               ),
             ),
+      // Two taps would be two sales, each with its own client request id, which the server could
+      // not tell apart - so the button closes while the first is saving.
       bottomNavigationBar: _loaded
-          ? _Total(total: _total, saving: _saving, onSave: _canSave ? _save : null)
+          ? BottomActionBar(
+              label: 'Total amount',
+              amount: money(_total),
+              actionLabel: 'Save Bill',
+              busy: _saving,
+              onPressed: _canSave ? _save : null,
+            )
           : null,
     );
   }
@@ -231,7 +246,10 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
           helperText: shop == null ? 'Required before saving' : null,
           selected: _shops.where((s) => s.id == shop?.id).firstOrNull,
           searchTextOf: (s) => s.phone ?? '',
-          onSelected: _chooseShop,
+          onSelected: (shop) {
+            _doneTyping();
+            _chooseShop(shop);
+          },
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
           leading: Container(
             width: 34,
@@ -261,28 +279,24 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
         ],
         if (shop != null && shop.balance > 0) ...[
           const SizedBox(height: 10),
-          Row(
-            children: [
-              const Icon(Icons.error_outline, size: 16, color: AppColors.danger),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'This shop already owes ${money(shop.balance)}.',
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.danger),
-                ),
-              ),
-            ],
+          InlineNotice(
+            'This shop already owes ${money(shop.balance)}.',
+            tone: Tone.danger,
+            icon: Icons.error_outline,
           ),
         ],
         if (_needsBranch) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           SearchableDropdown<CachedBranch>(
             key: const ValueKey('branch'),
             hintText: 'Search or select branch',
             helperText: _branch == null ? 'Required before saving' : null,
             selected: _branches.where((b) => b.id == _branch?.id).firstOrNull,
             searchTextOf: (b) => b.location ?? '',
-            onSelected: (branch) => setState(() => _branch = branch),
+            onSelected: (branch) {
+              _doneTyping();
+              setState(() => _branch = branch);
+            },
             entries: [
               for (final b in _branches) DropdownMenuEntry(value: b, label: b.name),
             ],
@@ -330,7 +344,10 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
       index: index,
       choices: _choicesFor(line),
       selected: product,
-      onSelected: (chosen) => setState(() => line.product = chosen),
+      onSelected: (chosen) {
+        _doneTyping();
+        setState(() => line.product = chosen);
+      },
       field: QuantityField(
         controller: line.quantity,
         fieldKey: ValueKey('bill-qty-$index'),
@@ -353,6 +370,21 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
   }
 
   Widget _paymentCard(BuildContext context) {
+    final total = _total;
+    final paid = _amountPaid;
+
+    // What the choice above means in rupees, once there is a bill to apply it to. Silent when
+    // more was handed over than the bill comes to: what happens to the rest is the office's call.
+    final outcome = total <= 0 || paid > total
+        ? null
+        : switch (_plan) {
+            _PaymentPlan.credit => '${money(total)} goes on credit.',
+            _PaymentPlan.paid => '${money(total)} received now. Nothing on credit.',
+            _PaymentPlan.partPaid when paid > 0 =>
+              '${money(paid)} received now. ${money(total - paid)} stays on credit.',
+            _PaymentPlan.partPaid => null,
+          };
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -368,28 +400,52 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
         if (_plan != _PaymentPlan.credit) ...[
           const SizedBox(height: 12),
           AppCard(
+            padding: const EdgeInsets.all(AppSpacing.xl),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (_plan == _PaymentPlan.partPaid) ...[
+                  const Text('AMOUNT RECEIVED', style: kEyebrowStyle),
+                  const SizedBox(height: 8),
                   TextField(
                     key: const ValueKey('partial-amount'),
                     controller: _partialAmount,
                     autofocus: true,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Amount received', prefixText: '₹ '),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: kTabularFigures,
+                    ),
+                    decoration: const InputDecoration(prefixText: '₹ ', hintText: '0'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                 ],
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'Cash', label: Text('Cash')),
-                    ButtonSegment(value: 'UPI', label: Text('UPI')),
-                  ],
-                  selected: {_method},
-                  onSelectionChanged: (values) => setState(() => _method = values.first),
+                const Text('RECEIVED BY', style: kEyebrowStyle),
+                const SizedBox(height: 8),
+                // The same choice buttons as the row above, a full thumb tall, rather than a
+                // second kind of control for the same kind of choice.
+                ChoiceRow<String>(
+                  value: _method,
+                  onChanged: (method) => setState(() => _method = method),
+                  options: const [('Cash', 'Cash'), ('UPI', 'UPI')],
                 ),
               ],
+            ),
+          ),
+        ],
+        if (outcome != null) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              outcome,
+              style: const TextStyle(
+                fontSize: 13.5,
+                height: 1.35,
+                color: AppColors.textMuted,
+                fontFeatures: kTabularFigures,
+              ),
             ),
           ),
         ],
@@ -430,61 +486,6 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
-}
-
-class _Total extends StatelessWidget {
-  const _Total({required this.total, required this.saving, required this.onSave});
-
-  final double total;
-
-  /// Two taps would make two separate sales - each with its own client request id, so the server
-  /// could not tell them apart. The button closes the moment the first one starts.
-  final bool saving;
-
-  final VoidCallback? onSave;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.border)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Total amount', style: TextStyle(color: AppColors.textMuted)),
-                      AnimatedAmount(
-                        money(total),
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  width: 160,
-                  child: FilledButton.icon(
-                    onPressed: saving ? null : onSave,
-                    icon: saving
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.check, size: 18),
-                    label: const Text('Save Bill'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
 }
 
 class _NoPrices extends StatelessWidget {

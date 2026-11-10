@@ -223,6 +223,10 @@ abstract final class AppTheme {
   }
 }
 
+/// Digits of one width, for money and counts: figures line up under each other, and a number that
+/// changes does not make the text around it shift.
+const List<FontFeature> kTabularFigures = [FontFeature.tabularFigures()];
+
 /// The small letter-spaced caps label used on every step/section eyebrow: "TODAY SO FAR",
 /// "1 · SELECT SHOP", "VAN STOCK". One text style so every screen's labels read as one system.
 const TextStyle kEyebrowStyle = TextStyle(
