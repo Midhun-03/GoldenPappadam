@@ -433,7 +433,7 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-10-29_
+_Last updated: 2026-11-11_
 
 **Own shop done (2026-09-30)**, rules in §4, design `docs/08-own-shop-design.md`. `SHOP` location,
 `ProductKind.Pieces`, `Product.MinimumSellingPrice`, movement type `ShopTransfer`, and the `ownshop` schema
@@ -652,6 +652,18 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   sync answer carries the `RN/...` number. The van reconciliation has a **Replaced** figure (admin Van
   screen and the phone's van tab). Also fixed: the shop page's payment history escaped its `$` and never
   showed a payment still waiting to sync. Next in the plan: the owner's daily summary.
+- **UI redesign in progress (2026-11-06 to 2026-11-10)**, branch `ui/motion-sales-login-sidebar`. No API,
+  database, business-rule or sync change. **Admin panel:** sales screens lead with the figure they produce
+  (new bill total, return value, payment with its oldest-first split), a shared `Logo`, a travelling sidebar
+  marker and a pending count on Rate requests; all motion lives in `client/src/index.css` and stands still
+  under reduced motion. `PRODUCT.md` is the product context the design tooling reads. **Phone, done and
+  approved by the owner:** Home (phase 1) and New Bill + Receive Payment (phase 2). Home is the visual
+  reference for every other phone screen: gold once per screen on the primary action with charcoal text, one
+  sync pill in the header, a caveat on the figures it qualifies. Shared pieces: `BottomActionBar`,
+  `InlineNotice` and `ChoiceRow` in `mobile/lib/core/widgets.dart`, `kTabularFigures` in `core/theme.dart`.
+  **Not redesigned yet:** every other phone screen, and `ProductLineCard`, left as it is until returns and
+  rates are redesigned with it. Each phase stops for the owner's approval on real-phone screenshots. 94 Dart
+  tests.
 - Phase 1 is feature-complete. Remaining work is judgement rather than code: use it on real data, then decide what to correct. Reporting is currently the dashboard plus the date filters and totals on the bills, payments, customers and stock screens; a dedicated printable report has not been built.
 
 Agreed order of work:
