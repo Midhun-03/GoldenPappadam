@@ -49,4 +49,11 @@ public class InvoiceSettings : AuditableEntity
     public string? BankDetails { get; set; }
 
     public string? TermsAndConditions { get; set; }
+
+    /// <summary>
+    /// The discount cap: the largest discount a salesman may give on a bill from the phone, as a
+    /// percentage of the bill's subtotal - the line amounts before the discount. 0 switches discounts
+    /// off on the phone. The office is not bound by it (owner, 2026-11-12).
+    /// </summary>
+    public decimal SalesmanDiscountCapPercent { get; set; } = 20m;
 }

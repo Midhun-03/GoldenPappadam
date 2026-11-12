@@ -59,6 +59,7 @@ class SyncEngine {
   static const _deviceIdKey = 'device_id';
   static const _lastSyncKey = 'last_synced_at';
   static const _pricesAsOfKey = 'prices_as_of';
+  static const _discountCapKey = 'discount_cap_percent';
   static const _vanLocationKey = 'van_location_id';
   static const _dayKey = 'day_summary';
 
@@ -316,6 +317,9 @@ class SyncEngine {
     final pricesAsOf = body['pricesAsOf'];
     if (pricesAsOf is String) await _db.writeMeta(_pricesAsOfKey, pricesAsOf);
 
+    final discountCap = body['discountCapPercent'];
+    if (discountCap is num) await _db.writeMeta(_discountCapKey, discountCap.toString());
+
     final vanLocation = body['vanLocationId'];
     if (vanLocation is String) await _db.writeMeta(_vanLocationKey, vanLocation);
   }
@@ -341,6 +345,12 @@ class SyncEngine {
   // ---------- status ----------
 
   Future<String?> get pricesAsOf => _db.readMeta(_pricesAsOfKey);
+
+  /// The most a salesperson may take off a bill, as a percentage of its value before the discount.
+  /// The office sets it and every snapshot carries it. Zero means no discount from the phone, and
+  /// that is also what a phone that has never been told a figure assumes.
+  Future<double> get discountCapPercent async =>
+      double.tryParse(await _db.readMeta(_discountCapKey) ?? '') ?? 0;
 
   Future<DateTime?> get lastSyncedAt async {
     final raw = await _db.readMeta(_lastSyncKey);

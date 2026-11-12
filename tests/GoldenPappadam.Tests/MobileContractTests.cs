@@ -121,6 +121,77 @@ public class MobileContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_body_the_app_sends_for_a_discounted_sale_is_accepted()
+    {
+        // Exactly what SalesRepository.recordSale writes when a discount is given: the two keys are
+        // added after "notes", and are absent altogether on a bill with no discount.
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "Invoice",
+                  "recordedAt": "2026-11-12T06:30:00.000Z",
+                  "sale": {
+                    "customerId": "{{_customerId}}",
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 10.0, "unitPrice": 35.0 }
+                    ],
+                    "pricesAsOf": "2026-11-12T05:00:00.000Z",
+                    "notes": null,
+                    "discountAmount": 50.0,
+                    "discountReason": "Old stock, expiring in 3 days"
+                  }
+                }
+              ]
+            }
+            """);
+
+        var result = response.GetProperty("results")[0];
+        Assert.Equal("Accepted", result.GetProperty("outcome").GetString());
+
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var invoice = await db.Invoices.SingleAsync();
+
+        Assert.Equal(50m, invoice.DiscountAmount);
+        Assert.Equal(300m, invoice.TotalAmount);
+        Assert.Equal("Old stock, expiring in 3 days", invoice.DiscountReason);
+    }
+
+    [Fact]
+    public async Task A_price_the_phone_was_never_told_is_refused_with_a_reason_the_app_can_show()
+    {
+        var response = await SubmitAsync($$"""
+            {
+              "deviceId": "{{_deviceId}}",
+              "items": [
+                {
+                  "clientRequestId": "{{Guid.NewGuid()}}",
+                  "type": "Invoice",
+                  "recordedAt": "2026-11-12T06:30:00.000Z",
+                  "sale": {
+                    "customerId": "{{_customerId}}",
+                    "lines": [
+                      { "productId": "{{_productId}}", "quantity": 10.0, "unitPrice": 0.0 }
+                    ],
+                    "pricesAsOf": "2026-11-12T05:00:00.000Z",
+                    "notes": null
+                  }
+                }
+              ]
+            }
+            """);
+
+        var result = response.GetProperty("results")[0];
+
+        // "Rejected" with an "error" is what the app turns into a Failed entry the salesperson can read.
+        Assert.Equal("Rejected", result.GetProperty("outcome").GetString());
+        Assert.Contains("not this shop's rate", result.GetProperty("error").GetString());
+    }
+
+    [Fact]
     public async Task The_body_the_app_sends_for_a_sale_paid_on_the_spot_is_accepted()
     {
         var saleId = Guid.NewGuid();
@@ -366,6 +437,7 @@ public class MobileContractTests : IAsyncLifetime
         // Each of these is read by name in mobile/lib/sync/sync_engine.dart.
         Assert.True(snapshot.TryGetProperty("serverTime", out _));
         Assert.True(snapshot.TryGetProperty("pricesAsOf", out _));
+        Assert.Equal(20m, snapshot.GetProperty("discountCapPercent").GetDecimal());
         Assert.True(snapshot.TryGetProperty("vanLocationId", out _));
         Assert.True(snapshot.TryGetProperty("paymentMethods", out _));
 

@@ -127,7 +127,11 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             ? 'Choose the loose pappadam these pieces come from.'
             : isPacked && form.sourceProductId === ''
               ? 'Choose what this pack is packed from.'
-              : null
+              : !((toNumber(form.sellingPrice) ?? 0) > 0)
+                ? isPieces
+                  ? 'Enter the rate per piece. It must be more than zero.'
+                  : 'Enter the standard price. It must be more than zero.'
+                : null
 
     if (missing) {
       setError(missing)
@@ -433,19 +437,23 @@ export function ProductDialog({ open, onOpenChange, product, categories, units, 
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          {/* items-start: the price has a line of help under it, and must not stretch its neighbours' rows. */}
+          <div className="grid items-start gap-4 sm:grid-cols-3">
             {form.kind !== 'Pieces' && (
               <div className="grid gap-1.5">
-                <Label htmlFor="sellingPrice">Selling price</Label>
+                <Label htmlFor="sellingPrice">
+                  Standard price <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="sellingPrice"
                   type="number"
                   step="0.01"
-                  min="0"
-                  placeholder="Not sold directly"
+                  min="0.01"
+                  required
                   value={form.sellingPrice}
                   onChange={(event) => setForm({ ...form, sellingPrice: event.target.value })}
                 />
+                <p className="text-xs text-muted-foreground">What a shop with no agreed rate pays.</p>
               </div>
             )}
 

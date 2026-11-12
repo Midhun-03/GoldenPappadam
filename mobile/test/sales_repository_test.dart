@@ -208,6 +208,65 @@ void main() {
     expect(ids, hasLength(4));
   });
 
+  test('a discount travels with the bill, in rupees, with the reason trimmed', () async {
+    await repository.recordSale(
+      customerId: 'shop-1',
+      customerName: 'Kumar Stores',
+      lines: [line],
+      amountPaid: 0,
+      paymentMethod: 'Cash',
+      discountAmount: 50,
+      discountReason: '  Old stock, expiring in 3 days  ',
+    );
+
+    final entry = (await db.select(db.outboxEntries).get()).firstWhere((e) => e.type == 'Invoice');
+    final sale = (await payloadOf(entry))['sale'] as Map<String, dynamic>;
+
+    expect(sale['discountAmount'], 50.0);
+    expect(sale['discountReason'], 'Old stock, expiring in 3 days');
+
+    // The price on the line is still the shop's rate: less is charged through the discount only.
+    expect((sale['lines'] as List).single['unitPrice'], 35.0);
+
+    // What the salesperson sees for this bill is what the shop was asked for: 350 less 50.
+    expect(entry.summary, 'Kumar Stores · ₹300.00');
+  });
+
+  test('a bill with no discount carries no discount keys at all', () async {
+    await repository.recordSale(
+      customerId: 'shop-1',
+      customerName: 'Kumar Stores',
+      lines: [line],
+      amountPaid: 0,
+      paymentMethod: 'Cash',
+    );
+
+    final sale = await payloadOf(
+        (await db.select(db.outboxEntries).get()).firstWhere((e) => e.type == 'Invoice'));
+
+    expect((sale['sale'] as Map).containsKey('discountAmount'), isFalse);
+    expect((sale['sale'] as Map).containsKey('discountReason'), isFalse);
+  });
+
+  test('a discount with no reason is refused before anything is written', () async {
+    for (final reason in [null, '', '   ']) {
+      expect(
+        () => repository.recordSale(
+          customerId: 'shop-1',
+          customerName: 'Kumar Stores',
+          lines: [line],
+          amountPaid: 0,
+          paymentMethod: 'Cash',
+          discountAmount: 50,
+          discountReason: reason,
+        ),
+        throwsArgumentError,
+      );
+    }
+
+    expect(await db.select(db.outboxEntries).get(), isEmpty);
+  });
+
   test('a sale with nothing on it is refused before anything is written', () async {
     expect(
       () => repository.recordSale(

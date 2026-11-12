@@ -33,6 +33,8 @@ public class ProductService(AppDbContext db)
             await EnsureOnePiecesProductPerVarietyAsync(null, sourceProductId, ct);
         }
 
+        var standardPrice = RequireStandardPrice(request);
+
         var product = new Product
         {
             ProductCode = request.ProductCode.Trim(),
@@ -40,7 +42,7 @@ public class ProductService(AppDbContext db)
             CategoryId = request.CategoryId,
             Kind = request.Kind,
             UnitOfMeasureId = request.UnitOfMeasureId,
-            SellingPrice = request.SellingPrice,
+            SellingPrice = standardPrice,
             MinimumSellingPrice = minimumSellingPrice,
             LowStockThreshold = request.LowStockThreshold,
             SourceProductId = sourceProductId,
@@ -54,6 +56,7 @@ public class ProductService(AppDbContext db)
         };
 
         db.Products.Add(product);
+        RecordPriceChange(product, null, standardPrice);
         await db.SaveChangesAsync(ct);
 
         return product;
@@ -94,12 +97,21 @@ public class ProductService(AppDbContext db)
             await EnsureOnePiecesProductPerVarietyAsync(product.Id, sourceProductId, ct);
         }
 
+        var standardPrice = RequireStandardPrice(request);
+
         product.ProductCode = request.ProductCode.Trim();
         product.Name = request.Name.Trim();
         product.CategoryId = request.CategoryId;
         product.UnitOfMeasureId = request.UnitOfMeasureId;
-        // A new rate band applies from the next shop sale; sales already made keep the rates they recorded.
-        product.SellingPrice = request.SellingPrice;
+
+        // A new price applies from the next bill or shop sale; those already made keep what they recorded.
+        // The change is kept, because a phone away from the office may still bill at the old price.
+        if (product.SellingPrice != standardPrice)
+        {
+            RecordPriceChange(product, product.SellingPrice, standardPrice);
+        }
+
+        product.SellingPrice = standardPrice;
         product.MinimumSellingPrice = minimumSellingPrice;
         product.LowStockThreshold = request.LowStockThreshold;
         product.SourceProductId = sourceProductId;
@@ -144,6 +156,24 @@ public class ProductService(AppDbContext db)
 
         return product;
     }
+
+    /// <summary>
+    /// Every product has a standard price above zero (owner, 2026-11-12): it is what a shop with no
+    /// agreed rate pays, so a product without one could not be billed to such a shop at all. Checked
+    /// last, after the rules about what kind of product this is, so their messages are not hidden by it.
+    /// </summary>
+    private static decimal RequireStandardPrice(SaveProductRequest request) =>
+        request.SellingPrice is > 0m
+            ? request.SellingPrice.Value
+            : throw new DomainException("Enter the product's standard price. It must be more than zero.");
+
+    private void RecordPriceChange(Product product, decimal? previous, decimal next) =>
+        db.ProductPriceChanges.Add(new ProductPriceChange
+        {
+            Product = product,
+            PreviousPrice = previous,
+            NewPrice = next
+        });
 
     /// <summary>
     /// The tax fields as they will be stored. Which treatment and rate are right is the accountant's

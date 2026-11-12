@@ -62,6 +62,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(x => x.RoundOff).HasPrecision(18, 2);
         builder.Property(x => x.TotalAmount).HasPrecision(18, 2);
         builder.Property(x => x.Notes).HasMaxLength(300);
+        builder.Property(x => x.DiscountReason).HasMaxLength(200);
         builder.Property(x => x.CancellationReason).HasMaxLength(300);
 
         // Two guarantees that no number is ever issued twice: the formatted number, and the

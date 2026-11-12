@@ -1,6 +1,7 @@
 using GoldenPappadam.Api.Common;
 using GoldenPappadam.Api.Features.Inventory.Products;
 using GoldenPappadam.Domain.Inventory;
+using Microsoft.EntityFrameworkCore;
 
 namespace GoldenPappadam.Tests;
 
@@ -52,7 +53,7 @@ public class ProductServiceTests : IAsyncLifetime
 
         var box = await _products.CreateAsync(
             new SaveProductRequest("BOX-12", "Box of 12", packet.CategoryId, ProductKind.Packed,
-                packet.UnitOfMeasureId, packet.Id, 12m, null, null),
+                packet.UnitOfMeasureId, packet.Id, 12m, 360m, null),
             default);
 
         // Trying to make the packet come from the box closes the loop: box -> packet -> box.
@@ -90,4 +91,66 @@ public class ProductServiceTests : IAsyncLifetime
                 loose.UnitOfMeasureId, loose.Id, 5m, null, null),
             default));
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task A_product_cannot_be_saved_without_a_standard_price_above_zero(int? price)
+    {
+        var (loose, _) = await _database.SeedProductsAsync();
+
+        var error = await Assert.ThrowsAsync<DomainException>(() => _products.CreateAsync(
+            new SaveProductRequest("LOOSE-2", "Loose pappadam (large)", loose.CategoryId, ProductKind.Loose,
+                loose.UnitOfMeasureId, null, null, price, null),
+            default));
+
+        Assert.Contains("standard price", error.Message);
+        Assert.False(await _database.Db.Products.AnyAsync(p => p.ProductCode == "LOOSE-2"));
+    }
+
+    [Fact]
+    public async Task A_product_that_has_a_price_cannot_have_it_taken_away()
+    {
+        var (loose, _) = await _database.SeedProductsAsync();
+        var product = await CreateLooseAsync(loose, 150m);
+
+        await Assert.ThrowsAsync<DomainException>(() => _products.UpdateAsync(product.Id, Request(product, null), default));
+        await Assert.ThrowsAsync<DomainException>(() => _products.UpdateAsync(product.Id, Request(product, 0m), default));
+
+        Assert.Equal(150m, product.SellingPrice);
+    }
+
+    [Fact]
+    public async Task Every_change_to_the_standard_price_is_kept_with_what_it_was_before_and_who_changed_it()
+    {
+        var (loose, _) = await _database.SeedProductsAsync();
+        var office = Guid.NewGuid();
+        _database.CurrentUser.UserId = office;
+
+        var product = await CreateLooseAsync(loose, 150m);
+        await _products.UpdateAsync(product.Id, Request(product, 160m), default);
+
+        // Saving the product again at the same price is not a price change.
+        await _products.UpdateAsync(product.Id, Request(product, 160m), default);
+
+        var history = await _database.Db.ProductPriceChanges
+            .Where(c => c.ProductId == product.Id)
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync();
+
+        List<(decimal?, decimal)> expected = [(null, 150m), (150m, 160m)];
+        Assert.Equal(expected, history.Select(h => (h.PreviousPrice, h.NewPrice)));
+        Assert.All(history, row => Assert.Equal(office, row.CreatedBy));
+    }
+
+    private Task<Product> CreateLooseAsync(Product like, decimal price) =>
+        _products.CreateAsync(
+            new SaveProductRequest("LOOSE-2", "Loose pappadam (large)", like.CategoryId, ProductKind.Loose,
+                like.UnitOfMeasureId, null, null, price, null),
+            default);
+
+    private static SaveProductRequest Request(Product product, decimal? price) =>
+        new(product.ProductCode, product.Name, product.CategoryId, product.Kind, product.UnitOfMeasureId,
+            null, null, price, null);
 }

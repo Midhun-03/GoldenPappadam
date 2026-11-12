@@ -19,6 +19,10 @@ import '../../data/sales_repository.dart';
 /// A product the office has never priced for the chosen shop is not offered at all, which is a
 /// better failure than an invented number.
 ///
+/// Charging less is a discount on the whole bill, behind a quiet "Add discount" row because it is
+/// rare. It is in rupees, needs a reason the office will read, and cannot go over the share of the
+/// bill the office allows - the bill cannot be saved until it fits.
+///
 /// Opened from Home with no shop, or from a shop's page with that shop already chosen.
 class SaleScreen extends ConsumerStatefulWidget {
   const SaleScreen({this.shop, super.key});
@@ -55,11 +59,19 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
   final _partialAmount = TextEditingController();
   String _method = 'Cash';
 
+  /// The most that may come off a bill, as a percentage of it. Zero: no discount is offered.
+  double _discountCap = 0;
+  bool _discountOpen = false;
+  final _discount = TextEditingController();
+  final _discountReason = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _shop = widget.shop;
     _partialAmount.addListener(() => setState(() {}));
+    _discount.addListener(() => setState(() {}));
+    _discountReason.addListener(() => setState(() {}));
     _load();
   }
 
@@ -69,6 +81,8 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
       line.quantity.dispose();
     }
     _partialAmount.dispose();
+    _discount.dispose();
+    _discountReason.dispose();
     super.dispose();
   }
 
@@ -78,6 +92,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     final recent = await db.recentShopNames();
     final products = await db.allProducts();
     final asOf = await ref.read(syncProvider).pricesAsOf;
+    final discountCap = await ref.read(syncProvider).discountCapPercent;
     final prices = _shop == null ? const <String, double?>{} : await db.pricesFor(_shop!.id);
     final branches = _shop == null ? const <CachedBranch>[] : await db.branchesFor(_shop!.id);
 
@@ -94,6 +109,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
       _products = products;
       _prices = prices;
       _pricesAsOf = asOf;
+      _discountCap = discountCap;
       _branches = branches;
       _loaded = true;
     });
@@ -121,6 +137,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
       _billLines = [_BillLine()];
       _plan = _PaymentPlan.credit;
       _partialAmount.clear();
+      _closeDiscount();
     });
   }
 
@@ -172,14 +189,43 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     line.quantity.dispose();
   }
 
-  double get _total => _lines.fold(0, (sum, line) => sum + line.lineTotal);
+  /// The lines added up, before any discount. The discount cap is a share of this.
+  double get _subtotal => _lines.fold(0, (sum, line) => sum + line.lineTotal);
+
+  double get _discountValue => _discountOpen ? (double.tryParse(_discount.text) ?? 0) : 0;
+
+  /// The cap in rupees for the bill as it stands, to the paisa and never rounded up - the office
+  /// compares exactly, and a paisa over would be refused after the goods were handed over.
+  double get _maxDiscount => (_subtotal * _discountCap + 1e-6).floorToDouble() / 100;
+
+  bool get _discountTooBig => _discountValue > _maxDiscount + 1e-9;
+
+  bool get _discountNeedsReason => _discountValue > 0 && _discountReason.text.trim().isEmpty;
+
+  /// A discount that no longer fits - a line was taken off after it was typed - blocks the save
+  /// rather than being lowered quietly: the shop may already have been told the figure.
+  bool get _discountIsValid => _discountValue >= 0 && !_discountTooBig && !_discountNeedsReason;
+
+  void _closeDiscount() {
+    _discountOpen = false;
+    _discount.clear();
+    _discountReason.clear();
+  }
+
+  /// What the shop is asked for: the lines less the discount.
+  double get _total => (_subtotal - _discountValue).clamp(0, double.infinity).toDouble();
 
   double get _partialAmountValue => double.tryParse(_partialAmount.text) ?? 0;
 
   bool get _planIsValid => _plan != _PaymentPlan.partPaid || _partialAmountValue > 0;
 
   bool get _canSave =>
-      _shop != null && _lines.isNotEmpty && _planIsValid && _branchIsValid && !_saving;
+      _shop != null &&
+      _lines.isNotEmpty &&
+      _planIsValid &&
+      _branchIsValid &&
+      _discountIsValid &&
+      !_saving;
 
   double get _amountPaid => switch (_plan) {
         _PaymentPlan.credit => 0,
@@ -213,6 +259,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
                   _shopCard(context),
                   const NumberedStepHeader(2, 'Products', caption: 'Price is read-only'),
                   _productsCard(context),
+                  if (_shop != null && _sellable.isNotEmpty && _discountCap > 0) _discountSection(context),
                   if (_shop != null && _sellable.isNotEmpty) ...[
                     const NumberedStepHeader(3, 'Payment'),
                     _paymentCard(context),
@@ -369,6 +416,95 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     );
   }
 
+  /// Closed, one quiet row: most bills have no discount. Open, the amount, the most allowed on
+  /// this bill, and why.
+  Widget _discountSection(BuildContext context) {
+    if (!_discountOpen) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const ValueKey('add-discount'),
+            onPressed: () => setState(() => _discountOpen = true),
+            icon: const Icon(Icons.sell_outlined, size: 18),
+            label: const Text('Add discount'),
+          ),
+        ),
+      );
+    }
+
+    final hasBill = _subtotal > 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: AppCard(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                // Expanded, so a wide letter-spaced label gives way to the button on a narrow phone.
+                const Expanded(child: Text('DISCOUNT', style: kEyebrowStyle)),
+                TextButton(
+                  key: const ValueKey('remove-discount'),
+                  onPressed: () => setState(_closeDiscount),
+                  child: const Text('Remove'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              key: const ValueKey('discount-amount'),
+              controller: _discount,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontFeatures: kTabularFigures),
+              decoration: InputDecoration(
+                prefixText: '₹ ',
+                hintText: '0',
+                helperText: hasBill
+                    ? 'Up to ${money(_maxDiscount)} on this bill (${_percent(_discountCap)}%)'
+                    : 'Add the products first',
+              ),
+            ),
+            if (_discountTooBig && hasBill) ...[
+              const SizedBox(height: 10),
+              InlineNotice(
+                'The most you can take off this bill is ${money(_maxDiscount)}.',
+                tone: Tone.danger,
+                icon: Icons.error_outline,
+              ),
+            ],
+            const SizedBox(height: 16),
+            const Text('WHY', style: kEyebrowStyle),
+            const SizedBox(height: 8),
+            TextField(
+              key: const ValueKey('discount-reason'),
+              controller: _discountReason,
+              maxLength: 200,
+              minLines: 1,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Old stock, bulk order...',
+                counterText: '',
+                helperText: _discountNeedsReason
+                    ? 'Needed with a discount. The office reads it; the shop does not see it.'
+                    : 'The office reads it; the shop does not see it.',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// "20", "12.5" - a percentage without a trailing ".0".
+  static String _percent(double value) =>
+      value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toString();
+
   Widget _paymentCard(BuildContext context) {
     final total = _total;
     final paid = _amountPaid;
@@ -459,6 +595,8 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     final total = _total;
     final amountPaid = _amountPaid;
     final method = _method;
+    final discount = _discountValue;
+    final discountReason = _discountReason.text;
 
     setState(() => _saving = true);
 
@@ -471,6 +609,8 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
             paymentMethod: method,
             pricesAsOf: _pricesAsOf,
             branchId: _branch?.id,
+            discountAmount: discount,
+            discountReason: discount > 0 ? discountReason : null,
           );
 
       // Saved locally already; this only tries to hand it over and never blocks the salesperson.

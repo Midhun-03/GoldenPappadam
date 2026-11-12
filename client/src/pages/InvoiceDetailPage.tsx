@@ -219,6 +219,12 @@ export function InvoiceDetailPage() {
               )}
 
               {data?.notes && <p className="mt-4 px-4 text-sm text-muted-foreground">{data.notes}</p>}
+              {data?.discountReason && (
+                <p className="mt-4 px-4 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Why the discount was given:</span> {data.discountReason}
+                  <span className="block text-xs">For the office. It is not printed on the invoice.</span>
+                </p>
+              )}
             </CardContent>
           </Card>
 

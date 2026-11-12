@@ -360,6 +360,26 @@ void main() {
     expect(await engine.pricesAsOf, '2026-09-15T10:00:00.000Z');
   });
 
+  test('the discount cap comes down with the snapshot, and is zero until the office sends one', () async {
+    // A phone that has never been told a cap offers no discount.
+    expect(await engine.discountCapPercent, 0);
+
+    api.handler = (path, body) => path.endsWith('/sync/submissions')
+        ? {'results': <dynamic>[]}
+        : {
+            'serverTime': DateTime.now().toUtc().toIso8601String(),
+            'pricesAsOf': '2026-11-12T10:00:00.000Z',
+            'discountCapPercent': 12.5,
+            'customers': <dynamic>[],
+            'products': <dynamic>[],
+            'prices': <dynamic>[],
+          };
+
+    await engine.syncNow();
+
+    expect(await engine.discountCapPercent, 12.5);
+  });
+
   test('a multi-branch customer and its branches come down with the snapshot', () async {
     api.handler = (path, body) => path.endsWith('/sync/submissions')
         ? {'results': <dynamic>[]}

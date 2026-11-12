@@ -9,6 +9,8 @@ namespace GoldenPappadam.Api.Features.FieldSales.Day;
 /// <summary>
 /// RecordedAt is when the salesperson saved it on the phone; ReceivedAt is when it reached the
 /// server. The gap between them is the visible shape of a phone that was out of signal.
+/// DiscountAmount and DiscountReason are what the salesperson took off the bill and why: no
+/// approval is asked for a discount inside the cap, so this is where the office sees it.
 /// </summary>
 public record FieldSaleRowDto(
     Guid InvoiceId,
@@ -23,7 +25,9 @@ public record FieldSaleRowDto(
     DateTime RecordedAt,
     DateTime ReceivedAt,
     bool PriceMismatch,
-    InvoiceStatus Status);
+    InvoiceStatus Status,
+    decimal DiscountAmount = 0m,
+    string? DiscountReason = null);
 
 public record FieldVisitRowDto(
     Guid CustomerId,
@@ -48,7 +52,10 @@ public record FieldSalesDayDto(
     /// </summary>
     int SlowestSyncMinutes,
     IReadOnlyList<FieldSaleRowDto> Sales,
-    IReadOnlyList<FieldVisitRowDto> Visits);
+    IReadOnlyList<FieldVisitRowDto> Visits,
+    /// <summary>What the sales team took off today's bills. TotalSales is already after it.</summary>
+    decimal DiscountGiven = 0m,
+    int DiscountedSaleCount = 0);
 
 /// <summary>
 /// What the salesperson did today, as the office sees it. Everything here comes from what has
@@ -86,7 +93,9 @@ public class FieldSalesDayService(AppDbContext db)
                 x.Submission.RecordedAt,
                 x.Submission.ReceivedAt,
                 x.Submission.PriceMismatch,
-                x.Invoice.Status
+                x.Invoice.Status,
+                x.Invoice.DiscountAmount,
+                x.Invoice.DiscountReason
             })
             .ToListAsync(ct);
 
@@ -104,7 +113,9 @@ public class FieldSalesDayService(AppDbContext db)
                 r.RecordedAt,
                 r.ReceivedAt,
                 r.PriceMismatch,
-                r.Status))
+                r.Status,
+                r.DiscountAmount,
+                r.DiscountReason))
             .ToList();
 
         var visits = await db.ShopVisits
@@ -147,6 +158,8 @@ public class FieldSalesDayService(AppDbContext db)
             issued.Count(s => s.PriceMismatch),
             sales.Count == 0 ? 0 : (int)sales.Max(s => (s.ReceivedAt - s.RecordedAt).TotalMinutes),
             sales,
-            visits);
+            visits,
+            issued.Sum(s => s.DiscountAmount),
+            issued.Count(s => s.DiscountAmount > 0m));
     }
 }

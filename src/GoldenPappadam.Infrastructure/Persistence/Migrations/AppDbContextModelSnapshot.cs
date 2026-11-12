@@ -789,6 +789,36 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                     b.ToTable("ProductCategories", "inventory");
                 });
 
+            modelBuilder.Entity("GoldenPappadam.Domain.Inventory.ProductPriceChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("NewPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("PreviousPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "CreatedAt");
+
+                    b.ToTable("ProductPriceChanges", "inventory");
+                });
+
             modelBuilder.Entity("GoldenPappadam.Domain.Inventory.RepackEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1674,6 +1704,10 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("DiscountReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("DocumentType")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -2070,6 +2104,10 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                     b.Property<bool>("RoundToNearestRupee")
                         .HasColumnType("bit");
 
+                    b.Property<decimal>("SalesmanDiscountCapPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
                     b.Property<string>("SeriesCode")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -2092,7 +2130,10 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("InvoiceSettings", "sales");
+                    b.ToTable("InvoiceSettings", "sales", t =>
+                        {
+                            t.HasCheckConstraint("CK_InvoiceSettings_SalesmanDiscountCapPercent", "[SalesmanDiscountCapPercent] >= 0 AND [SalesmanDiscountCapPercent] <= 100");
+                        });
 
                     b.HasData(
                         new
@@ -2103,6 +2144,7 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                             LegalName = "Golden Pappadam",
                             PricesIncludeTax = true,
                             RoundToNearestRupee = false,
+                            SalesmanDiscountCapPercent = 20m,
                             SeriesCode = "GP",
                             StateCode = "32"
                         });
@@ -3140,6 +3182,17 @@ namespace GoldenPappadam.Infrastructure.Persistence.Migrations
                     b.Navigation("SourceProduct");
 
                     b.Navigation("UnitOfMeasure");
+                });
+
+            modelBuilder.Entity("GoldenPappadam.Domain.Inventory.ProductPriceChange", b =>
+                {
+                    b.HasOne("GoldenPappadam.Domain.Inventory.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("GoldenPappadam.Domain.Inventory.RepackEntry", b =>

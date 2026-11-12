@@ -55,6 +55,9 @@ class SalesRepository {
   /// The three are written in one transaction so a sale can never exist without the stop that
   /// explains it, and the visit names the other two by their client ids - because at this moment
   /// the phone has never spoken to the server and knows no other name for them.
+  ///
+  /// [discountAmount] is rupees off the whole bill and needs [discountReason]. The price on each
+  /// line stays the shop's rate: charging less is always a discount, never a lower price.
   Future<String> recordSale({
     required String customerId,
     required String customerName,
@@ -64,14 +67,25 @@ class SalesRepository {
     String? notes,
     String? pricesAsOf,
     String? branchId,
+    double discountAmount = 0,
+    String? discountReason,
   }) async {
     if (lines.isEmpty) {
       throw ArgumentError('A sale needs at least one product.');
     }
 
+    final reason = discountReason?.trim() ?? '';
+
+    // The office reads why; a discount with no reason would be refused there, after the goods
+    // have been handed over, so it is not allowed into the outbox at all.
+    if (discountAmount > 0 && reason.isEmpty) {
+      throw ArgumentError('A discount needs a reason.');
+    }
+
     final recordedAt = DateTime.now().toUtc();
     final saleId = _uuid.v4();
-    final total = lines.fold<double>(0, (sum, line) => sum + line.lineTotal);
+    final subtotal = lines.fold<double>(0, (sum, line) => sum + line.lineTotal);
+    final total = subtotal - (discountAmount > 0 ? discountAmount : 0);
     final paymentId = amountPaid > 0 ? _uuid.v4() : null;
 
     await _db.transaction(() async {
@@ -94,6 +108,10 @@ class SalesRepository {
             ],
             'pricesAsOf': pricesAsOf ?? recordedAt.toIso8601String(),
             'notes': notes,
+            if (discountAmount > 0) ...{
+              'discountAmount': discountAmount,
+              'discountReason': reason,
+            },
           }
         },
       );

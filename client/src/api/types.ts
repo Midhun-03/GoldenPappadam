@@ -388,6 +388,8 @@ export type InvoiceDetail = InvoiceListItem &
     reverseCharge: boolean
     pricesIncludeTax: boolean
     notes: string | null
+    /** Why the discount was given. For the office; never printed on the invoice. */
+    discountReason: string | null
     finalizedAt: string
     finalizedByName: string | null
     /** The phone a synced sale came from. */
@@ -439,6 +441,11 @@ export type InvoiceSettings = {
   /** What the next bill dated today would be called. Shown, never reserved. */
   nextInvoiceNumber: string
   updatedAt: string | null
+  /**
+   * The most a salesman may take off a bill from the phone, as a percentage of its subtotal.
+   * 0 switches phone discounts off. The office's own discounts are not limited by it.
+   */
+  salesmanDiscountCapPercent: number
 }
 
 export type SaveInvoiceSettings = Omit<InvoiceSettings, 'gstEnabled' | 'nextInvoiceNumber' | 'updatedAt'>
@@ -607,6 +614,9 @@ export type FieldSaleRow = {
   receivedAt: string
   priceMismatch: boolean
   status: InvoiceStatus
+  /** What the salesperson took off this bill, and why in their own words. */
+  discountAmount: number
+  discountReason: string | null
 }
 
 export type FieldVisitRow = {
@@ -630,6 +640,9 @@ export type FieldSalesDay = {
   slowestSyncMinutes: number
   sales: FieldSaleRow[]
   visits: FieldVisitRow[]
+  /** What the sales team took off the day's bills. totalSales is already after it. */
+  discountGiven: number
+  discountedSaleCount: number
 }
 
 export type StockRequestStatus = 'Requested' | 'Fulfilled' | 'Cancelled'

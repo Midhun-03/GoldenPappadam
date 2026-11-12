@@ -4,7 +4,9 @@ namespace GoldenPappadam.Api.Features.Sales.Settings;
 
 /// <summary>
 /// GstEnabled is not stored: it is simply whether a GSTIN is on file. NextInvoiceNumber is what
-/// the next bill dated today would be called - shown, never reserved.
+/// the next bill dated today would be called - shown, never reserved. SalesmanDiscountCapPercent is the
+/// most a salesman may take off a bill from the phone, as a percentage of its subtotal; 0 switches
+/// phone discounts off, and leaving it out of a save keeps what it was.
 /// </summary>
 public record InvoiceSettingsDto(
     string LegalName,
@@ -21,7 +23,8 @@ public record InvoiceSettingsDto(
     string? TermsAndConditions,
     bool GstEnabled,
     string NextInvoiceNumber,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    decimal SalesmanDiscountCapPercent = 20m);
 
 public record SaveInvoiceSettingsRequest(
     [Required, MaxLength(150)] string LegalName,
@@ -35,6 +38,7 @@ public record SaveInvoiceSettingsRequest(
     bool RoundToNearestRupee,
     [MaxLength(200)] string? PaymentTerms,
     [MaxLength(500)] string? BankDetails,
-    [MaxLength(1000)] string? TermsAndConditions);
+    [MaxLength(1000)] string? TermsAndConditions,
+    [Range(typeof(decimal), "0", "100")] decimal? SalesmanDiscountCapPercent = null);
 
 public record StateDto(string Code, string Name);

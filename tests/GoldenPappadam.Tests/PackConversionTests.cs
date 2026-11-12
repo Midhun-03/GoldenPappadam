@@ -34,7 +34,7 @@ public class PackConversionTests : IAsyncLifetime
     private async Task<Product> PacketAsync(string code, int? pieces, decimal? quantity = null, Guid? source = null) =>
         await _products.CreateAsync(
             new SaveProductRequest(code, code, _loose.CategoryId, ProductKind.Packed, await PacketUnitAsync(),
-                source ?? _loose.Id, quantity, null, null, PiecesPerPack: pieces),
+                source ?? _loose.Id, quantity, 30m, null, PiecesPerPack: pieces),
             default);
 
     [Fact]

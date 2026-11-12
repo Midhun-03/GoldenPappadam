@@ -50,6 +50,11 @@ public partial class InvoiceSettingsService(AppDbContext db)
 
         EnsureGstinMatchesState(gstin, stateCode, "the business");
 
+        if (request.SalesmanDiscountCapPercent is < 0m or > 100m)
+        {
+            throw new DomainException("The salesman's discount limit is a percentage from 0 to 100.");
+        }
+
         if (seriesCode == ReturnSeries)
         {
             throw new DomainException($"'{ReturnSeries}' numbers return notes. Choose another prefix for invoices.");
@@ -92,6 +97,9 @@ public partial class InvoiceSettingsService(AppDbContext db)
         settings.PaymentTerms = Clean(request.PaymentTerms);
         settings.BankDetails = Clean(request.BankDetails);
         settings.TermsAndConditions = Clean(request.TermsAndConditions);
+
+        // Applies to bills that arrive from now on; a phone learns the new figure at its next sync.
+        settings.SalesmanDiscountCapPercent = request.SalesmanDiscountCapPercent ?? settings.SalesmanDiscountCapPercent;
 
         await db.SaveChangesAsync(ct);
 
@@ -146,7 +154,8 @@ public partial class InvoiceSettingsService(AppDbContext db)
             settings.TermsAndConditions,
             settings.Gstin is not null,
             InvoiceNumbering.Format(settings.SeriesCode, financialYear, last + 1),
-            settings.UpdatedAt);
+            settings.UpdatedAt,
+            settings.SalesmanDiscountCapPercent);
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

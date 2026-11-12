@@ -4,6 +4,7 @@ using GoldenPappadam.Api.Features.Sales.Settings;
 using GoldenPappadam.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using GoldenPappadam.Api.Features.Inventory.Stock;
+using GoldenPappadam.Api.Features.FieldSales.Day;
 using GoldenPappadam.Api.Features.FieldSales.StockRequests;
 using GoldenPappadam.Api.Features.FieldSales.VanLoads;
 using GoldenPappadam.Api.Features.Mobile;
@@ -149,11 +150,12 @@ public class MobileSyncTests : IAsyncLifetime
     public async Task A_price_changed_while_the_phone_was_away_is_flagged_not_rewritten()
     {
         await _prices.SetAsync(_shop.Id, _packet.Id, 35m, default);
+        var lastSync = DateTime.UtcNow;
 
         // The salesperson sold at 35 out on the route; the office moved it to 36 meanwhile.
         await _prices.SetAsync(_shop.Id, _packet.Id, 36m, default);
 
-        var result = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m, 35m));
+        var result = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m, 35m, lastSync));
 
         Assert.Equal(SubmissionOutcome.Accepted, result.Outcome);
         Assert.True(result.PriceMismatch);
@@ -172,6 +174,233 @@ public class MobileSyncTests : IAsyncLifetime
         var result = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m, 35m));
 
         Assert.False(result.PriceMismatch);
+    }
+
+    [Theory]
+    [InlineData(30)]
+    [InlineData(0)]
+    [InlineData(45.5)]
+    public async Task A_price_that_was_never_the_shops_rate_refuses_the_whole_bill(double price)
+    {
+        await _prices.SetAsync(_shop.Id, _packet.Id, 35m, default);
+        var clientRequestId = Guid.NewGuid();
+
+        var result = await SubmitAsync(SaleItem(clientRequestId, 10m, (decimal)price, DateTime.UtcNow.AddDays(-30)));
+
+        Assert.Equal(SubmissionOutcome.Rejected, result.Outcome);
+        Assert.Contains("not this shop's rate", result.Error);
+
+        // Nothing was written: no bill, no stock off the van, and the client id is free to be used
+        // again once the office has sorted it out.
+        Assert.False(await _database.Db.Invoices.AnyAsync());
+        Assert.False(await _database.Db.SyncSubmissions.AnyAsync(s => s.ClientRequestId == clientRequestId));
+        Assert.Equal(150m, await _stock.GetQuantityOnHandAsync(_packet.Id, KnownStockLocations.FirstVanId, default));
+    }
+
+    [Fact]
+    public async Task One_bad_line_refuses_the_lines_beside_it_too()
+    {
+        var item = new SubmissionItemRequest(Guid.NewGuid(), SubmissionType.Invoice, DateTime.UtcNow,
+            new MobileSaleRequest(
+                _shop.Id,
+                [new MobileSaleLineRequest(_packet.Id, 5m, 45m), new MobileSaleLineRequest(_packet.Id, 5m, 12m)],
+                DateTime.UtcNow, null),
+            null, null);
+
+        var result = await SubmitAsync(item);
+
+        Assert.Equal(SubmissionOutcome.Rejected, result.Outcome);
+        Assert.False(await _database.Db.Invoices.AnyAsync());
+    }
+
+    [Fact]
+    public async Task A_rate_the_shop_stopped_paying_before_the_phones_last_sync_is_refused()
+    {
+        await _prices.SetAsync(_shop.Id, _packet.Id, 35m, default);
+        await _prices.SetAsync(_shop.Id, _packet.Id, 36m, default);
+
+        // The phone synced after the change, so it was told 36. It has no honest way to charge 35.
+        var result = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m, 35m, DateTime.UtcNow));
+
+        Assert.Equal(SubmissionOutcome.Rejected, result.Outcome);
+    }
+
+    [Fact]
+    public async Task A_last_known_rate_is_accepted_however_long_the_phone_was_away()
+    {
+        await _prices.SetAsync(_shop.Id, _packet.Id, 35m, default);
+        var lastSync = DateTime.UtcNow;
+        await _prices.SetAsync(_shop.Id, _packet.Id, 36m, default);
+        await _prices.SetAsync(_shop.Id, _packet.Id, 38m, default);
+
+        // Two changes behind: 35 was the rate at the last sync, 36 came and went, 38 is the rate now.
+        var old = await SubmitAsync(SaleItem(Guid.NewGuid(), 1m, 35m, lastSync));
+        var between = await SubmitAsync(SaleItem(Guid.NewGuid(), 1m, 36m, lastSync));
+        var current = await SubmitAsync(SaleItem(Guid.NewGuid(), 1m, 38m, lastSync));
+
+        Assert.True(old is { Outcome: SubmissionOutcome.Accepted, PriceMismatch: true });
+        Assert.True(between is { Outcome: SubmissionOutcome.Accepted, PriceMismatch: true });
+        Assert.True(current is { Outcome: SubmissionOutcome.Accepted, PriceMismatch: false });
+    }
+
+    [Fact]
+    public async Task A_standard_price_changed_while_the_phone_was_away_is_flagged_not_refused()
+    {
+        // Route Shop has no agreed rate, so it pays the standard price - 45 when the phone last synced.
+        var lastSync = DateTime.UtcNow;
+        var products = new GoldenPappadam.Api.Features.Inventory.Products.ProductService(_database.Db);
+
+        await products.UpdateAsync(
+            _packet.Id,
+            new GoldenPappadam.Api.Features.Inventory.Products.SaveProductRequest(
+                _packet.ProductCode, _packet.Name, _packet.CategoryId, _packet.Kind, _packet.UnitOfMeasureId,
+                _packet.SourceProductId, _packet.SourceQuantityPerPack, 48m, null),
+            default);
+
+        var atTheOldPrice = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m, 45m, lastSync));
+        var atTheNewPrice = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m, 48m, lastSync));
+
+        Assert.True(atTheOldPrice is { Outcome: SubmissionOutcome.Accepted, PriceMismatch: true });
+        Assert.True(atTheNewPrice is { Outcome: SubmissionOutcome.Accepted, PriceMismatch: false });
+    }
+
+    [Fact]
+    public async Task A_rate_agreed_while_the_phone_was_away_leaves_the_standard_price_honest()
+    {
+        var lastSync = DateTime.UtcNow;
+
+        // The office agrees 37 with the shop; the phone, still out, bills at the standard 45 it knows.
+        await _prices.SetAsync(_shop.Id, _packet.Id, 37m, default);
+
+        var result = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m, 45m, lastSync));
+
+        Assert.True(result is { Outcome: SubmissionOutcome.Accepted, PriceMismatch: true });
+    }
+
+    [Fact]
+    public async Task The_snapshot_is_stamped_with_when_it_was_taken()
+    {
+        var before = DateTime.UtcNow;
+
+        var snapshot = await _sync.GetSnapshotAsync(default);
+
+        // The phone sends this stamp back with every bill; a rate changed after it is "while away".
+        Assert.InRange(snapshot.PricesAsOf, before, DateTime.UtcNow);
+    }
+
+    [Fact]
+    public async Task A_salesmans_discount_inside_the_cap_is_kept_with_his_reason()
+    {
+        // 10 packets at 45 is 450; the cap is 20%, so up to 90 may come off.
+        var result = await SubmitAsync(DiscountedSale(10m, 45m, 50m, "  Old stock, expiring in 3 days  "));
+
+        Assert.Equal(SubmissionOutcome.Accepted, result.Outcome);
+
+        var invoice = await _database.Db.Invoices.Include(i => i.Lines).SingleAsync();
+        Assert.Equal(450m, invoice.SubTotal);
+        Assert.Equal(50m, invoice.DiscountAmount);
+        Assert.Equal(400m, invoice.TotalAmount);
+        Assert.Equal("Old stock, expiring in 3 days", invoice.DiscountReason);
+
+        // The rate on the bill is still the real rate; the discount is beside it, not inside it.
+        Assert.Equal(45m, invoice.Lines[0].UnitPrice);
+    }
+
+    [Fact]
+    public async Task The_cap_is_exact_to_the_paisa()
+    {
+        var atTheCap = await SubmitAsync(DiscountedSale(10m, 45m, 90m, "Bulk order"));
+        var onePaisaOver = await SubmitAsync(DiscountedSale(10m, 45m, 90.01m, "Bulk order"));
+
+        Assert.Equal(SubmissionOutcome.Accepted, atTheCap.Outcome);
+        Assert.Equal(SubmissionOutcome.Rejected, onePaisaOver.Outcome);
+        Assert.Contains("more than 20% of the bill", onePaisaOver.Error);
+        Assert.Single(await _database.Db.Invoices.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task A_discount_from_the_phone_needs_a_reason(string? reason)
+    {
+        var result = await SubmitAsync(DiscountedSale(10m, 45m, 50m, reason));
+
+        Assert.Equal(SubmissionOutcome.Rejected, result.Outcome);
+        Assert.Contains("needs a reason", result.Error);
+        Assert.False(await _database.Db.Invoices.AnyAsync());
+    }
+
+    [Fact]
+    public async Task A_cap_of_zero_switches_discounts_off_on_the_phone()
+    {
+        await SetDiscountCapAsync(0m);
+
+        var discounted = await SubmitAsync(DiscountedSale(10m, 45m, 1m, "Regular customer"));
+        var plain = await SubmitAsync(SaleItem(Guid.NewGuid(), 10m, 45m));
+
+        Assert.Equal(SubmissionOutcome.Rejected, discounted.Outcome);
+        Assert.Contains("switched off", discounted.Error);
+        Assert.Equal(SubmissionOutcome.Accepted, plain.Outcome);
+    }
+
+    [Fact]
+    public async Task The_cap_is_the_one_in_force_when_the_bill_arrives()
+    {
+        // The phone was told 20% and gave 90 off; the office has since lowered the cap to 10%.
+        await SetDiscountCapAsync(10m);
+
+        var result = await SubmitAsync(DiscountedSale(10m, 45m, 90m, "Bulk order"));
+
+        Assert.Equal(SubmissionOutcome.Rejected, result.Outcome);
+        Assert.Contains("more than 10% of the bill", result.Error);
+    }
+
+    [Fact]
+    public async Task The_snapshot_tells_the_phone_the_cap()
+    {
+        Assert.Equal(20m, (await _sync.GetSnapshotAsync(default)).DiscountCapPercent);
+
+        await SetDiscountCapAsync(12.5m);
+
+        Assert.Equal(12.5m, (await _sync.GetSnapshotAsync(default)).DiscountCapPercent);
+    }
+
+    [Fact]
+    public async Task The_office_sees_each_discount_and_its_reason_on_today_on_the_road()
+    {
+        await SubmitAsync(DiscountedSale(10m, 45m, 50m, "Old stock"));
+        await SubmitAsync(SaleItem(Guid.NewGuid(), 2m, 45m));
+
+        var day = await new FieldSalesDayService(_database.Db).GetAsync(IndiaTime.Today(), default);
+
+        Assert.Equal(50m, day.DiscountGiven);
+        Assert.Equal(1, day.DiscountedSaleCount);
+
+        // 400 after the discount, plus 90.
+        Assert.Equal(490m, day.TotalSales);
+
+        var discounted = Assert.Single(day.Sales, s => s.DiscountAmount > 0m);
+        Assert.Equal("Old stock", discounted.DiscountReason);
+    }
+
+    [Fact]
+    public async Task The_cap_is_a_setting_that_a_save_without_it_leaves_alone()
+    {
+        var settings = new InvoiceSettingsService(_database.Db);
+        var current = await settings.GetAsync(default);
+
+        SaveInvoiceSettingsRequest Request(decimal? cap) => new(
+            current.LegalName, current.Address, current.Phone, current.Email, current.Gstin, current.StateCode,
+            current.SeriesCode, current.PricesIncludeTax, current.RoundToNearestRupee, current.PaymentTerms,
+            current.BankDetails, current.TermsAndConditions, cap);
+
+        Assert.Equal(20m, current.SalesmanDiscountCapPercent);
+        Assert.Equal(15m, (await settings.SaveAsync(Request(15m), default)).SalesmanDiscountCapPercent);
+        Assert.Equal(15m, (await settings.SaveAsync(Request(null), default)).SalesmanDiscountCapPercent);
+
+        await Assert.ThrowsAsync<DomainException>(() => settings.SaveAsync(Request(101m), default));
+        await Assert.ThrowsAsync<DomainException>(() => settings.SaveAsync(Request(-1m), default));
     }
 
     [Fact]
@@ -532,9 +761,24 @@ public class MobileSyncTests : IAsyncLifetime
         return batch.Results[0];
     }
 
-    private SubmissionItemRequest SaleItem(Guid clientRequestId, decimal quantity, decimal unitPrice) =>
+    private SubmissionItemRequest DiscountedSale(decimal quantity, decimal unitPrice, decimal discount, string? reason) =>
+        new(Guid.NewGuid(), SubmissionType.Invoice, DateTime.UtcNow,
+            new MobileSaleRequest(_shop.Id, [new MobileSaleLineRequest(_packet.Id, quantity, unitPrice)],
+                DateTime.UtcNow, null, null, discount, reason),
+            null, null);
+
+    private async Task SetDiscountCapAsync(decimal percent)
+    {
+        var settings = await _database.Db.InvoiceSettings.SingleAsync();
+        settings.SalesmanDiscountCapPercent = percent;
+        await _database.Db.SaveChangesAsync();
+    }
+
+    /// <summary>pricesAsOf is when the phone last synced; left out, it synced a moment ago.</summary>
+    private SubmissionItemRequest SaleItem(
+        Guid clientRequestId, decimal quantity, decimal unitPrice, DateTime? pricesAsOf = null) =>
         new(clientRequestId, SubmissionType.Invoice, DateTime.UtcNow,
             new MobileSaleRequest(_shop.Id, [new MobileSaleLineRequest(_packet.Id, quantity, unitPrice)],
-                DateTime.UtcNow, null),
+                pricesAsOf ?? DateTime.UtcNow, null),
             null, null);
 }

@@ -207,6 +207,75 @@ public class CustomerPriceTests : IAsyncLifetime
         Assert.Single(await _prices.GetChangesAsync(shop.Id, false, null, null, 50, default));
     }
 
+    [Fact]
+    public async Task Zero_typed_over_an_agreed_rate_removes_it_and_says_so_in_the_history()
+    {
+        var shop = await _database.SeedCustomerAsync("Danya Supermarket");
+        await _prices.SetAsync(shop.Id, _packet.Id, 37m, default);
+
+        var after = await _prices.SetAsync(shop.Id, _packet.Id, 0m, default);
+
+        // Zero is not a rate: the shop is back on the standard price, as if the rate had been removed.
+        Assert.Null(after.AgreedPrice);
+        Assert.Equal(45m, after.EffectivePrice);
+
+        var bill = await BillAsync(shop.Id, quantity: 1m);
+        Assert.Equal(45m, bill.Invoice.Lines[0].UnitPrice);
+
+        var history = await _prices.GetChangesAsync(shop.Id, false, null, null, 50, default);
+        List<(decimal?, decimal?)> expected = [(37m, null), (null, 37m)];
+        Assert.Equal(expected, history.Select(h => (h.PreviousPrice, h.NewPrice)));
+    }
+
+    [Fact]
+    public async Task Zero_for_a_shop_with_no_agreed_rate_changes_nothing()
+    {
+        var shop = await _database.SeedCustomerAsync("Shop A");
+
+        var after = await _prices.SetAsync(shop.Id, _packet.Id, 0m, default);
+
+        Assert.Null(after.AgreedPrice);
+        Assert.Empty(await _prices.GetChangesAsync(shop.Id, false, null, null, 50, default));
+        Assert.False(await _database.Db.CustomerPrices.AnyAsync());
+    }
+
+    [Fact]
+    public async Task A_new_shops_first_rate_cannot_be_zero()
+    {
+        var shop = await _database.SeedCustomerAsync("Shop A");
+
+        await Assert.ThrowsAsync<DomainException>(
+            () => _prices.SetInitialRatesAsync(shop.Id, [(_packet.Id, 0m)], default));
+    }
+
+    [Fact]
+    public async Task A_bill_line_is_never_free_even_when_the_office_types_the_price()
+    {
+        var shop = await _database.SeedCustomerAsync("Shop A");
+
+        var error = await Assert.ThrowsAsync<DomainException>(() => _invoices.CreateAsync(
+            new CreateInvoiceRequest(shop.Id, null, 0m, null, [new InvoiceLineRequest(_packet.Id, 1m, 0m)]),
+            default));
+
+        Assert.Contains("use the discount", error.Message);
+        Assert.False(await _database.Db.Invoices.AnyAsync());
+    }
+
+    [Fact]
+    public async Task Goods_are_given_free_through_the_offices_discount_not_through_the_rate()
+    {
+        var shop = await _database.SeedCustomerAsync("Shop A");
+
+        var bill = await _invoices.CreateAsync(
+            new CreateInvoiceRequest(shop.Id, null, 450m, null, [new InvoiceLineRequest(_packet.Id, 10m, null)]),
+            default);
+
+        // The rate on the bill is still the real rate; what was given away shows as a discount.
+        Assert.Equal(45m, bill.Invoice.Lines[0].UnitPrice);
+        Assert.Equal(450m, bill.Invoice.DiscountAmount);
+        Assert.Equal(0m, bill.Invoice.TotalAmount);
+    }
+
     private Task<CreateInvoiceResponse> BillAsync(Guid customerId, decimal quantity) =>
         _invoices.CreateAsync(
             new CreateInvoiceRequest(customerId, null, 0m, null,

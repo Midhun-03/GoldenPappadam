@@ -107,6 +107,15 @@ export function FieldSalesDayPage() {
         </div>
       )}
 
+      {(day.data?.discountGiven ?? 0) > 0 && (
+        <p className="mb-4 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm lg:mb-5">
+          Discounts given by the sales team:{' '}
+          <span className="font-medium tabular-nums">{formatMoney(day.data!.discountGiven)}</span> on{' '}
+          {day.data!.discountedSaleCount} {day.data!.discountedSaleCount === 1 ? 'bill' : 'bills'}. The sales figure
+          above is after them; each bill below says why.
+        </p>
+      )}
+
       <Card className="mb-4 lg:mb-5">
         <CardHeader>
           <CardTitle>Sales</CardTitle>
@@ -152,6 +161,12 @@ export function FieldSalesDayPage() {
                         <span className="font-mono text-xs text-muted-foreground">{sale.invoiceNumber}</span>
                         {sale.priceMismatch && <Badge variant="warning">Price changed</Badge>}
                       </div>
+                      {sale.discountAmount > 0 && (
+                        <div className="mt-0.5 whitespace-normal break-words text-xs text-muted-foreground">
+                          <span className="tabular-nums">{formatMoney(sale.discountAmount)}</span> off:{' '}
+                          {sale.discountReason ?? 'no reason given'}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="hidden max-w-[16rem] truncate text-xs text-muted-foreground lg:table-cell">
                       {sale.products}

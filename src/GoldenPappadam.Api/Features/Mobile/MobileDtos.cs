@@ -78,8 +78,12 @@ public record SnapshotPaymentDto(
 /// there are tens of shops and tens of products, and a delta protocol would be more moving parts
 /// than the payload is worth.
 ///
-/// <paramref name="PricesAsOf"/> is the stamp the phone sends back with a sale, so the server can
-/// tell whether a price changed while the phone was away.
+/// <paramref name="PricesAsOf"/> is when this snapshot was taken. The phone sends it back with every
+/// sale it prices from the snapshot, so the server can tell which rates that phone had been told -
+/// and so which prices a bill from it may honestly carry.
+///
+/// <paramref name="DiscountCapPercent"/> is the most a salesperson may take off a bill, as a
+/// percentage of its subtotal. 0 means discounts are switched off on the phone.
 /// </summary>
 public record SnapshotDto(
     DateTime ServerTime,
@@ -91,14 +95,16 @@ public record SnapshotDto(
     IReadOnlyList<SnapshotPaymentDto> Payments,
     IReadOnlyList<string> PaymentMethods,
     IReadOnlyList<SnapshotBranchDto> Branches,
-    IReadOnlyList<SnapshotRateRequestDto>? RateRequests = null);
+    IReadOnlyList<SnapshotRateRequestDto>? RateRequests = null,
+    decimal DiscountCapPercent = 0m);
 
 // ---------- what the phone sends back ----------
 
 /// <summary>
 /// UnitPrice is what the salesperson's app actually charged, not a price they chose: the app shows
 /// it read-only and has no way to edit it. It is sent because the sale already happened at that
-/// price, and rewriting history would make the bill disagree with what the shop was told.
+/// price, and rewriting history would make the bill disagree with what the shop was told. The server
+/// accepts it only if it is the shop's rate now or was at some moment since the phone's snapshot.
 /// </summary>
 public record MobileSaleLineRequest(
     [Required] Guid ProductId,
@@ -108,13 +114,19 @@ public record MobileSaleLineRequest(
 /// <summary>
 /// BranchId names which shop of a multi-branch customer this sale is for. The snapshot tells the
 /// phone which customers need one; a plain customer never carries one, same rule as the admin panel.
+///
+/// DiscountAmount is rupees off the whole bill, and DiscountReason is the salesperson's own words for
+/// why - required with any discount. The server refuses a discount over the cap in Settings, which the
+/// snapshot tells the phone so that it can stop the salesperson before the bill is saved.
 /// </summary>
 public record MobileSaleRequest(
     [Required] Guid CustomerId,
     [Required, MinLength(1)] List<MobileSaleLineRequest> Lines,
     DateTime PricesAsOf,
     [MaxLength(300)] string? Notes,
-    Guid? BranchId = null);
+    Guid? BranchId = null,
+    [Range(typeof(decimal), "0", "79228162514264337593543950335")] decimal DiscountAmount = 0m,
+    [MaxLength(200)] string? DiscountReason = null);
 
 public record MobilePaymentRequest(
     [Required] Guid CustomerId,

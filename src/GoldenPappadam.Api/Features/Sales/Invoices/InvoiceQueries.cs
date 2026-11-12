@@ -74,6 +74,7 @@ public static class InvoiceQueries
                     .Where(a => a.InvoiceId == i.Id)
                     .Sum(a => (decimal?)a.Amount) ?? 0m),
             i.Notes,
+            i.DiscountReason,
             i.CreatedAt,
             db.Users.Where(u => u.Id == i.CreatedBy).Select(u => u.FullName).FirstOrDefault(),
             db.SyncSubmissions

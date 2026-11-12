@@ -336,6 +336,158 @@ void main() {
     expect(((jsonDecode(sale.payload)['sale']['lines']) as List).single['quantity'], 1.0);
   });
 
+  // ---------- discount ----------
+
+  /// The office allows a discount of up to this share of a bill; the snapshot is how the phone
+  /// is told, and this is where the snapshot keeps it.
+  Future<void> allowDiscount(double percent) => db.writeMeta('discount_cap_percent', '$percent');
+
+  Finder discountAmount() => find.byKey(const ValueKey('discount-amount'));
+  Finder discountReason() => find.byKey(const ValueKey('discount-reason'));
+  Finder addDiscount() => find.byKey(const ValueKey('add-discount'));
+
+  Future<void> openDiscount(WidgetTester tester) async {
+    await tester.ensureVisible(addDiscount());
+    await tester.tap(addDiscount());
+    await tester.pumpAndSettle();
+  }
+
+  /// Ten packets at 35 is a bill of 350; at 20% up to 70 may come off.
+  Future<void> billTenPackets(WidgetTester tester) async {
+    await allowDiscount(20);
+    await billOnePacket(tester);
+    await tapPlus(tester, times: 9);
+  }
+
+  testWidgets('no discount is offered until the office allows one', (tester) async {
+    await billOnePacket(tester);
+
+    expect(addDiscount(), findsNothing);
+  });
+
+  testWidgets('a discount is one closed row until it is asked for', (tester) async {
+    await billTenPackets(tester);
+
+    expect(addDiscount(), findsOneWidget);
+    expect(discountAmount(), findsNothing);
+
+    await openDiscount(tester);
+
+    expect(discountAmount(), findsOneWidget);
+    expect(find.text('Up to ${money(70)} on this bill (20%)'), findsOneWidget);
+  });
+
+  testWidgets('a discount comes off the total, and the bill saves with it and the reason', (tester) async {
+    await billTenPackets(tester);
+    await openDiscount(tester);
+
+    await tester.enterText(discountAmount(), '50');
+    await tester.pumpAndSettle();
+
+    // 350 less 50, in the bar the salesperson reads the figure from.
+    expect(find.text(money(300)), findsWidgets);
+
+    // A figure with no reason cannot be saved.
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNull);
+
+    await tester.enterText(discountReason(), 'Old stock');
+    await tester.pumpAndSettle();
+    await tester.tap(saveBar());
+    await tester.pumpAndSettle();
+
+    final entries = await db.select(db.outboxEntries).get();
+    final sale = jsonDecode(entries.firstWhere((e) => e.type == 'Invoice').payload)['sale'];
+
+    expect(sale['discountAmount'], 50.0);
+    expect(sale['discountReason'], 'Old stock');
+    expect((sale['lines'] as List).single['unitPrice'], 35.0);
+  });
+
+  testWidgets('a discount over the cap cannot be saved, and says what the most is', (tester) async {
+    await billTenPackets(tester);
+    await openDiscount(tester);
+
+    await tester.enterText(discountAmount(), '70.01');
+    await tester.enterText(discountReason(), 'Bulk order');
+    await tester.pumpAndSettle();
+
+    expect(find.text('The most you can take off this bill is ${money(70)}.'), findsOneWidget);
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNull);
+
+    // Exactly the cap is allowed.
+    await tester.enterText(discountAmount(), '70');
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('The most you can take off'), findsNothing);
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNotNull);
+  });
+
+  testWidgets('a discount that stops fitting when the bill shrinks blocks the save instead of shrinking',
+      (tester) async {
+    await billTenPackets(tester);
+    await openDiscount(tester);
+    await tester.enterText(discountAmount(), '70');
+    await tester.enterText(discountReason(), 'Bulk order');
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNotNull);
+
+    // Five packets now: a bill of 175, where the most is 35. The 70 stays as typed.
+    await tester.enterText(find.byKey(const ValueKey('bill-qty-0')), '5');
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<TextField>(discountAmount()).controller!.text, '70');
+    expect(find.text('The most you can take off this bill is ${money(35)}.'), findsOneWidget);
+    expect(tester.widget<FilledButton>(saveBar()).onPressed, isNull);
+  });
+
+  testWidgets('removing the discount puts the bill back as it was', (tester) async {
+    await billTenPackets(tester);
+    await openDiscount(tester);
+    await tester.enterText(discountAmount(), '50');
+    await tester.enterText(discountReason(), 'Old stock');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('remove-discount')));
+    await tester.pumpAndSettle();
+
+    expect(discountAmount(), findsNothing);
+    expect(addDiscount(), findsOneWidget);
+
+    await tester.tap(saveBar());
+    await tester.pumpAndSettle();
+
+    final entries = await db.select(db.outboxEntries).get();
+    final sale = jsonDecode(entries.firstWhere((e) => e.type == 'Invoice').payload)['sale'] as Map;
+
+    expect(sale.containsKey('discountAmount'), isFalse);
+  });
+
+  testWidgets('a bill paid on the spot with a discount records what was actually handed over', (tester) async {
+    await billTenPackets(tester);
+    await openDiscount(tester);
+    await tester.enterText(discountAmount(), '50');
+    await tester.enterText(discountReason(), 'Old stock');
+    await tester.pumpAndSettle();
+
+    // With the discount open the payment step is below the fold, and the page builds it on scroll.
+    await tester.scrollUntilVisible(
+      find.text('Paid'),
+      200,
+      scrollable: find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first,
+    );
+    await tester.tap(find.text('Paid'));
+    await tester.pumpAndSettle();
+    await tester.tap(saveBar());
+    await tester.pumpAndSettle();
+
+    final entries = await db.select(db.outboxEntries).get();
+    final payment = entries.firstWhere((e) => e.type == 'Payment');
+
+    // The shop paid the bill after the discount, not before it.
+    expect(jsonDecode(payment.payload)['payment']['amount'], 300.0);
+  });
+
   testWidgets('every bill gets its own client request id', (tester) async {
     for (var i = 0; i < 2; i++) {
       await billOnePacket(tester);

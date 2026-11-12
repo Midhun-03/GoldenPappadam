@@ -30,6 +30,7 @@ type Form = {
   paymentTerms: string
   bankDetails: string
   termsAndConditions: string
+  salesmanDiscountCapPercent: string
 }
 
 const toForm = (settings: InvoiceSettings): Form => ({
@@ -45,6 +46,7 @@ const toForm = (settings: InvoiceSettings): Form => ({
   paymentTerms: settings.paymentTerms ?? '',
   bankDetails: settings.bankDetails ?? '',
   termsAndConditions: settings.termsAndConditions ?? '',
+  salesmanDiscountCapPercent: String(settings.salesmanDiscountCapPercent),
 })
 
 /**
@@ -77,6 +79,7 @@ export function InvoiceSettingsCard() {
         paymentTerms: value.paymentTerms.trim() || null,
         bankDetails: value.bankDetails.trim() || null,
         termsAndConditions: value.termsAndConditions.trim() || null,
+        salesmanDiscountCapPercent: Number(value.salesmanDiscountCapPercent),
       }),
     onSuccess: (saved) => {
       queryClient.setQueryData(['invoice-settings'], saved)
@@ -88,7 +91,16 @@ export function InvoiceSettingsCard() {
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
-    if (form) save.mutate(form)
+    if (!form) return
+
+    const cap = Number(form.salesmanDiscountCapPercent)
+
+    if (form.salesmanDiscountCapPercent.trim() === '' || Number.isNaN(cap) || cap < 0 || cap > 100) {
+      setError("Enter the salesman's discount limit as a percentage from 0 to 100.")
+      return
+    }
+
+    save.mutate(form)
   }
 
   const field = <K extends keyof Form>(key: K, value: Form[K]) => form && setForm({ ...form, [key]: value })
@@ -241,6 +253,29 @@ export function InvoiceSettingsCard() {
                   <span className="text-xs text-muted-foreground">The difference is printed as the round-off.</span>
                 </span>
               </label>
+            </div>
+
+            <div className="grid gap-1.5 rounded-lg border bg-muted/40 p-3">
+              <Label htmlFor="salesmanDiscountCapPercent">
+                Most a salesman may take off a bill (%) <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="salesmanDiscountCapPercent"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                max="100"
+                required
+                className="sm:w-32"
+                value={form.salesmanDiscountCapPercent}
+                onChange={(event) => field('salesmanDiscountCapPercent', event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                A share of the bill before the discount: at 20, a bill of ₹2,000 can have up to ₹400 off. The salesman
+                must say why, and you see it on Today on the road. 0 switches discounts off on the phone. Your own
+                bills are not limited. A phone learns a new figure the next time it syncs.
+              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">

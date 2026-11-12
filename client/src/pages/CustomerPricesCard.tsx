@@ -216,7 +216,12 @@ function SetPriceDialog({
     mutationFn: () => customerPricesApi.set(customerId, selectedProductId, Number(price)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['customers', customerId, 'prices'] })
-      toast.success('Price saved. It applies to the next bill, not to bills already made.')
+      // Zero is not a rate: the server removes the agreed rate and the shop pays the standard price.
+      toast.success(
+        Number(price) === 0
+          ? 'Back to the standard price for this shop, from the next bill.'
+          : 'Price saved. It applies to the next bill, not to bills already made.',
+      )
       onOpenChange(false)
     },
     onError: (failure) =>
@@ -233,7 +238,7 @@ function SetPriceDialog({
     }
 
     if (price.trim() === '' || Number.isNaN(Number(price)) || Number(price) < 0) {
-      setError('Enter a price of zero or more.')
+      setError('Enter a price, or 0 to go back to the standard price.')
       return
     }
 
@@ -287,8 +292,8 @@ function SetPriceDialog({
               {chosen && (
                 <p className="text-xs text-muted-foreground">
                   {chosen.defaultPrice === null
-                    ? 'This product has no standard price of its own.'
-                    : `The standard price is ${formatMoney(chosen.defaultPrice)}.`}
+                    ? 'This product has no standard price yet. Set one on the product.'
+                    : `The standard price is ${formatMoney(chosen.defaultPrice)}. Enter 0 and this shop pays that.`}
                 </p>
               )}
             </div>

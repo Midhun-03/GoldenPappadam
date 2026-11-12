@@ -67,7 +67,11 @@ public class CustomerPriceService(AppDbContext db, ICurrentUser currentUser)
     /// duplicated, and one that was removed earlier comes back rather than colliding with the
     /// unique index.
     /// </summary>
-    /// <summary>The office changing a rate. Refused for a salesperson: theirs is a request to the office.</summary>
+    /// <summary>
+    /// The office changing a rate. Refused for a salesperson: theirs is a request to the office.
+    /// Zero is not a rate (owner, 2026-11-12): it means the shop has no agreed rate and pays the standard
+    /// price, so zero typed over an existing rate removes it, exactly as <see cref="RemoveAsync"/> does.
+    /// </summary>
     public async Task<CustomerPriceDto> SetAsync(
         Guid customerId,
         Guid productId,
@@ -75,6 +79,12 @@ public class CustomerPriceService(AppDbContext db, ICurrentUser currentUser)
         CancellationToken ct)
     {
         EnsureOffice();
+
+        if (unitPrice == 0m)
+        {
+            return await ClearAsync(customerId, productId, ct);
+        }
+
         var product = await SetCoreAsync(customerId, productId, unitPrice, null, ct);
         await db.SaveChangesAsync(ct);
 
@@ -86,6 +96,34 @@ public class CustomerPriceService(AppDbContext db, ICurrentUser currentUser)
             product.SellingPrice,
             unitPrice,
             unitPrice);
+    }
+
+    /// <summary>Zero from the office: the agreed rate, if there is one, is removed and recorded as removed.</summary>
+    private async Task<CustomerPriceDto> ClearAsync(Guid customerId, Guid productId, CancellationToken ct)
+    {
+        await EnsureCustomerExistsAsync(customerId, ct);
+
+        var product = await db.Products.FirstOrDefaultAsync(p => p.Id == productId, ct)
+                      ?? throw new NotFoundException("Product");
+
+        var price = await db.CustomerPrices
+            .FirstOrDefaultAsync(cp => cp.CustomerId == customerId && cp.ProductId == productId && cp.IsActive, ct);
+
+        if (price is not null)
+        {
+            price.IsActive = false;
+            RecordChange(customerId, productId, price.UnitPrice, null);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return new CustomerPriceDto(
+            product.Id,
+            product.ProductCode,
+            product.Name,
+            await UnitCodeAsync(product.UnitOfMeasureId, ct),
+            product.SellingPrice,
+            null,
+            product.SellingPrice);
     }
 
     /// <summary>
@@ -172,9 +210,11 @@ public class CustomerPriceService(AppDbContext db, ICurrentUser currentUser)
         Guid? rateRequestId,
         CancellationToken ct)
     {
-        if (unitPrice < 0m)
+        // Zero is never a rate: the office's zero is handled as a removal before it gets here, and nobody
+        // else - a new shop's first rates, an approved request - may remove one.
+        if (unitPrice <= 0m)
         {
-            throw new DomainException("A price cannot be negative.");
+            throw new DomainException("A rate must be more than zero.");
         }
 
         var customer = await EnsureCustomerExistsAsync(customerId, ct);
@@ -327,6 +367,83 @@ public class CustomerPriceService(AppDbContext db, ICurrentUser currentUser)
         return await db.CustomerPrices
             .Where(cp => cp.CustomerId == customerId && cp.IsActive && ids.Contains(cp.ProductId))
             .ToDictionaryAsync(cp => cp.ProductId, cp => cp.UnitPrice, ct);
+    }
+
+    /// <summary>
+    /// What a shop pays for each product now, and every rate it has had since <paramref name="since"/>
+    /// - the moment a phone last heard from the office. A bill made on that phone is honest at any of
+    /// them: it was priced from what the phone had been told (its last-known rate).
+    ///
+    /// The histories make this a small question. The rate at <paramref name="since"/> is the "previous"
+    /// side of the first change after it, so every rate in the window is the current one or one side of
+    /// a change inside it. While the shop had no agreed rate it paid the standard price, so the standard
+    /// price's own changes count for that stretch. This errs towards accepting: a standard price is
+    /// allowed for the whole window once the shop was without an agreed rate at any point in it. That
+    /// is deliberate - a bill not at the current rate is flagged for the office either way.
+    /// </summary>
+    public async Task<Dictionary<Guid, RatesSince>> GetRatesSinceAsync(
+        Guid customerId,
+        IEnumerable<Guid> productIds,
+        DateTime since,
+        CancellationToken ct)
+    {
+        var ids = productIds.Distinct().ToList();
+        var agreed = await GetAgreedPricesAsync(customerId, ids, ct);
+
+        var standard = await db.Products
+            .Where(p => ids.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.SellingPrice, ct);
+
+        var agreedChanges = await db.CustomerPriceChanges
+            .Where(c => c.CustomerId == customerId && ids.Contains(c.ProductId) && c.CreatedAt > since)
+            .Select(c => new { c.ProductId, c.PreviousPrice, c.NewPrice })
+            .ToListAsync(ct);
+
+        var standardChanges = await db.ProductPriceChanges
+            .Where(c => ids.Contains(c.ProductId) && c.CreatedAt > since)
+            .Select(c => new { c.ProductId, c.PreviousPrice, NewPrice = (decimal?)c.NewPrice })
+            .ToListAsync(ct);
+
+        var result = new Dictionary<Guid, RatesSince>();
+
+        foreach (var id in ids)
+        {
+            var agreedNow = agreed.TryGetValue(id, out var rate) ? rate : (decimal?)null;
+            var standardNow = standard.GetValueOrDefault(id);
+            var mine = agreedChanges.Where(c => c.ProductId == id).ToList();
+
+            var known = new HashSet<decimal>();
+            Add(known, agreedNow);
+
+            foreach (var change in mine)
+            {
+                Add(known, change.PreviousPrice);
+                Add(known, change.NewPrice);
+            }
+
+            if (agreedNow is null || mine.Any(c => c.PreviousPrice is null || c.NewPrice is null))
+            {
+                Add(known, standardNow);
+
+                foreach (var change in standardChanges.Where(c => c.ProductId == id))
+                {
+                    Add(known, change.PreviousPrice);
+                    Add(known, change.NewPrice);
+                }
+            }
+
+            result[id] = new RatesSince(Resolve(null, agreedNow, standardNow), known);
+        }
+
+        return result;
+
+        static void Add(HashSet<decimal> set, decimal? price)
+        {
+            if (price is { } value)
+            {
+                set.Add(value);
+            }
+        }
     }
 
     /// <summary>

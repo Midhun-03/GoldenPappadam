@@ -12,7 +12,9 @@ public class InvoiceSettingsConfiguration : IEntityTypeConfiguration<InvoiceSett
 
     public void Configure(EntityTypeBuilder<InvoiceSettings> builder)
     {
-        builder.ToTable("InvoiceSettings", Schemas.Sales);
+        builder.ToTable("InvoiceSettings", Schemas.Sales, table => table.HasCheckConstraint(
+            "CK_InvoiceSettings_SalesmanDiscountCapPercent",
+            "[SalesmanDiscountCapPercent] >= 0 AND [SalesmanDiscountCapPercent] <= 100"));
 
         builder.Property(x => x.LegalName).HasMaxLength(150).IsRequired();
         builder.Property(x => x.Address).HasMaxLength(300);
@@ -24,6 +26,7 @@ public class InvoiceSettingsConfiguration : IEntityTypeConfiguration<InvoiceSett
         builder.Property(x => x.PaymentTerms).HasMaxLength(200);
         builder.Property(x => x.BankDetails).HasMaxLength(500);
         builder.Property(x => x.TermsAndConditions).HasMaxLength(1000);
+        builder.Property(x => x.SalesmanDiscountCapPercent).HasPrecision(5, 2);
 
         // No GSTIN is seeded: GST stays off until someone enters the real number.
         builder.HasData(new InvoiceSettings
@@ -35,6 +38,7 @@ public class InvoiceSettingsConfiguration : IEntityTypeConfiguration<InvoiceSett
             SeriesCode = "GP",
             PricesIncludeTax = true,
             RoundToNearestRupee = false,
+            SalesmanDiscountCapPercent = 20m,
             CreatedAt = SeededAt
         });
     }

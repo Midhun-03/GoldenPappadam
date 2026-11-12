@@ -104,6 +104,12 @@ public class Invoice : AuditableEntity
     /// <summary>Bill-level discount. Zero when unused. Shared across the lines to reduce their taxable value.</summary>
     public decimal DiscountAmount { get; set; }
 
+    /// <summary>
+    /// Why the discount was given, in the words of whoever gave it. Required from a salesman, optional
+    /// from the office. For the office to read; never printed on the invoice the shop receives.
+    /// </summary>
+    public string? DiscountReason { get; set; }
+
     public decimal TaxableAmount { get; set; }
     public decimal CgstAmount { get; set; }
     public decimal SgstAmount { get; set; }

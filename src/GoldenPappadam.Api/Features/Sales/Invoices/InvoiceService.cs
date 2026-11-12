@@ -25,13 +25,24 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
     private const int SaveAttempts = 3;
     private static readonly int[] UniqueViolationErrors = [2601, 2627];
 
-    public async Task<CreateInvoiceResponse> CreateAsync(CreateInvoiceRequest request, CancellationToken ct)
+    public Task<CreateInvoiceResponse> CreateAsync(CreateInvoiceRequest request, CancellationToken ct) =>
+        CreateAsync(request, null, ct);
+
+    /// <summary>
+    /// <paramref name="discountCapPercent"/> is the most the discount may be, as a percentage of the
+    /// bill's subtotal. The office bills with none; a bill from a salesman's phone carries the cap in
+    /// Settings, and is refused over it.
+    /// </summary>
+    public async Task<CreateInvoiceResponse> CreateAsync(
+        CreateInvoiceRequest request,
+        decimal? discountCapPercent,
+        CancellationToken ct)
     {
         // Where the goods physically came from: the warehouse for a counter sale, the van for a
         // delivery on the route. Defaults to the warehouse, which is what every bill meant before
         // the van kept its own stock.
         var locationId = await stock.ResolveLocationAsync(request.LocationId, ct);
-        var (invoice, seriesCode) = await BuildAsync(request, ct);
+        var (invoice, seriesCode) = await BuildAsync(request, discountCapPercent, ct);
 
         await SaveAsync(invoice, seriesCode, locationId, ct);
 
@@ -44,7 +55,7 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
     /// <summary>Works the bill out exactly as <see cref="CreateAsync"/> would, and saves nothing.</summary>
     public async Task<InvoicePreviewDto> PreviewAsync(CreateInvoiceRequest request, CancellationToken ct)
     {
-        var (invoice, _) = await BuildAsync(request, ct);
+        var (invoice, _) = await BuildAsync(request, null, ct);
 
         return new InvoicePreviewDto(
             invoice.DocumentType,
@@ -130,7 +141,10 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
     /// Validates the request and works out every amount, returning an unsaved invoice with no
     /// number yet. Nothing is tracked by the context until <see cref="SaveAsync"/>.
     /// </summary>
-    private async Task<(Invoice Invoice, string SeriesCode)> BuildAsync(CreateInvoiceRequest request, CancellationToken ct)
+    private async Task<(Invoice Invoice, string SeriesCode)> BuildAsync(
+        CreateInvoiceRequest request,
+        decimal? discountCapPercent,
+        CancellationToken ct)
     {
         if (request.Lines.Count == 0)
         {
@@ -200,6 +214,15 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             throw new DomainException("The discount cannot be more than the bill.");
         }
 
+        // Compared exactly, with no rounding: 20% of 1,987.00 is 397.40, and 397.41 is over.
+        if (discountCapPercent is { } cap && request.DiscountAmount > calculation.SubTotal * cap / 100m)
+        {
+            throw new DomainException(cap == 0m
+                ? "Discounts from the phone are switched off. The office can give one on its own bill."
+                : $"The discount ({request.DiscountAmount:0.00}) is more than {cap:0.##}% of the bill, which is " +
+                  $"{calculation.SubTotal * cap / 100m:0.00} on {calculation.SubTotal:0.00}.");
+        }
+
         var invoice = new Invoice
         {
             // Filled in by SaveAsync, inside the transaction, from the database's counter.
@@ -244,6 +267,11 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
             RoundOff = calculation.RoundOff,
             TotalAmount = calculation.TotalAmount,
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
+
+            // A reason with no discount explains nothing, so it is not kept.
+            DiscountReason = request.DiscountAmount > 0m && !string.IsNullOrWhiteSpace(request.DiscountReason)
+                ? request.DiscountReason.Trim()
+                : null,
 
             Lines = request.Lines.Select((line, index) =>
             {
@@ -451,9 +479,12 @@ public class InvoiceService(AppDbContext db, StockService stock, CustomerPriceSe
                     product.Id, product.Name, product.UnitCode, product.HsnCode, product.TaxTreatment, product.GstRate,
                     agreedPrices.TryGetValue(product.Id, out var agreed) ? agreed : null, product.SellingPrice);
 
-            if (forBill.UnitPrice(line.UnitPrice) < 0m)
+            // A line on a bill is never free or negative (owner, 2026-11-12): the rate stays the real
+            // rate, and goods given away are a discount, where it shows and is put to someone's name.
+            if (forBill.UnitPrice(line.UnitPrice) <= 0m)
             {
-                throw new DomainException($"The price for '{product.Name}' cannot be negative.");
+                throw new DomainException(
+                    $"The price for '{product.Name}' must be more than zero. To charge less, or nothing, use the discount.");
             }
         }
 

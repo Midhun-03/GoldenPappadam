@@ -16,6 +16,13 @@ public record CustomerPriceDto(
     decimal? AgreedPrice,
     decimal? EffectivePrice);
 
+/// <summary>
+/// One product's price for one shop over a stretch of time: what the shop pays now (null only for a
+/// product nobody has priced), and every rate it has had since the stretch began, the current one included.
+/// </summary>
+public sealed record RatesSince(decimal? Current, IReadOnlySet<decimal> Known);
+
+/// <summary>Zero is not a rate: it removes the agreed rate, and the shop pays the standard price.</summary>
 public record SetCustomerPriceRequest(
     [Range(typeof(decimal), "0", "79228162514264337593543950335")] decimal UnitPrice);
 

@@ -99,7 +99,9 @@ Keep payments simple and practical — not a full enterprise accounting system. 
   rate, which is audited, rather than typing a one-off price onto a bill.
 - **A recorded price is never rewritten.** An offline sale is a transaction that already happened, so it is
   saved at the price the phone used; if the price changed while the phone was offline, the bill is *flagged*
-  for the admin, not silently re-priced.
+  for the admin, not silently re-priced. _Narrowed 2026-10-29, built 2026-11-12: only a price that is the
+  shop's rate now, or was at some moment since the phone last synced, is accepted; any other price refuses the
+  whole bill - `docs/adr/0001-refuse-phone-bills-at-unknown-prices.md`._
 - **Stock leaves the warehouse when the van is loaded**, not when a shop is billed. That makes stock
   location-aware: `inventory.StockLocations` plus `StockMovement.LocationId`. Unsold stock returns every
   evening, and a shortfall is **shown to the admin, never auto-adjusted** — that reconciliation is what
@@ -433,7 +435,34 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-11-11_
+_Last updated: 2026-11-12_
+
+**Phone pricing and discount done (2026-11-12)**, branch `feature/phone-pricing-discount`. Rules in "Decisions
+made" (2026-11-12), terms in `GLOSSARY.md`, the refusal rule in `docs/adr/0001-refuse-phone-bills-at-unknown-prices.md`.
+- **Standard price:** `ProductService` refuses a product with no price above zero and records every change in the
+  immutable `inventory.ProductPriceChanges` (migration `AddProductPriceChanges`, existing prices backfilled). The
+  column stays nullable so older rows are not broken; such a product cannot be billed without an agreed rate
+  until it is priced.
+- **Agreed rate:** zero from the office removes the rate and records the removal (`CustomerPriceService.SetAsync`);
+  zero is refused everywhere else. A bill line of zero or less is refused in `InvoiceService`, for the office too.
+- **The phone's price check:** `MobileSyncService.CheckPricesAsync` with `CustomerPriceService.GetRatesSinceAsync` -
+  the shop's rate now, or any rate it had since the snapshot the phone priced from, which is flagged as before;
+  anything else refuses the whole bill and writes nothing. The snapshot's `pricesAsOf` is now the moment the
+  snapshot was taken (it used to be the newest rate edit), so the phone needed no change to send the right stamp.
+- **Discount from the phone:** `InvoiceSettings.SalesmanDiscountCapPercent` (default 20, 0 = off, on Settings >
+  Invoices and GST) and `Invoices.DiscountReason`, migration `AddSalesmanDiscount`. `MobileSaleRequest` carries
+  `discountAmount` and `discountReason`; the reason is required and the cap is the one in force when the bill
+  arrives, compared exactly. The snapshot carries `discountCapPercent`. The office sees each discount and its
+  reason on Today on the road and on the bill's page; the PDF is unchanged, so the shop never sees the reason.
+- **Phone:** New Bill has a closed "Add discount" row (hidden when the cap is 0) that opens to the amount, the
+  most allowed on this bill and the reason; a discount over the cap or with no reason blocks Save and is never
+  lowered for the salesman. No drift schema change: the cap lives in the meta table.
+- 490 C# tests and 105 Dart tests pass. Checked over real HTTP and in the admin panel against a
+  throwaway database. **Not checked on a real phone:** the New Bill change waits for the owner's approval on
+  screenshots, like the earlier phone phases. Both migrations were applied to the development database
+  `GoldenPappadam` on 2026-11-12, after a backup (`GoldenPappadam_before_pricing_20261112.bak` in SQL Express's
+  Backup folder); `GoldenPappadamDemo` has not had them. **To do by the office:** give every product its
+  standard price as it is added.
 
 **Own shop done (2026-09-30)**, rules in §4, design `docs/08-own-shop-design.md`. `SHOP` location,
 `ProductKind.Pieces`, `Product.MinimumSellingPrice`, movement type `ShopTransfer`, and the `ownshop` schema
@@ -730,7 +759,7 @@ Decisions made:
 - 2026-10-29 — **Price on a bill from the phone** (owner): the server accepts a line price only if it is the
   shop's current rate or the rate the phone last received in its snapshot (a rate the office changed while
   the phone was offline); any other price, ₹0 included, is refused. Replaces "accept and flag" for
-  mismatches - a bill priced at the last-known rate is still flagged for the office. Not built yet.
+  mismatches - a bill priced at the last-known rate is still flagged for the office. Built 2026-11-12.
 - 2026-10-29 — **Hosting** (owner): production runs on the existing **Windows 11 office PC**, on during working
   hours including the Sundays staff work, with phones syncing over the office Wi-Fi. Network, security and
   reliability requirements are to be identified before anything is changed. Not set up yet.
@@ -739,6 +768,25 @@ Decisions made:
   `source/repos/GoldenProducts` project) - none deleted until its purpose is confirmed. Encrypted, the password
   kept separately, integrity verified, restores tested into separate databases. Off-site copy in a separate
   business Google account; local copy on the existing 8 GB USB drive if it fits. Planning only until approved.
+- 2026-11-12 — **Phone pricing and discount, settled in detail** (owner). Terms in `GLOSSARY.md`; the refusal
+  rule and its rejected alternatives in `docs/adr/0001-refuse-phone-bills-at-unknown-prices.md`. Built the
+  same day - see "Phone pricing and discount done" at the top of §9.
+  - **Standard price:** every product must have one, above zero - never blank, never 0, every kind of product.
+    Any active product can therefore be billed to any shop. Its changes are recorded in an immutable history,
+    like agreed rates.
+  - **Agreed rate:** blank or zero means there is none and the shop pays the standard price. Zero typed over
+    an existing rate removes it - office only, recorded in the rate history.
+  - **A bill line is never ₹0**, from the phone or the office; free goods go through the office's discount.
+  - **Last-known rate:** accepted with no age limit and flagged with the existing "Price changed" badge -
+    no acknowledgement, no stored difference, nothing shown to the salesman. Any other price refuses the whole
+    bill; it stays failed on the phone and the office re-enters it by hand. No refused-bills screen.
+  - **Discount from the phone:** see §10 Q3. The cap is a setting (default 20%, 0% switches phone discounts
+    off), enforced at its value when the bill arrives; over the cap is blocked on the phone and refused by the
+    server. The reason is free text, required with any discount. Today on the road shows each bill's discount
+    and reason and the day's total. New Bill gets one closed "Add discount" row, for the owner's approval on
+    screenshots.
+  - **Discount** means only a reduction on the bill being made. Settling an old bill short is not one and is
+    not built; nor are a standard-price history screen and a discount report.
 
 Pending decisions:
 
@@ -868,7 +916,7 @@ Never design around an assumption for these; ask, or keep the design open.
 |---|---|---|---|
 | ~~1~~ | ~~Do different shops pay different prices?~~ | **Answered 2026-09-15: yes.** See §4 "Confirmed requirements" | sales pricing |
 | ~~2~~ | ~~Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded?~~ | **Answered 2026-09-25:** only expired or damaged packets come back, never resold; replacement, credit or nothing, decided by the office per shop. Pappadam lasts 20 days from packing; unsold packets are repacked (any size, no loss, fresh 20 days) when the office decides. Built in the office 2026-09-26; phone next - `docs/05-reports-returns-design.md` | inventory + sales |
-| ~~3~~ | ~~Are discounts given, and at bill level or item level?~~ | **Answered 2026-10-29:** bill-level only, given from the office **and from the phone** (the phone sends 0 today). No item-level discounts. A salesman may give **any amount, with no limit and no office approval** (owner, 2026-10-29). Not built on the phone yet | invoice totals, phone sale |
+| ~~3~~ | ~~Are discounts given, and at bill level or item level?~~ | **Answered 2026-10-29, changed 2026-11-12:** bill-level only, given from the office **and from the phone** (the phone sends 0 today). No item-level discounts. A salesman's discount is capped at **20% of the bill's subtotal** (before discount and tax; a setting the office can change), is typed in rupees and **needs a reason**, which the office sees and the shop never does; no office approval inside the cap. The office's own discounts are not capped and need no reason. This replaces "any amount, with no limit" (owner, 2026-10-29). Built 2026-11-12; the phone's New Bill change awaits the owner's approval on screenshots | invoice totals, phone sale |
 | 4 | GST: the exact HSN code, that pappadam is exempt rather than nil-rated, and the "Bill of Supply" heading on GST bills for exempt goods | **Partly answered 2026-09-23:** one HSN, no GST today, GST bills only for GST-registered shops. Accountant to confirm the three details | invoices |
 | ~~5~~ | ~~Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now?~~ | **Answered 2026-10-27:** start at 1. No bill had gone to a real customer; all test bills were deleted in the data reset | invoice numbering |
 | ~~6~~ | ~~Which days does a Saturday's wage cover? Is Sunday a working day?~~ | **Answered 2026-09-28:** Sunday to Saturday, Saturday included; Sunday is worked by some employees in turn | weekly wages |

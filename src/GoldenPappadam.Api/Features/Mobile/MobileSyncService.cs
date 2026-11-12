@@ -91,6 +91,11 @@ public class MobileSyncService(
 
     public async Task<SnapshotDto> GetSnapshotAsync(CancellationToken ct)
     {
+        // Taken before anything is read, so a rate changed while the snapshot is being put together
+        // counts as changed after it. The phone sends this back with every bill it prices from this
+        // snapshot, and it is how the server knows which rates that phone could honestly have used.
+        var pricesAsOf = DateTime.UtcNow;
+
         var customers = await CustomerQueries.Project(db.Customers.Where(c => c.IsActive).OrderBy(c => c.Name), db)
             .Select(c => new SnapshotCustomerDto(
                 c.Id, c.Name, c.ContactPerson, c.Phone, c.Address, c.Balance, c.HasMultipleBranches,
@@ -118,13 +123,6 @@ public class MobileSyncService(
             .Where(cp => cp.IsActive && cp.Product!.Kind != ProductKind.Pieces)
             .Select(cp => new SnapshotPriceDto(cp.CustomerId, cp.ProductId, cp.UnitPrice))
             .ToListAsync(ct);
-
-        // The newest price change the phone is being told about. It sends this back with a sale,
-        // and anything changed after it is what makes a mismatch detectable.
-        var pricesAsOf = await db.CustomerPrices
-            .Select(cp => cp.UpdatedAt ?? cp.CreatedAt)
-            .OrderByDescending(at => at)
-            .FirstOrDefaultAsync(ct);
 
         // Recent only. The shop page answers "when did I last collect from you?", not "show me
         // three years of history", and the phone should not carry what it will never display.
@@ -160,7 +158,7 @@ public class MobileSyncService(
 
         return new SnapshotDto(
             DateTime.UtcNow,
-            pricesAsOf == default ? DateTime.UtcNow : pricesAsOf,
+            pricesAsOf,
             device?.LocationId,
             customers,
             products,
@@ -168,8 +166,16 @@ public class MobileSyncService(
             recentPayments,
             Enum.GetValues<PaymentMethod>().Where(m => m != PaymentMethod.ReturnCredit).Select(m => m.ToString()).ToArray(),
             branches,
-            myRequests);
+            myRequests,
+            await DiscountCapPercentAsync(ct));
     }
+
+    /// <summary>The most a salesperson may take off a bill, as a percentage of its subtotal. 0 is "none".</summary>
+    private Task<decimal> DiscountCapPercentAsync(CancellationToken ct) =>
+        db.InvoiceSettings
+            .Where(s => s.Id == InvoiceSettings.SingletonId)
+            .Select(s => s.SalesmanDiscountCapPercent)
+            .SingleAsync(ct);
 
     // ---------- upload ----------
 
@@ -318,19 +324,30 @@ public class MobileSyncService(
         // which would balance the books and leave the van's wrong.
         var vanId = RequireVan(device);
 
-        // The price the phone charged is kept as charged. What the server decides is whether the
-        // office has changed it since, in which case a person is asked to look.
-        var mismatch = await HasPriceMovedAsync(sale, ct);
+        // The price the phone charged is kept as charged, never rewritten - but only a price the
+        // phone could honestly have been told. Anything else refuses the whole bill (ADR 0001).
+        var mismatch = await CheckPricesAsync(sale, ct);
 
+        // A salesperson's discount is theirs to give, with no approval, but they say why (owner,
+        // 2026-11-12). The office reads the reason; the shop never sees it.
+        if (sale.DiscountAmount > 0m && string.IsNullOrWhiteSpace(sale.DiscountReason))
+        {
+            throw new DomainException("Say why the discount was given. A discount from the phone needs a reason.");
+        }
+
+        // The cap is the one in Settings as this bill arrives, not the one the phone last heard of:
+        // the app stops a discount over it before the bill is saved, so this is the backstop.
         var created = await invoices.CreateAsync(
             new CreateInvoiceRequest(
                 sale.CustomerId,
                 IndiaTime.ToIndiaDate(item.RecordedAt),
-                0m,
+                sale.DiscountAmount,
                 sale.Notes,
                 sale.Lines.Select(l => new InvoiceLineRequest(l.ProductId, l.Quantity, l.UnitPrice)).ToList(),
                 vanId,
-                sale.BranchId),
+                sale.BranchId,
+                sale.DiscountReason),
+            await DiscountCapPercentAsync(ct),
             ct);
 
         await RecordSubmissionAsync(device, item, created.Invoice.Id, mismatch, ct);
@@ -701,31 +718,57 @@ public class MobileSyncService(
     }
 
     /// <summary>
-    /// True when the office has changed what this shop pays since the snapshot the phone priced
-    /// from. The sale is still saved at the price it was made at - see docs B6.
+    /// A bill from the phone is accepted at the shop's rate now, or at a rate the shop had at some
+    /// moment since the snapshot the phone priced it from - its last-known rate, however old (owner,
+    /// 2026-10-29 and 2026-11-12). The second kind is saved as charged and flagged for the office,
+    /// which is what the return value says. Any other price can only be a bug or tampering, because
+    /// the app has no way to type one, so the whole bill is refused: docs/adr/0001.
     /// </summary>
-    private async Task<bool> HasPriceMovedAsync(MobileSaleRequest sale, CancellationToken ct)
+    private async Task<bool> CheckPricesAsync(MobileSaleRequest sale, CancellationToken ct)
     {
-        var agreed = await prices.GetAgreedPricesAsync(sale.CustomerId, sale.Lines.Select(l => l.ProductId), ct);
+        // A stamp from the future proves nothing about the past; it is read as "just now".
+        var since = sale.PricesAsOf.ToUniversalTime();
 
-        var productPrices = await db.Products
-            .Where(p => sale.Lines.Select(l => l.ProductId).Contains(p.Id))
-            .ToDictionaryAsync(p => p.Id, p => p.SellingPrice, ct);
+        if (since > DateTime.UtcNow)
+        {
+            since = DateTime.UtcNow;
+        }
+
+        var productIds = sale.Lines.Select(l => l.ProductId).Distinct().ToList();
+        var rates = await prices.GetRatesSinceAsync(sale.CustomerId, productIds, since, ct);
+
+        var names = await db.Products
+            .Where(p => productIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+
+        var atAnOlderRate = false;
 
         foreach (var line in sale.Lines)
         {
-            var current = CustomerPriceService.Resolve(
-                null,
-                agreed.TryGetValue(line.ProductId, out var shopPrice) ? shopPrice : null,
-                productPrices.GetValueOrDefault(line.ProductId));
-
-            if (current is not null && current != line.UnitPrice)
+            // An unknown product is the bill's own problem, and the invoice service says so better.
+            if (!rates.TryGetValue(line.ProductId, out var rate) || !names.TryGetValue(line.ProductId, out var name))
             {
-                return true;
+                continue;
             }
+
+            if (line.UnitPrice == rate.Current)
+            {
+                continue;
+            }
+
+            if (!rate.Known.Contains(line.UnitPrice))
+            {
+                throw new DomainException(
+                    $"The price on this bill for '{name}' ({line.UnitPrice:0.00}) is not this shop's rate" +
+                    (rate.Current is { } current ? $" ({current:0.00})" : string.Empty) +
+                    ", and never was since this phone last synced. The bill was not saved. Tell the office, " +
+                    "which will enter it by hand.");
+            }
+
+            atAnOlderRate = true;
         }
 
-        return false;
+        return atAnOlderRate;
     }
 
     private async Task<Guid?> ResolveRecordAsync(Guid? clientRequestId, SubmissionType type, CancellationToken ct)

@@ -15,6 +15,8 @@ public record InvoiceLineRequest(
 /// BranchId names which shop of a multi-branch customer this bill is for: required when that
 /// customer has branches, and rejected otherwise so a bill can never point at the wrong shop.
 /// No totals are accepted: the server works every amount out itself.
+/// DiscountReason says why a discount was given. The office may leave it out; a bill from the phone
+/// may not. It is kept only when there is a discount.
 /// </summary>
 public record CreateInvoiceRequest(
     [Required] Guid CustomerId,
@@ -23,7 +25,8 @@ public record CreateInvoiceRequest(
     [MaxLength(300)] string? Notes,
     [Required, MinLength(1)] List<InvoiceLineRequest> Lines,
     Guid? LocationId = null,
-    Guid? BranchId = null);
+    Guid? BranchId = null,
+    [MaxLength(200)] string? DiscountReason = null);
 
 public record CancelInvoiceRequest([Required, MaxLength(300)] string Reason);
 
@@ -120,6 +123,7 @@ public record InvoiceDetailDto(
     decimal AmountPaid,
     decimal Outstanding,
     string? Notes,
+    string? DiscountReason,
     DateTime FinalizedAt,
     string? FinalizedByName,
     string? RecordedOnDevice,

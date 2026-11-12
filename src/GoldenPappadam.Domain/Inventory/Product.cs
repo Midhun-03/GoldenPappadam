@@ -51,7 +51,10 @@ public class Product : AuditableEntity
     public decimal? PiecesPerKg { get; set; }
 
     /// <summary>
-    /// Default selling price. Null means the product is not normally sold as it is. For an own-shop
+    /// The standard price: what a shop with no agreed rate pays. Every product has one, above zero
+    /// (owner, 2026-11-12) - <c>ProductService</c> enforces it, and its changes are kept in
+    /// <see cref="ProductPriceChange"/>. The column stays nullable only for products saved before that
+    /// rule, which cannot be billed without an agreed rate until someone prices them. For an own-shop
     /// pieces product it is the rate per piece, and also the most a piece may be sold for.
     /// </summary>
     public decimal? SellingPrice { get; set; }
