@@ -883,3 +883,17 @@ Never design around an assumption for these; ask, or keep the design open.
 | 15 | How long must invoices, GST records, books of account and related records be kept? (Backups proposed: yearly copies for 8 years.) | TBD — accountant; the 8-year proposal is **not approved** | backup retention |
 
 Answered on 2026-09-14 and now part of the design: stock shortfall warns instead of blocking; one loose variety can be packed into many packet sizes; a pack can occasionally be made from another pack.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as GitHub issues in `Midhun-03/GoldenPappadam` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
