@@ -437,7 +437,8 @@ Design before large code drops; deliver in reviewable increments.
 
 _Last updated: 2026-11-13_
 
-**Phone pricing and discount done (2026-11-12)**, branch `feature/phone-pricing-discount`. Rules in "Decisions
+**Phone pricing and discount done (2026-11-12)**, merged into `master` on 2026-11-13 (it was built on
+`feature/phone-pricing-discount`). Rules in "Decisions
 made" (2026-11-12), terms in `GLOSSARY.md`, the refusal rule in `docs/adr/0001-refuse-phone-bills-at-unknown-prices.md`.
 - **Standard price:** `ProductService` refuses a product with no price above zero and records every change in the
   immutable `inventory.ProductPriceChanges` (migration `AddProductPriceChanges`, existing prices backfilled). The
@@ -684,7 +685,8 @@ There is no phase 2: the owner numbered the mobile work phase 3.
   sync answer carries the `RN/...` number. The van reconciliation has a **Replaced** figure (admin Van
   screen and the phone's van tab). Also fixed: the shop page's payment history escaped its `$` and never
   showed a payment still waiting to sync. Next in the plan: the owner's daily summary.
-- **UI redesign in progress (2026-11-06 to 2026-11-10)**, branch `ui/motion-sales-login-sidebar`. No API,
+- **UI redesign in progress (2026-11-06 to 2026-11-10)**, merged into `master` on 2026-11-13 (it was built on
+  `ui/motion-sales-login-sidebar`). No API,
   database, business-rule or sync change. **Admin panel:** sales screens lead with the figure they produce
   (new bill total, return value, payment with its oldest-first split), a shared `Logo`, a travelling sidebar
   marker and a pending count on Rate requests; all motion lives in `client/src/index.css` and stands still
