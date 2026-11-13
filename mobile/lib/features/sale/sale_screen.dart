@@ -212,8 +212,10 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
     _discountReason.clear();
   }
 
-  /// What the shop is asked for: the lines less the discount.
-  double get _total => (_subtotal - _discountValue).clamp(0, double.infinity).toDouble();
+  /// What the shop is asked for: the lines less the discount. A discount over the cap cannot be
+  /// saved, so it is not taken off the figure either - a total the shop can never be asked for
+  /// would only mislead.
+  double get _total => _discountTooBig ? _subtotal : _subtotal - _discountValue;
 
   double get _partialAmountValue => double.tryParse(_partialAmount.text) ?? 0;
 
@@ -424,9 +426,11 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
         padding: const EdgeInsets.only(top: 4),
         child: Align(
           alignment: Alignment.centerLeft,
+          // Charcoal, not gold: gold is the one primary action on a screen, and that is Save Bill.
           child: TextButton.icon(
             key: const ValueKey('add-discount'),
             onPressed: () => setState(() => _discountOpen = true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.charcoal),
             icon: const Icon(Icons.sell_outlined, size: 18),
             label: const Text('Add discount'),
           ),
@@ -450,6 +454,7 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
                 TextButton(
                   key: const ValueKey('remove-discount'),
                   onPressed: () => setState(_closeDiscount),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.textMuted),
                   child: const Text('Remove'),
                 ),
               ],
@@ -461,22 +466,21 @@ class _SaleScreenState extends ConsumerState<SaleScreen> {
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontFeatures: kTabularFigures),
+              // Over the cap, the line under the field says so in place of the hint. It sits against
+              // the field on purpose: with the keyboard up there is no room for a notice further
+              // down, and that is exactly when the figure is being typed.
               decoration: InputDecoration(
                 prefixText: '₹ ',
                 hintText: '0',
                 helperText: hasBill
                     ? 'Up to ${money(_maxDiscount)} on this bill (${_percent(_discountCap)}%)'
                     : 'Add the products first',
+                errorText: _discountTooBig && hasBill
+                    ? 'The most you can take off this bill is ${money(_maxDiscount)}.'
+                    : null,
+                errorMaxLines: 2,
               ),
             ),
-            if (_discountTooBig && hasBill) ...[
-              const SizedBox(height: 10),
-              InlineNotice(
-                'The most you can take off this bill is ${money(_maxDiscount)}.',
-                tone: Tone.danger,
-                icon: Icons.error_outline,
-              ),
-            ],
             const SizedBox(height: 16),
             const Text('WHY', style: kEyebrowStyle),
             const SizedBox(height: 8),

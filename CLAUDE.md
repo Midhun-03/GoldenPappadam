@@ -435,7 +435,7 @@ Design before large code drops; deliver in reviewable increments.
 
 ## 9. Project status
 
-_Last updated: 2026-11-12_
+_Last updated: 2026-11-13_
 
 **Phone pricing and discount done (2026-11-12)**, branch `feature/phone-pricing-discount`. Rules in "Decisions
 made" (2026-11-12), terms in `GLOSSARY.md`, the refusal rule in `docs/adr/0001-refuse-phone-bills-at-unknown-prices.md`.
@@ -458,8 +458,11 @@ made" (2026-11-12), terms in `GLOSSARY.md`, the refusal rule in `docs/adr/0001-r
   most allowed on this bill and the reason; a discount over the cap or with no reason blocks Save and is never
   lowered for the salesman. No drift schema change: the cap lives in the meta table.
 - 490 C# tests and 105 Dart tests pass. Checked over real HTTP and in the admin panel against a
-  throwaway database. **Not checked on a real phone:** the New Bill change waits for the owner's approval on
-  screenshots, like the earlier phone phases. Both migrations were applied to the development database
+  throwaway database. **Checked on the owner's phone and approved (2026-11-13)**, screenshots in
+  `docs/screenshots/mobile-bill-discount/`. The real screen led to three changes: the over-limit message is the
+  amount field's own error line, because a notice further down is hidden while the keyboard is up; a discount
+  over the cap is not taken off the total; and "Add discount" and "Remove" are charcoal and grey, keeping gold
+  for Save Bill alone. Both migrations were applied to the development database
   `GoldenPappadam` on 2026-11-12, after a backup (`GoldenPappadam_before_pricing_20261112.bak` in SQL Express's
   Backup folder); `GoldenPappadamDemo` has not had them. **To do by the office:** give every product its
   standard price as it is added.
@@ -868,6 +871,9 @@ the current LAN address added there. When the API is served over HTTPS, both fil
    phone's connections: the PC reaches `http://<lan-ip>:5207` fine, the phone gets nothing. Allow TCP 5207
    (or the exe) inside McAfee's firewall settings. Test from the phone itself with
    `adb shell curl -s -o /dev/null -w '%{http_code}' http://<lan-ip>:5207/openapi/v1.json` — 200 means open.
+   To check something on the phone without touching the firewall, go over the USB cable instead:
+   `adb reverse tcp:5207 tcp:5207`, and build with `--dart-define=API_BASE_URL=http://127.0.0.1:5207`. That
+   build syncs only while the cable is in and the forward is set, so put a Wi-Fi build back afterwards.
 2. `ipconfig` → the Wi-Fi IPv4 address must match the app's `API_BASE_URL`. Ask the router for a DHCP
    reservation for the laptop so it stops changing.
 3. The phone must be on the same Wi-Fi as the laptop.
@@ -916,7 +922,7 @@ Never design around an assumption for these; ask, or keep the design open.
 |---|---|---|---|
 | ~~1~~ | ~~Do different shops pay different prices?~~ | **Answered 2026-09-15: yes.** See §4 "Confirmed requirements" | sales pricing |
 | ~~2~~ | ~~Returns: do shops return damaged/unsold stock, and is it replaced, credited, restocked or discarded?~~ | **Answered 2026-09-25:** only expired or damaged packets come back, never resold; replacement, credit or nothing, decided by the office per shop. Pappadam lasts 20 days from packing; unsold packets are repacked (any size, no loss, fresh 20 days) when the office decides. Built in the office 2026-09-26; phone next - `docs/05-reports-returns-design.md` | inventory + sales |
-| ~~3~~ | ~~Are discounts given, and at bill level or item level?~~ | **Answered 2026-10-29, changed 2026-11-12:** bill-level only, given from the office **and from the phone** (the phone sends 0 today). No item-level discounts. A salesman's discount is capped at **20% of the bill's subtotal** (before discount and tax; a setting the office can change), is typed in rupees and **needs a reason**, which the office sees and the shop never does; no office approval inside the cap. The office's own discounts are not capped and need no reason. This replaces "any amount, with no limit" (owner, 2026-10-29). Built 2026-11-12; the phone's New Bill change awaits the owner's approval on screenshots | invoice totals, phone sale |
+| ~~3~~ | ~~Are discounts given, and at bill level or item level?~~ | **Answered 2026-10-29, changed 2026-11-12:** bill-level only, given from the office **and from the phone** (the phone sends 0 today). No item-level discounts. A salesman's discount is capped at **20% of the bill's subtotal** (before discount and tax; a setting the office can change), is typed in rupees and **needs a reason**, which the office sees and the shop never does; no office approval inside the cap. The office's own discounts are not capped and need no reason. This replaces "any amount, with no limit" (owner, 2026-10-29). Built 2026-11-12; the phone's New Bill change was approved by the owner on 2026-11-13 | invoice totals, phone sale |
 | 4 | GST: the exact HSN code, that pappadam is exempt rather than nil-rated, and the "Bill of Supply" heading on GST bills for exempt goods | **Partly answered 2026-09-23:** one HSN, no GST today, GST bills only for GST-registered shops. Accountant to confirm the three details | invoices |
 | ~~5~~ | ~~Should the `GP` series continue from the old `INV` numbers (15 onward) or start at 1 as it does now?~~ | **Answered 2026-10-27:** start at 1. No bill had gone to a real customer; all test bills were deleted in the data reset | invoice numbering |
 | ~~6~~ | ~~Which days does a Saturday's wage cover? Is Sunday a working day?~~ | **Answered 2026-09-28:** Sunday to Saturday, Saturday included; Sunday is worked by some employees in turn | weekly wages |

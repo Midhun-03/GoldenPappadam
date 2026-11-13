@@ -414,6 +414,10 @@ void main() {
     expect(find.text('The most you can take off this bill is ${money(70)}.'), findsOneWidget);
     expect(tester.widget<FilledButton>(saveBar()).onPressed, isNull);
 
+    // A discount that cannot be saved is not taken off the total either: the bar still says 350.
+    expect(find.text(money(350)), findsWidgets);
+    expect(find.text(money(279.99)), findsNothing);
+
     // Exactly the cap is allowed.
     await tester.enterText(discountAmount(), '70');
     await tester.pumpAndSettle();
